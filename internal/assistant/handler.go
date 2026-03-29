@@ -115,10 +115,10 @@ func (h *Handler) getHandler() http.HandlerFunc {
 }
 
 type request struct {
-	Names     string `json:"names"`
-	LastNames string `json:"last_names"`
-	Email     string `json:"email"`
-	Password  string `json:"password"`
+	Names      string `json:"names"`
+	LastNames  string `json:"last_names"`
+	Email      string `json:"email"`
+	Passphrase string `json:"password"` //nolint:gosec // Request body field name required by API contract.
 }
 
 func (h *Handler) createHandler() http.HandlerFunc {
@@ -130,7 +130,7 @@ func (h *Handler) createHandler() http.HandlerFunc {
 			return
 		}
 
-		passwordHash, err := h.hasher.Hash(req.Password)
+		passwordHash, err := h.hasher.Hash(req.Passphrase)
 		if err != nil {
 			h.logger.Error("failed to hash assistant password", slog.Any("error", err))
 			http.Error(w, failedToCreateAssistantMsg, http.StatusInternalServerError)
