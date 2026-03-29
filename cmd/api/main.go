@@ -2,6 +2,7 @@ package main
 
 import (
 	"appointment-manager/internal/assistant"
+	"appointment-manager/internal/password"
 	"context"
 	"log/slog"
 	"net/http"
@@ -24,7 +25,8 @@ func main() {
 	logger.Info("starting API server")
 
 	assistantRepo := assistant.NewMemRepository()
-	assistantHandler, err := assistant.NewHandler(logger, assistantRepo)
+	passwordHasher := password.NewArgon2()
+	assistantHandler, err := assistant.NewHandler(logger, assistantRepo, passwordHasher)
 	if err != nil {
 		logger.Error("failed to create assistant handler", slog.Any("error", err))
 		os.Exit(1)

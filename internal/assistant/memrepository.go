@@ -15,11 +15,11 @@ func NewMemRepository() *MemRepository {
 	store := make(map[ID]*Assistant)
 	ID := ID(uuid.NewString())
 	store[ID] = &Assistant{
-		ID:        ID,
-		Names:     "John",
-		LastNames: "Doe",
-		Email:     "fakeemail@email.com",
-		Password:  "password123",
+		ID:           ID,
+		Names:        "John",
+		LastNames:    "Doe",
+		Email:        "fakeemail@email.com",
+		PasswordHash: "password123",
 	}
 
 	return &MemRepository{
@@ -41,4 +41,11 @@ func (r *MemRepository) Get(_ context.Context, id ID) (*Assistant, error) {
 		return nil, fmt.Errorf("%w: ID: %s", ErrAssistantNotFound, id)
 	}
 	return assistant, nil
+}
+
+func (r *MemRepository) Create(_ context.Context, assistant Assistant) (ID, error) {
+	id := ID(uuid.NewString())
+	assistant.ID = id
+	r.store[id] = &assistant
+	return id, nil
 }
