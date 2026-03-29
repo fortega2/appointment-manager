@@ -3,6 +3,7 @@ package main
 import (
 	"appointment-manager/internal/assistant"
 	"appointment-manager/internal/password"
+	"appointment-manager/internal/server"
 	"context"
 	"log/slog"
 	"net/http"
@@ -13,11 +14,22 @@ import (
 )
 
 const (
-	serverAddr        = ":8080"
-	readHeaderTimeout = 5 * time.Second
+	serverAddr              = ":8080"
+	serverReadHeaderTimeout = 5 * time.Second
+	serverReadTimeout       = 10 * time.Second
+	serverWriteTimeout      = 15 * time.Second
+	serverIdleTimeout       = 60 * time.Second
+	serverMaxHeaderBytes    = 1 << 20
+	serverShutdownTimeout   = 3 * time.Second
 )
 
 func main() {
+	if err := run(); err != nil {
+		os.Exit(1)
+	}
+}
+
+func run() error {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
 		Level:     slog.LevelDebug,
 		AddSource: true,
@@ -29,37 +41,26 @@ func main() {
 	assistantHandler, err := assistant.NewHandler(logger, assistantRepo, passwordHasher)
 	if err != nil {
 		logger.Error("failed to create assistant handler", slog.Any("error", err))
-		os.Exit(1)
+		return err
 	}
 
 	mux := http.NewServeMux()
 	assistantHandler.RegisterHandlers(mux)
 
-	sig := make(chan os.Signal, 1)
-	signal.Notify(sig, os.Interrupt, syscall.SIGTERM)
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
 
-	srv := &http.Server{
-		Addr:              serverAddr,
-		Handler:           mux,
-		ReadHeaderTimeout: readHeaderTimeout,
+	if err := server.Start(ctx, logger, mux, serverAddr, server.Config{
+		ReadHeaderTimeout: serverReadHeaderTimeout,
+		ReadTimeout:       serverReadTimeout,
+		WriteTimeout:      serverWriteTimeout,
+		IdleTimeout:       serverIdleTimeout,
+		MaxHeaderBytes:    serverMaxHeaderBytes,
+		ShutdownTimeout:   serverShutdownTimeout,
+	}); err != nil {
+		logger.Error("server error", slog.Any("error", err))
+		return err
 	}
 
-	go func() {
-		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			logger.Error("failed to start server", slog.Any("error", err))
-			os.Exit(1)
-		}
-	}()
-
-	logger.Info("API server started on :8080")
-
-	<-sig
-	logger.Info("shutting down API server")
-
-	if err := srv.Shutdown(context.Background()); err != nil {
-		logger.Error("failed to shutdown server", slog.Any("error", err))
-		os.Exit(1)
-	}
-
-	logger.Info("API server stopped")
+	return nil
 }
