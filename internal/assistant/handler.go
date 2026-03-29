@@ -6,6 +6,7 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"reflect"
 )
 
 const (
@@ -15,38 +16,43 @@ const (
 	failedToCreateAssistantMsg = "failed to create assistant"
 )
 
-type Repository interface {
+type Handler struct {
+	service service
+	logger  *slog.Logger
+}
+
+type service interface {
 	List(ctx context.Context) ([]Assistant, error)
 	Get(ctx context.Context, id ID) (*Assistant, error)
-	Create(ctx context.Context, assistant Assistant) (ID, error)
+	Create(ctx context.Context, input CreateInput) (ID, error)
 }
 
-type Hasher interface {
-	Hash(password string) (string, error)
-}
-
-type Handler struct {
-	repo   Repository
-	hasher Hasher
-	logger *slog.Logger
-}
-
-func NewHandler(logger *slog.Logger, repo Repository, hasher Hasher) (*Handler, error) {
+func NewHandler(logger *slog.Logger, service service) (*Handler, error) {
 	if logger == nil {
 		return nil, ErrNilLogger
 	}
-	if repo == nil {
-		return nil, ErrNilRepository
-	}
-	if hasher == nil {
-		return nil, ErrNilPasswordHasher
+	if isNilService(service) {
+		return nil, ErrNilService
 	}
 
 	return &Handler{
-		repo:   repo,
-		hasher: hasher,
-		logger: logger,
+		service: service,
+		logger:  logger,
 	}, nil
+}
+
+func isNilService(s service) bool {
+	if s == nil {
+		return true
+	}
+
+	v := reflect.ValueOf(s)
+	switch v.Kind() {
+	case reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.Pointer, reflect.Slice:
+		return v.IsNil()
+	default:
+		return false
+	}
 }
 
 func (h *Handler) RegisterHandlers(mux *http.ServeMux) {
@@ -57,7 +63,7 @@ func (h *Handler) RegisterHandlers(mux *http.ServeMux) {
 
 func (h *Handler) listHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		assistants, err := h.repo.List(r.Context())
+		assistants, err := h.service.List(r.Context())
 		if err != nil {
 			h.logger.Error("failed to list assistants", slog.Any("error", err))
 			http.Error(w, "failed to list assistants", http.StatusInternalServerError)
@@ -87,7 +93,7 @@ func (h *Handler) getHandler() http.HandlerFunc {
 			return
 		}
 
-		assistant, err := h.repo.Get(r.Context(), assistID)
+		assistant, err := h.service.Get(r.Context(), assistID)
 		if err != nil {
 			if errors.Is(err, ErrAssistantNotFound) {
 				http.Error(w, "assistant not found", http.StatusNotFound)
@@ -115,10 +121,10 @@ func (h *Handler) getHandler() http.HandlerFunc {
 }
 
 type request struct {
-	Names      string `json:"names"`
-	LastNames  string `json:"last_names"`
-	Email      string `json:"email"`
-	Passphrase string `json:"password"` //nolint:gosec // Request body field name required by API contract.
+	Names     string `json:"names"`
+	LastNames string `json:"last_names"`
+	Email     string `json:"email"`
+	Password  string `json:"password"` //nolint:gosec // Request body field name required by API contract.
 }
 
 func (h *Handler) createHandler() http.HandlerFunc {
@@ -130,22 +136,14 @@ func (h *Handler) createHandler() http.HandlerFunc {
 			return
 		}
 
-		passwordHash, err := h.hasher.Hash(req.Passphrase)
+		id, err := h.service.Create(r.Context(), CreateInput(req))
 		if err != nil {
-			h.logger.Error("failed to hash assistant password", slog.Any("error", err))
-			http.Error(w, failedToCreateAssistantMsg, http.StatusInternalServerError)
-			return
-		}
+			if isValidationError(err) {
+				h.logger.Error("invalid assistant request", slog.Any("error", err))
+				http.Error(w, err.Error(), http.StatusUnprocessableEntity)
+				return
+			}
 
-		assist, err := NewAssistant(req.Names, req.LastNames, req.Email, passwordHash)
-		if err != nil {
-			h.logger.Error("invalid assistant request", slog.Any("error", err))
-			http.Error(w, err.Error(), http.StatusUnprocessableEntity)
-			return
-		}
-
-		id, err := h.repo.Create(r.Context(), *assist)
-		if err != nil {
 			h.logger.Error(failedToCreateAssistantMsg, slog.Any("error", err))
 			http.Error(w, failedToCreateAssistantMsg, http.StatusInternalServerError)
 			return
@@ -155,4 +153,11 @@ func (h *Handler) createHandler() http.HandlerFunc {
 		w.Header().Set("Location", "/api/v1/assistants/"+id.String())
 		w.WriteHeader(http.StatusCreated)
 	}
+}
+
+func isValidationError(err error) bool {
+	return errors.Is(err, ErrAssistantRequestNamesRequired) ||
+		errors.Is(err, ErrAssistantRequestLastNamesRequired) ||
+		errors.Is(err, ErrAssistantRequestEmailRequired) ||
+		errors.Is(err, ErrAssistantRequestPasswordRequired)
 }

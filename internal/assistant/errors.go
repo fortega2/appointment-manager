@@ -9,6 +9,8 @@ var (
 	ErrNilLogger         = errors.New("logger cannot be nil")
 	ErrNilRepository     = errors.New("repository cannot be nil")
 	ErrNilPasswordHasher = errors.New("password hasher cannot be nil")
+	ErrNilService        = errors.New("service cannot be nil")
+	ErrEmptyPasswordHash = errors.New("password hash cannot be empty")
 
 	ErrAssistantRequestNamesRequired     = errors.New("names is required")
 	ErrAssistantRequestLastNamesRequired = errors.New("last names is required")

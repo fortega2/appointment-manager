@@ -20,39 +20,33 @@ const (
 	handlerAssistantNames           = "Jane"
 	handlerAssistantLastNames       = "Doe"
 	handlerAssistantEmail           = "jane.doe@email.com"
-	handlerAssistantHash            = "hash"
-	handlerAssistantHashedPassword  = "hashed"
-	handlerAssistantHiddenPassword  = "hidden"
-	handlerAssistantPlainPassword   = "123456"
 	handlerAssistantFixedID         = "a6f3d3f9-6dd2-4848-8af9-98fe0c060816"
 	handlerInvalidAssistantID       = "not-an-id"
+	handlerAssistantPlainPassword   = "123456"
 	handlerBoomErrMsg               = "boom"
 	handlerCreateAssistantBody      = `{"names":"Jane","last_names":"Doe","email":"jane.doe@email.com","password":"123456"}`
 	handlerCreateAssistantBadBody   = `{"names":"","last_names":"Doe","email":"jane.doe@email.com","password":"123456"}`
-	handlerCaseRepositoryError      = "repository error"
+	handlerCaseServiceError         = "service error"
 	handlerCaseSuccess              = "success"
-	handlerPathIDParam              = "id"
 	handlerWrappedErrMsg            = "wrapped"
 	handlerContentType              = "Content-Type"
 	handlerApplicationJSON          = "application/json"
 	handlerLocationHeader           = "Location"
 	handlerCaseInvalidID            = "invalid id"
 	handlerCaseNotFound             = "not found"
-	handlerCaseHashingError         = "hashing error"
 	handlerCaseValidationError      = "validation error"
+	handlerCaseEmptyHashError       = "empty hash error"
 	handlerCaseInvalidJSON          = "invalid json"
 	handlerCaseNilLogger            = "nil logger"
-	handlerCaseNilRepository        = "nil repository"
-	handlerCaseNilHasher            = "nil hasher"
+	handlerCaseNilService           = "nil service"
 	handlerCaseRegisterDoesNotPanic = "register does not panic"
-	handlerGosecIgnoreReason        = "G101: false positive on API request field name"
 )
 
-type mockRepository struct {
+type mockService struct {
 	mock.Mock
 }
 
-func (m *mockRepository) List(ctx context.Context) ([]assistant.Assistant, error) {
+func (m *mockService) List(ctx context.Context) ([]assistant.Assistant, error) {
 	args := m.Called(ctx)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
@@ -61,7 +55,7 @@ func (m *mockRepository) List(ctx context.Context) ([]assistant.Assistant, error
 	return args.Get(0).([]assistant.Assistant), args.Error(1)
 }
 
-func (m *mockRepository) Get(ctx context.Context, id assistant.ID) (*assistant.Assistant, error) {
+func (m *mockService) Get(ctx context.Context, id assistant.ID) (*assistant.Assistant, error) {
 	args := m.Called(ctx, id)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
@@ -70,8 +64,8 @@ func (m *mockRepository) Get(ctx context.Context, id assistant.ID) (*assistant.A
 	return args.Get(0).(*assistant.Assistant), args.Error(1)
 }
 
-func (m *mockRepository) Create(ctx context.Context, record assistant.Assistant) (assistant.ID, error) {
-	args := m.Called(ctx, record)
+func (m *mockService) Create(ctx context.Context, input assistant.CreateInput) (assistant.ID, error) {
+	args := m.Called(ctx, input)
 	if args.Get(0) == nil {
 		return "", args.Error(1)
 	}
@@ -79,23 +73,14 @@ func (m *mockRepository) Create(ctx context.Context, record assistant.Assistant)
 	return args.Get(0).(assistant.ID), args.Error(1)
 }
 
-type mockHasher struct {
-	mock.Mock
-}
-
-func (m *mockHasher) Hash(password string) (string, error) {
-	args := m.Called(password)
-	return args.String(0), args.Error(1)
-}
-
 func newTestLogger() *slog.Logger {
 	return slog.New(slog.DiscardHandler)
 }
 
-func newMuxWithHandler(t *testing.T, repo *mockRepository, hasher *mockHasher) *http.ServeMux {
+func newMuxWithHandler(t *testing.T, service *mockService) *http.ServeMux {
 	t.Helper()
 
-	h, err := assistant.NewHandler(newTestLogger(), repo, hasher)
+	h, err := assistant.NewHandler(newTestLogger(), service)
 	require.NoError(t, err)
 
 	mux := http.NewServeMux()
@@ -107,27 +92,24 @@ func newMuxWithHandler(t *testing.T, repo *mockRepository, hasher *mockHasher) *
 func TestNewHandlerValidation(t *testing.T) {
 	t.Parallel()
 
-	repo := new(mockRepository)
-	hasher := new(mockHasher)
+	svc := new(mockService)
 	logger := newTestLogger()
 
 	tests := []struct {
 		name     string
 		logger   *slog.Logger
-		repo     assistant.Repository
-		hasher   assistant.Hasher
+		service  *mockService
 		expected error
 	}{
-		{name: handlerCaseNilLogger, logger: nil, repo: repo, hasher: hasher, expected: assistant.ErrNilLogger},
-		{name: handlerCaseNilRepository, logger: logger, repo: nil, hasher: hasher, expected: assistant.ErrNilRepository},
-		{name: handlerCaseNilHasher, logger: logger, repo: repo, hasher: nil, expected: assistant.ErrNilPasswordHasher},
+		{name: handlerCaseNilLogger, logger: nil, service: svc, expected: assistant.ErrNilLogger},
+		{name: handlerCaseNilService, logger: logger, service: nil, expected: assistant.ErrNilService},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			h, err := assistant.NewHandler(tt.logger, tt.repo, tt.hasher)
+			h, err := assistant.NewHandler(tt.logger, tt.service)
 
 			require.Error(t, err)
 			assert.Nil(t, h)
@@ -142,7 +124,7 @@ func TestRegisterHandlers(t *testing.T) {
 	t.Run(handlerCaseRegisterDoesNotPanic, func(t *testing.T) {
 		t.Parallel()
 
-		h, err := assistant.NewHandler(newTestLogger(), new(mockRepository), new(mockHasher))
+		h, err := assistant.NewHandler(newTestLogger(), new(mockService))
 		require.NoError(t, err)
 
 		mux := http.NewServeMux()
@@ -155,14 +137,13 @@ func TestRegisterHandlers(t *testing.T) {
 func TestListEndpoint(t *testing.T) {
 	t.Parallel()
 
-	t.Run(handlerCaseRepositoryError, func(t *testing.T) {
+	t.Run(handlerCaseServiceError, func(t *testing.T) {
 		t.Parallel()
 
-		repo := new(mockRepository)
-		hasher := new(mockHasher)
-		mux := newMuxWithHandler(t, repo, hasher)
+		svc := new(mockService)
+		mux := newMuxWithHandler(t, svc)
 
-		repo.On("List", mock.Anything).Return([]assistant.Assistant(nil), errors.New(handlerBoomErrMsg)).Once()
+		svc.On("List", mock.Anything).Return([]assistant.Assistant(nil), errors.New(handlerBoomErrMsg)).Once()
 
 		req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, handlerAssistantsPath, nil)
 		rec := httptest.NewRecorder()
@@ -170,25 +151,24 @@ func TestListEndpoint(t *testing.T) {
 		mux.ServeHTTP(rec, req)
 
 		assert.Equal(t, http.StatusInternalServerError, rec.Code)
-		repo.AssertExpectations(t)
+		svc.AssertExpectations(t)
 	})
 
 	t.Run(handlerCaseSuccess, func(t *testing.T) {
 		t.Parallel()
 
-		repo := new(mockRepository)
-		hasher := new(mockHasher)
-		mux := newMuxWithHandler(t, repo, hasher)
+		svc := new(mockService)
+		mux := newMuxWithHandler(t, svc)
 
 		expected := []assistant.Assistant{{
 			ID:           assistant.ID(handlerAssistantFixedID),
 			Names:        handlerAssistantNames,
 			LastNames:    handlerAssistantLastNames,
 			Email:        handlerAssistantEmail,
-			PasswordHash: handlerAssistantHiddenPassword,
+			PasswordHash: "hidden",
 		}}
 
-		repo.On("List", mock.Anything).Return(expected, nil).Once()
+		svc.On("List", mock.Anything).Return(expected, nil).Once()
 
 		req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, handlerAssistantsPath, nil)
 		rec := httptest.NewRecorder()
@@ -198,8 +178,8 @@ func TestListEndpoint(t *testing.T) {
 		assert.Equal(t, http.StatusOK, rec.Code)
 		assert.Equal(t, handlerApplicationJSON, rec.Header().Get(handlerContentType))
 		assert.Contains(t, rec.Body.String(), handlerAssistantEmail)
-		assert.NotContains(t, rec.Body.String(), handlerAssistantHiddenPassword)
-		repo.AssertExpectations(t)
+		assert.NotContains(t, rec.Body.String(), "hidden")
+		svc.AssertExpectations(t)
 	})
 }
 
@@ -209,7 +189,7 @@ func TestGetEndpoint(t *testing.T) {
 	t.Run(handlerCaseInvalidID, func(t *testing.T) {
 		t.Parallel()
 
-		mux := newMuxWithHandler(t, new(mockRepository), new(mockHasher))
+		mux := newMuxWithHandler(t, new(mockService))
 
 		req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, handlerAssistantsPath+"/"+handlerInvalidAssistantID, nil)
 		rec := httptest.NewRecorder()
@@ -222,11 +202,11 @@ func TestGetEndpoint(t *testing.T) {
 	t.Run(handlerCaseNotFound, func(t *testing.T) {
 		t.Parallel()
 
-		repo := new(mockRepository)
-		mux := newMuxWithHandler(t, repo, new(mockHasher))
+		svc := new(mockService)
+		mux := newMuxWithHandler(t, svc)
 
 		missingID := assistant.ID(handlerAssistantFixedID)
-		repo.On("Get", mock.Anything, missingID).Return((*assistant.Assistant)(nil), errors.Join(assistant.ErrAssistantNotFound, errors.New(handlerWrappedErrMsg))).Once()
+		svc.On("Get", mock.Anything, missingID).Return((*assistant.Assistant)(nil), errors.Join(assistant.ErrAssistantNotFound, errors.New(handlerWrappedErrMsg))).Once()
 
 		req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, handlerAssistantsPath+"/"+missingID.String(), nil)
 		rec := httptest.NewRecorder()
@@ -234,17 +214,17 @@ func TestGetEndpoint(t *testing.T) {
 		mux.ServeHTTP(rec, req)
 
 		assert.Equal(t, http.StatusNotFound, rec.Code)
-		repo.AssertExpectations(t)
+		svc.AssertExpectations(t)
 	})
 
-	t.Run(handlerCaseRepositoryError, func(t *testing.T) {
+	t.Run(handlerCaseServiceError, func(t *testing.T) {
 		t.Parallel()
 
-		repo := new(mockRepository)
-		mux := newMuxWithHandler(t, repo, new(mockHasher))
+		svc := new(mockService)
+		mux := newMuxWithHandler(t, svc)
 
 		recordID := assistant.ID(handlerAssistantFixedID)
-		repo.On("Get", mock.Anything, recordID).Return((*assistant.Assistant)(nil), errors.New(handlerBoomErrMsg)).Once()
+		svc.On("Get", mock.Anything, recordID).Return((*assistant.Assistant)(nil), errors.New(handlerBoomErrMsg)).Once()
 
 		req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, handlerAssistantsPath+"/"+recordID.String(), nil)
 		rec := httptest.NewRecorder()
@@ -252,24 +232,46 @@ func TestGetEndpoint(t *testing.T) {
 		mux.ServeHTTP(rec, req)
 
 		assert.Equal(t, http.StatusInternalServerError, rec.Code)
-		repo.AssertExpectations(t)
+		svc.AssertExpectations(t)
+	})
+
+	t.Run(handlerCaseEmptyHashError, func(t *testing.T) {
+		t.Parallel()
+
+		svc := new(mockService)
+		svc.On("Create", mock.Anything, assistant.CreateInput{
+			Names:     handlerAssistantNames,
+			LastNames: handlerAssistantLastNames,
+			Email:     handlerAssistantEmail,
+			Password:  handlerAssistantPlainPassword,
+		}).Return(assistant.ID(""), assistant.ErrEmptyPasswordHash).Once()
+
+		mux := newMuxWithHandler(t, svc)
+
+		req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, handlerAssistantsPath, bytes.NewBufferString(handlerCreateAssistantBody))
+		rec := httptest.NewRecorder()
+
+		mux.ServeHTTP(rec, req)
+
+		assert.Equal(t, http.StatusInternalServerError, rec.Code)
+		svc.AssertExpectations(t)
 	})
 
 	t.Run(handlerCaseSuccess, func(t *testing.T) {
 		t.Parallel()
 
-		repo := new(mockRepository)
-		mux := newMuxWithHandler(t, repo, new(mockHasher))
+		svc := new(mockService)
+		mux := newMuxWithHandler(t, svc)
 
 		record := &assistant.Assistant{
 			ID:           assistant.ID(handlerAssistantFixedID),
 			Names:        handlerAssistantNames,
 			LastNames:    handlerAssistantLastNames,
 			Email:        handlerAssistantEmail,
-			PasswordHash: handlerAssistantHiddenPassword,
+			PasswordHash: "hidden",
 		}
 
-		repo.On("Get", mock.Anything, record.ID).Return(record, nil).Once()
+		svc.On("Get", mock.Anything, record.ID).Return(record, nil).Once()
 
 		req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, handlerAssistantsPath+"/"+record.ID.String(), nil)
 		rec := httptest.NewRecorder()
@@ -279,8 +281,8 @@ func TestGetEndpoint(t *testing.T) {
 		assert.Equal(t, http.StatusOK, rec.Code)
 		assert.Equal(t, handlerApplicationJSON, rec.Header().Get(handlerContentType))
 		assert.Contains(t, rec.Body.String(), handlerAssistantEmail)
-		assert.NotContains(t, rec.Body.String(), handlerAssistantHiddenPassword)
-		repo.AssertExpectations(t)
+		assert.NotContains(t, rec.Body.String(), "hidden")
+		svc.AssertExpectations(t)
 	})
 }
 
@@ -290,7 +292,7 @@ func TestCreateEndpoint(t *testing.T) {
 	t.Run(handlerCaseInvalidJSON, func(t *testing.T) {
 		t.Parallel()
 
-		mux := newMuxWithHandler(t, new(mockRepository), new(mockHasher))
+		mux := newMuxWithHandler(t, new(mockService))
 
 		req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, handlerAssistantsPath, bytes.NewBufferString("{"))
 		rec := httptest.NewRecorder()
@@ -300,53 +302,40 @@ func TestCreateEndpoint(t *testing.T) {
 		assert.Equal(t, http.StatusBadRequest, rec.Code)
 	})
 
-	t.Run(handlerCaseHashingError, func(t *testing.T) {
-		t.Parallel()
-
-		hasher := new(mockHasher)
-		hasher.On("Hash", handlerAssistantPlainPassword).Return("", errors.New(handlerBoomErrMsg)).Once()
-		mux := newMuxWithHandler(t, new(mockRepository), hasher)
-
-		req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, handlerAssistantsPath, bytes.NewBufferString(handlerCreateAssistantBody))
-		rec := httptest.NewRecorder()
-
-		mux.ServeHTTP(rec, req)
-
-		assert.Equal(t, http.StatusInternalServerError, rec.Code)
-		hasher.AssertExpectations(t)
-	})
-
 	t.Run(handlerCaseValidationError, func(t *testing.T) {
 		t.Parallel()
 
-		hasher := new(mockHasher)
-		hasher.On("Hash", handlerAssistantPlainPassword).Return(handlerAssistantHashedPassword, nil).Once()
-		mux := newMuxWithHandler(t, new(mockRepository), hasher)
+		svc := new(mockService)
+		svc.On("Create", mock.Anything, assistant.CreateInput{
+			Names:     handlerAssistantNames,
+			LastNames: handlerAssistantLastNames,
+			Email:     handlerAssistantEmail,
+			Password:  handlerAssistantPlainPassword,
+		}).Return(assistant.ID(""), assistant.ErrAssistantRequestNamesRequired).Once()
 
-		req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, handlerAssistantsPath, bytes.NewBufferString(handlerCreateAssistantBadBody))
+		mux := newMuxWithHandler(t, svc)
+
+		req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, handlerAssistantsPath, bytes.NewBufferString(handlerCreateAssistantBody))
 		rec := httptest.NewRecorder()
 
 		mux.ServeHTTP(rec, req)
 
 		assert.Equal(t, http.StatusUnprocessableEntity, rec.Code)
-		hasher.AssertExpectations(t)
+		svc.AssertExpectations(t)
 	})
 
-	t.Run(handlerCaseRepositoryError, func(t *testing.T) {
+	t.Run(handlerCaseServiceError, func(t *testing.T) {
 		t.Parallel()
 
-		repo := new(mockRepository)
-		hasher := new(mockHasher)
-		hasher.On("Hash", handlerAssistantPlainPassword).Return(handlerAssistantHashedPassword, nil).Once()
+		svc := new(mockService)
+		svc.On("Create", mock.Anything, assistant.CreateInput{
+			Names:     handlerAssistantNames,
+			LastNames: handlerAssistantLastNames,
+			Email:     handlerAssistantEmail,
+			Password:  handlerAssistantPlainPassword,
+		}).Return(assistant.ID(""), errors.New(handlerBoomErrMsg)).Once()
 
-		repo.
-			On("Create", mock.Anything, mock.MatchedBy(func(record assistant.Assistant) bool {
-				return record.Names == handlerAssistantNames && record.LastNames == handlerAssistantLastNames && record.Email == handlerAssistantEmail && record.PasswordHash == handlerAssistantHashedPassword
-			})).
-			Return(assistant.ID(""), errors.New(handlerBoomErrMsg)).
-			Once()
-
-		mux := newMuxWithHandler(t, repo, hasher)
+		mux := newMuxWithHandler(t, svc)
 
 		req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, handlerAssistantsPath, bytes.NewBufferString(handlerCreateAssistantBody))
 		rec := httptest.NewRecorder()
@@ -354,26 +343,22 @@ func TestCreateEndpoint(t *testing.T) {
 		mux.ServeHTTP(rec, req)
 
 		assert.Equal(t, http.StatusInternalServerError, rec.Code)
-		repo.AssertExpectations(t)
-		hasher.AssertExpectations(t)
+		svc.AssertExpectations(t)
 	})
 
 	t.Run(handlerCaseSuccess, func(t *testing.T) {
 		t.Parallel()
 
-		repo := new(mockRepository)
-		hasher := new(mockHasher)
-		hasher.On("Hash", handlerAssistantPlainPassword).Return(handlerAssistantHashedPassword, nil).Once()
-
+		svc := new(mockService)
 		createdID := assistant.ID(handlerAssistantFixedID)
-		repo.
-			On("Create", mock.Anything, mock.MatchedBy(func(record assistant.Assistant) bool {
-				return record.Names == handlerAssistantNames && record.LastNames == handlerAssistantLastNames && record.Email == handlerAssistantEmail && record.PasswordHash == handlerAssistantHashedPassword
-			})).
-			Return(createdID, nil).
-			Once()
+		svc.On("Create", mock.Anything, assistant.CreateInput{
+			Names:     handlerAssistantNames,
+			LastNames: handlerAssistantLastNames,
+			Email:     handlerAssistantEmail,
+			Password:  handlerAssistantPlainPassword,
+		}).Return(createdID, nil).Once()
 
-		mux := newMuxWithHandler(t, repo, hasher)
+		mux := newMuxWithHandler(t, svc)
 
 		req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, handlerAssistantsPath, bytes.NewBufferString(handlerCreateAssistantBody))
 		rec := httptest.NewRecorder()
@@ -383,7 +368,28 @@ func TestCreateEndpoint(t *testing.T) {
 		assert.Equal(t, http.StatusCreated, rec.Code)
 		assert.Equal(t, handlerApplicationJSON, rec.Header().Get(handlerContentType))
 		assert.Equal(t, handlerAssistantsPath+"/"+createdID.String(), rec.Header().Get(handlerLocationHeader))
-		repo.AssertExpectations(t)
-		hasher.AssertExpectations(t)
+		svc.AssertExpectations(t)
+	})
+
+	t.Run(handlerCaseValidationError+" missing names", func(t *testing.T) {
+		t.Parallel()
+
+		svc := new(mockService)
+		svc.On("Create", mock.Anything, assistant.CreateInput{
+			Names:     "",
+			LastNames: handlerAssistantLastNames,
+			Email:     handlerAssistantEmail,
+			Password:  handlerAssistantPlainPassword,
+		}).Return(assistant.ID(""), assistant.ErrAssistantRequestNamesRequired).Once()
+
+		mux := newMuxWithHandler(t, svc)
+
+		req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, handlerAssistantsPath, bytes.NewBufferString(handlerCreateAssistantBadBody))
+		rec := httptest.NewRecorder()
+
+		mux.ServeHTTP(rec, req)
+
+		assert.Equal(t, http.StatusUnprocessableEntity, rec.Code)
+		svc.AssertExpectations(t)
 	})
 }

@@ -38,7 +38,13 @@ func run() error {
 
 	assistantRepo := assistant.NewMemRepository()
 	passwordHasher := password.NewArgon2()
-	assistantHandler, err := assistant.NewHandler(logger, assistantRepo, passwordHasher)
+	assistantService, err := assistant.NewService(assistantRepo, passwordHasher)
+	if err != nil {
+		logger.Error("failed to create assistant service", slog.Any("error", err))
+		return err
+	}
+
+	assistantHandler, err := assistant.NewHandler(logger, assistantService)
 	if err != nil {
 		logger.Error("failed to create assistant handler", slog.Any("error", err))
 		return err
