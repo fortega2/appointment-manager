@@ -7,6 +7,8 @@ import (
 	"log/slog"
 	"net/http"
 	"reflect"
+
+	"github.com/google/uuid"
 )
 
 const (
@@ -23,8 +25,8 @@ type Handler struct {
 
 type service interface {
 	List(ctx context.Context) ([]Assistant, error)
-	Get(ctx context.Context, id ID) (*Assistant, error)
-	Create(ctx context.Context, input CreateInput) (ID, error)
+	Get(ctx context.Context, id uuid.UUID) (*Assistant, error)
+	Create(ctx context.Context, input CreateInput) (uuid.UUID, error)
 }
 
 func NewHandler(logger *slog.Logger, service service) (*Handler, error) {
@@ -102,7 +104,7 @@ func (h *Handler) getHandler() http.HandlerFunc {
 
 			h.logger.Error(
 				"failed to get assistant",
-				slog.String("assistant_id", string(assistID)),
+				slog.String("assistant_id", assistID.String()),
 				slog.Any("error", err))
 			http.Error(w, "failed to get assistant", http.StatusInternalServerError)
 			return
@@ -112,7 +114,7 @@ func (h *Handler) getHandler() http.HandlerFunc {
 		if err := json.NewEncoder(w).Encode(assistant); err != nil {
 			h.logger.Error(
 				"failed to encode assistant response",
-				slog.String("assistant_id", string(assistID)),
+				slog.String("assistant_id", assistID.String()),
 				slog.Any("error", err))
 			http.Error(w, "failed to encode assistant response", http.StatusInternalServerError)
 			return

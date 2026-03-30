@@ -3,12 +3,14 @@ package assistant
 import (
 	"context"
 	"strings"
+
+	"github.com/google/uuid"
 )
 
 type Repository interface {
 	List(ctx context.Context) ([]Assistant, error)
-	Get(ctx context.Context, id ID) (*Assistant, error)
-	Create(ctx context.Context, assistant Assistant) (ID, error)
+	Get(ctx context.Context, id uuid.UUID) (*Assistant, error)
+	Create(ctx context.Context, assistant Assistant) (uuid.UUID, error)
 }
 
 type Hasher interface {
@@ -38,7 +40,7 @@ func (s *Service) List(ctx context.Context) ([]Assistant, error) {
 	return s.repo.List(ctx)
 }
 
-func (s *Service) Get(ctx context.Context, id ID) (*Assistant, error) {
+func (s *Service) Get(ctx context.Context, id uuid.UUID) (*Assistant, error) {
 	return s.repo.Get(ctx, id)
 }
 
@@ -49,22 +51,22 @@ type CreateInput struct {
 	Password  string //nolint:gosec // Service input requires explicit password field.
 }
 
-func (s *Service) Create(ctx context.Context, input CreateInput) (ID, error) {
+func (s *Service) Create(ctx context.Context, input CreateInput) (uuid.UUID, error) {
 	if err := validateCreateInput(input); err != nil {
-		return "", err
+		return uuid.Nil, err
 	}
 
 	hashedPassword, err := s.hasher.Hash(input.Password)
 	if err != nil {
-		return "", err
+		return uuid.Nil, err
 	}
 	if strings.TrimSpace(hashedPassword) == "" {
-		return "", ErrEmptyPasswordHash
+		return uuid.Nil, ErrEmptyPasswordHash
 	}
 
 	assist, err := NewAssistant(input.Names, input.LastNames, input.Email, hashedPassword)
 	if err != nil {
-		return "", err
+		return uuid.Nil, err
 	}
 
 	return s.repo.Create(ctx, *assist)

@@ -10,12 +10,12 @@ import (
 
 type MemRepository struct {
 	mu    sync.RWMutex
-	store map[ID]*Assistant
+	store map[uuid.UUID]*Assistant
 }
 
 func NewMemRepository() *MemRepository {
-	store := make(map[ID]*Assistant)
-	seedID := ID(uuid.NewString())
+	store := make(map[uuid.UUID]*Assistant)
+	seedID := uuid.New()
 	store[seedID] = &Assistant{
 		ID:           seedID,
 		Names:        "John",
@@ -40,7 +40,7 @@ func (r *MemRepository) List(_ context.Context) ([]Assistant, error) {
 	return assistants, nil
 }
 
-func (r *MemRepository) Get(_ context.Context, id ID) (*Assistant, error) {
+func (r *MemRepository) Get(_ context.Context, id uuid.UUID) (*Assistant, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
@@ -53,11 +53,11 @@ func (r *MemRepository) Get(_ context.Context, id ID) (*Assistant, error) {
 	return &assistantCopy, nil
 }
 
-func (r *MemRepository) Create(_ context.Context, assistant Assistant) (ID, error) {
+func (r *MemRepository) Create(_ context.Context, assistant Assistant) (uuid.UUID, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	id := ID(uuid.NewString())
+	id := uuid.New()
 	assistant.ID = id
 	r.store[id] = &assistant
 	return id, nil

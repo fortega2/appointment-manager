@@ -7,14 +7,12 @@ import (
 	"github.com/google/uuid"
 )
 
-type ID string
-
 type Assistant struct {
-	ID           ID     `json:"id"`
-	Names        string `json:"names"`
-	LastNames    string `json:"last_names"`
-	Email        string `json:"email"`
-	PasswordHash string `json:"-"`
+	ID           uuid.UUID `json:"id"`
+	Names        string    `json:"names"`
+	LastNames    string    `json:"last_names"`
+	Email        string    `json:"email"`
+	PasswordHash string    `json:"-"`
 }
 
 func NewAssistant(names, lastNames, email, passwordHash string) (*Assistant, error) {
@@ -32,7 +30,7 @@ func NewAssistant(names, lastNames, email, passwordHash string) (*Assistant, err
 	}
 
 	return &Assistant{
-		ID:           ID(uuid.NewString()),
+		ID:           uuid.New(),
 		Names:        names,
 		LastNames:    lastNames,
 		Email:        email,
@@ -40,16 +38,14 @@ func NewAssistant(names, lastNames, email, passwordHash string) (*Assistant, err
 	}, nil
 }
 
-func ParseID(raw string) (ID, error) {
+func ParseID(raw string) (uuid.UUID, error) {
 	if raw == "" {
-		return "", ErrInvalidID
+		return uuid.Nil, ErrInvalidID
 	}
-	if _, err := uuid.Parse(raw); err != nil {
-		return "", fmt.Errorf("%w: %w", ErrInvalidID, err)
+	parsedID, err := uuid.Parse(raw)
+	if err != nil {
+		return uuid.Nil, fmt.Errorf("%w: %w", ErrInvalidID, err)
 	}
-	return ID(raw), nil
-}
 
-func (id ID) String() string {
-	return string(id)
+	return parsedID, nil
 }

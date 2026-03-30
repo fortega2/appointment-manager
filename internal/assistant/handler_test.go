@@ -10,6 +10,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
@@ -55,7 +56,7 @@ func (m *mockService) List(ctx context.Context) ([]assistant.Assistant, error) {
 	return args.Get(0).([]assistant.Assistant), args.Error(1)
 }
 
-func (m *mockService) Get(ctx context.Context, id assistant.ID) (*assistant.Assistant, error) {
+func (m *mockService) Get(ctx context.Context, id uuid.UUID) (*assistant.Assistant, error) {
 	args := m.Called(ctx, id)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
@@ -64,13 +65,13 @@ func (m *mockService) Get(ctx context.Context, id assistant.ID) (*assistant.Assi
 	return args.Get(0).(*assistant.Assistant), args.Error(1)
 }
 
-func (m *mockService) Create(ctx context.Context, input assistant.CreateInput) (assistant.ID, error) {
+func (m *mockService) Create(ctx context.Context, input assistant.CreateInput) (uuid.UUID, error) {
 	args := m.Called(ctx, input)
 	if args.Get(0) == nil {
-		return "", args.Error(1)
+		return uuid.Nil, args.Error(1)
 	}
 
-	return args.Get(0).(assistant.ID), args.Error(1)
+	return args.Get(0).(uuid.UUID), args.Error(1)
 }
 
 func newTestLogger() *slog.Logger {
@@ -160,8 +161,9 @@ func TestListEndpoint(t *testing.T) {
 		svc := new(mockService)
 		mux := newMuxWithHandler(t, svc)
 
+		recordID := uuid.MustParse(handlerAssistantFixedID)
 		expected := []assistant.Assistant{{
-			ID:           assistant.ID(handlerAssistantFixedID),
+			ID:           recordID,
 			Names:        handlerAssistantNames,
 			LastNames:    handlerAssistantLastNames,
 			Email:        handlerAssistantEmail,
@@ -205,7 +207,7 @@ func TestGetEndpoint(t *testing.T) {
 		svc := new(mockService)
 		mux := newMuxWithHandler(t, svc)
 
-		missingID := assistant.ID(handlerAssistantFixedID)
+		missingID := uuid.MustParse(handlerAssistantFixedID)
 		svc.On("Get", mock.Anything, missingID).Return((*assistant.Assistant)(nil), errors.Join(assistant.ErrAssistantNotFound, errors.New(handlerWrappedErrMsg))).Once()
 
 		req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, handlerAssistantsPath+"/"+missingID.String(), nil)
@@ -223,32 +225,10 @@ func TestGetEndpoint(t *testing.T) {
 		svc := new(mockService)
 		mux := newMuxWithHandler(t, svc)
 
-		recordID := assistant.ID(handlerAssistantFixedID)
+		recordID := uuid.MustParse(handlerAssistantFixedID)
 		svc.On("Get", mock.Anything, recordID).Return((*assistant.Assistant)(nil), errors.New(handlerBoomErrMsg)).Once()
 
 		req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, handlerAssistantsPath+"/"+recordID.String(), nil)
-		rec := httptest.NewRecorder()
-
-		mux.ServeHTTP(rec, req)
-
-		assert.Equal(t, http.StatusInternalServerError, rec.Code)
-		svc.AssertExpectations(t)
-	})
-
-	t.Run(handlerCaseEmptyHashError, func(t *testing.T) {
-		t.Parallel()
-
-		svc := new(mockService)
-		svc.On("Create", mock.Anything, assistant.CreateInput{
-			Names:     handlerAssistantNames,
-			LastNames: handlerAssistantLastNames,
-			Email:     handlerAssistantEmail,
-			Password:  handlerAssistantPlainPassword,
-		}).Return(assistant.ID(""), assistant.ErrEmptyPasswordHash).Once()
-
-		mux := newMuxWithHandler(t, svc)
-
-		req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, handlerAssistantsPath, bytes.NewBufferString(handlerCreateAssistantBody))
 		rec := httptest.NewRecorder()
 
 		mux.ServeHTTP(rec, req)
@@ -264,7 +244,7 @@ func TestGetEndpoint(t *testing.T) {
 		mux := newMuxWithHandler(t, svc)
 
 		record := &assistant.Assistant{
-			ID:           assistant.ID(handlerAssistantFixedID),
+			ID:           uuid.MustParse(handlerAssistantFixedID),
 			Names:        handlerAssistantNames,
 			LastNames:    handlerAssistantLastNames,
 			Email:        handlerAssistantEmail,
@@ -311,7 +291,7 @@ func TestCreateEndpoint(t *testing.T) {
 			LastNames: handlerAssistantLastNames,
 			Email:     handlerAssistantEmail,
 			Password:  handlerAssistantPlainPassword,
-		}).Return(assistant.ID(""), assistant.ErrAssistantRequestNamesRequired).Once()
+		}).Return(uuid.Nil, assistant.ErrAssistantRequestNamesRequired).Once()
 
 		mux := newMuxWithHandler(t, svc)
 
@@ -333,7 +313,29 @@ func TestCreateEndpoint(t *testing.T) {
 			LastNames: handlerAssistantLastNames,
 			Email:     handlerAssistantEmail,
 			Password:  handlerAssistantPlainPassword,
-		}).Return(assistant.ID(""), errors.New(handlerBoomErrMsg)).Once()
+		}).Return(uuid.Nil, errors.New(handlerBoomErrMsg)).Once()
+
+		mux := newMuxWithHandler(t, svc)
+
+		req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, handlerAssistantsPath, bytes.NewBufferString(handlerCreateAssistantBody))
+		rec := httptest.NewRecorder()
+
+		mux.ServeHTTP(rec, req)
+
+		assert.Equal(t, http.StatusInternalServerError, rec.Code)
+		svc.AssertExpectations(t)
+	})
+
+	t.Run(handlerCaseEmptyHashError, func(t *testing.T) {
+		t.Parallel()
+
+		svc := new(mockService)
+		svc.On("Create", mock.Anything, assistant.CreateInput{
+			Names:     handlerAssistantNames,
+			LastNames: handlerAssistantLastNames,
+			Email:     handlerAssistantEmail,
+			Password:  handlerAssistantPlainPassword,
+		}).Return(uuid.Nil, assistant.ErrEmptyPasswordHash).Once()
 
 		mux := newMuxWithHandler(t, svc)
 
@@ -350,7 +352,7 @@ func TestCreateEndpoint(t *testing.T) {
 		t.Parallel()
 
 		svc := new(mockService)
-		createdID := assistant.ID(handlerAssistantFixedID)
+		createdID := uuid.MustParse(handlerAssistantFixedID)
 		svc.On("Create", mock.Anything, assistant.CreateInput{
 			Names:     handlerAssistantNames,
 			LastNames: handlerAssistantLastNames,
@@ -380,7 +382,7 @@ func TestCreateEndpoint(t *testing.T) {
 			LastNames: handlerAssistantLastNames,
 			Email:     handlerAssistantEmail,
 			Password:  handlerAssistantPlainPassword,
-		}).Return(assistant.ID(""), assistant.ErrAssistantRequestNamesRequired).Once()
+		}).Return(uuid.Nil, assistant.ErrAssistantRequestNamesRequired).Once()
 
 		mux := newMuxWithHandler(t, svc)
 

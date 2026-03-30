@@ -5,6 +5,7 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -16,7 +17,6 @@ const (
 	assistantHashedPassword = "hashed-password"
 	assistantHash           = "hash"
 	invalidAssistantID      = "not-an-id"
-	assistantIDLiteral      = "assistant-id"
 	whitespaceLiteral       = "   "
 	twoSpacesLiteral        = "  "
 )
@@ -124,16 +124,8 @@ func TestParseIDValidation(t *testing.T) {
 			parsedID, err := assistant.ParseID(tt.raw)
 
 			require.Error(t, err)
-			assert.Empty(t, parsedID)
+			assert.Equal(t, uuid.Nil, parsedID)
 			assert.True(t, errors.Is(err, tt.expected))
 		})
 	}
-}
-
-func TestIDString(t *testing.T) {
-	t.Parallel()
-
-	id := assistant.ID(assistantIDLiteral)
-
-	assert.Equal(t, assistantIDLiteral, id.String())
 }

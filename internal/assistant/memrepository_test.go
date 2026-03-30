@@ -8,6 +8,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -20,7 +21,7 @@ const (
 	memAssistantSeedNames      = "John"
 	memAssistantSeedEmail      = "fakeemail@email.com"
 	memAssistantSeedPassword   = "password123"
-	memMissingIDLiteral        = "missing-id"
+	memMissingIDLiteral        = "11111111-1111-1111-1111-111111111111"
 	memAssistantMutatedNames   = "Mutated"
 	memNameFmt                 = "Name-%d"
 	memPersonEmailFmt          = "person-%d@email.com"
@@ -72,7 +73,8 @@ func TestMemRepositoryGetNotFound(t *testing.T) {
 
 	repo := assistant.NewMemRepository()
 
-	assistantRecord, err := repo.Get(context.Background(), assistant.ID(memMissingIDLiteral))
+	missingID := uuid.MustParse(memMissingIDLiteral)
+	assistantRecord, err := repo.Get(context.Background(), missingID)
 
 	require.Error(t, err)
 	assert.Nil(t, assistantRecord)

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
@@ -43,7 +44,7 @@ func (m *serviceRepoMock) List(ctx context.Context) ([]assistant.Assistant, erro
 	return args.Get(0).([]assistant.Assistant), args.Error(1)
 }
 
-func (m *serviceRepoMock) Get(ctx context.Context, id assistant.ID) (*assistant.Assistant, error) {
+func (m *serviceRepoMock) Get(ctx context.Context, id uuid.UUID) (*assistant.Assistant, error) {
 	args := m.Called(ctx, id)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
@@ -52,13 +53,13 @@ func (m *serviceRepoMock) Get(ctx context.Context, id assistant.ID) (*assistant.
 	return args.Get(0).(*assistant.Assistant), args.Error(1)
 }
 
-func (m *serviceRepoMock) Create(ctx context.Context, record assistant.Assistant) (assistant.ID, error) {
+func (m *serviceRepoMock) Create(ctx context.Context, record assistant.Assistant) (uuid.UUID, error) {
 	args := m.Called(ctx, record)
 	if args.Get(0) == nil {
-		return "", args.Error(1)
+		return uuid.Nil, args.Error(1)
 	}
 
-	return args.Get(0).(assistant.ID), args.Error(1)
+	return args.Get(0).(uuid.UUID), args.Error(1)
 }
 
 type serviceHasherMock struct {
@@ -128,7 +129,7 @@ func TestServiceList(t *testing.T) {
 		require.NoError(t, err)
 
 		expected := []assistant.Assistant{{
-			ID:           assistant.ID(serviceAssistantFixedID),
+			ID:           uuid.MustParse(serviceAssistantFixedID),
 			Names:        serviceAssistantNames,
 			LastNames:    serviceAssistantLastNames,
 			Email:        serviceAssistantEmail,
@@ -156,7 +157,7 @@ func TestServiceGet(t *testing.T) {
 		svc, err := assistant.NewService(repo, hasher)
 		require.NoError(t, err)
 
-		requestedID := assistant.ID(serviceAssistantMissingID)
+		requestedID := uuid.MustParse(serviceAssistantMissingID)
 		repo.On("Get", mock.Anything, requestedID).Return((*assistant.Assistant)(nil), errors.New(serviceBoomErrMsg)).Once()
 
 		result, getErr := svc.Get(context.Background(), requestedID)
@@ -175,7 +176,7 @@ func TestServiceGet(t *testing.T) {
 		require.NoError(t, err)
 
 		record := &assistant.Assistant{
-			ID:           assistant.ID(serviceAssistantFixedID),
+			ID:           uuid.MustParse(serviceAssistantFixedID),
 			Names:        serviceAssistantNames,
 			LastNames:    serviceAssistantLastNames,
 			Email:        serviceAssistantEmail,
@@ -211,7 +212,7 @@ func TestServiceCreate(t *testing.T) {
 		})
 
 		require.Error(t, createErr)
-		assert.Empty(t, id)
+		assert.Equal(t, uuid.Nil, id)
 		assert.True(t, errors.Is(createErr, assistant.ErrAssistantRequestPasswordRequired))
 		hasher.AssertNotCalled(t, "Hash", mock.Anything)
 		repo.AssertNotCalled(t, "Create", mock.Anything, mock.Anything)
@@ -235,7 +236,7 @@ func TestServiceCreate(t *testing.T) {
 		})
 
 		require.Error(t, createErr)
-		assert.Empty(t, id)
+		assert.Equal(t, uuid.Nil, id)
 		hasher.AssertExpectations(t)
 		repo.AssertNotCalled(t, "Create", mock.Anything, mock.Anything)
 	})
@@ -258,7 +259,7 @@ func TestServiceCreate(t *testing.T) {
 		})
 
 		require.Error(t, createErr)
-		assert.Empty(t, id)
+		assert.Equal(t, uuid.Nil, id)
 		assert.True(t, errors.Is(createErr, assistant.ErrEmptyPasswordHash))
 		hasher.AssertExpectations(t)
 		repo.AssertNotCalled(t, "Create", mock.Anything, mock.Anything)
@@ -280,7 +281,7 @@ func TestServiceCreate(t *testing.T) {
 		})
 
 		require.Error(t, createErr)
-		assert.Empty(t, id)
+		assert.Equal(t, uuid.Nil, id)
 		assert.True(t, errors.Is(createErr, assistant.ErrAssistantRequestNamesRequired))
 		hasher.AssertNotCalled(t, "Hash", mock.Anything)
 		repo.AssertNotCalled(t, "Create", mock.Anything, mock.Anything)
@@ -300,7 +301,7 @@ func TestServiceCreate(t *testing.T) {
 				record.LastNames == serviceAssistantLastNames &&
 				record.Email == serviceAssistantEmail &&
 				record.PasswordHash == serviceAssistantHash
-		})).Return(assistant.ID(""), errors.New(serviceBoomErrMsg)).Once()
+		})).Return(uuid.Nil, errors.New(serviceBoomErrMsg)).Once()
 
 		id, createErr := svc.Create(context.Background(), assistant.CreateInput{
 			Names:     serviceAssistantNames,
@@ -310,7 +311,7 @@ func TestServiceCreate(t *testing.T) {
 		})
 
 		require.Error(t, createErr)
-		assert.Empty(t, id)
+		assert.Equal(t, uuid.Nil, id)
 		hasher.AssertExpectations(t)
 		repo.AssertExpectations(t)
 	})
@@ -323,7 +324,7 @@ func TestServiceCreate(t *testing.T) {
 		svc, err := assistant.NewService(repo, hasher)
 		require.NoError(t, err)
 
-		createdID := assistant.ID(serviceAssistantFixedID)
+		createdID := uuid.MustParse(serviceAssistantFixedID)
 		hasher.On("Hash", serviceAssistantPassword).Return(serviceAssistantHash, nil).Once()
 		repo.On("Create", mock.Anything, mock.MatchedBy(func(record assistant.Assistant) bool {
 			return record.Names == serviceAssistantNames &&
