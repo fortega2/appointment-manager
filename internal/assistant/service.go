@@ -45,8 +45,8 @@ func (s *Service) Get(ctx context.Context, id uuid.UUID) (*Assistant, error) {
 }
 
 type CreateInput struct {
-	Names     string
-	LastNames string
+	FirstName string
+	LastName  string
 	Email     string
 	Password  string //nolint:gosec // Service input requires explicit password field.
 }
@@ -64,7 +64,7 @@ func (s *Service) Create(ctx context.Context, input CreateInput) (uuid.UUID, err
 		return uuid.Nil, ErrEmptyPasswordHash
 	}
 
-	assist, err := NewAssistant(input.Names, input.LastNames, input.Email, hashedPassword)
+	assist, err := NewAssistant(input.FirstName, input.LastName, input.Email, hashedPassword)
 	if err != nil {
 		return uuid.Nil, err
 	}
@@ -73,11 +73,11 @@ func (s *Service) Create(ctx context.Context, input CreateInput) (uuid.UUID, err
 }
 
 func validateCreateInput(input CreateInput) error {
-	if strings.TrimSpace(input.Names) == "" {
-		return ErrAssistantRequestNamesRequired
+	if strings.TrimSpace(input.FirstName) == "" {
+		return ErrAssistantRequestFirstNameRequired
 	}
-	if strings.TrimSpace(input.LastNames) == "" {
-		return ErrAssistantRequestLastNamesRequired
+	if strings.TrimSpace(input.LastName) == "" {
+		return ErrAssistantRequestLastNameRequired
 	}
 	if strings.TrimSpace(input.Email) == "" {
 		return ErrAssistantRequestEmailRequired

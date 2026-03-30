@@ -18,8 +18,8 @@ func NewMemRepository() *MemRepository {
 	seedID := uuid.New()
 	store[seedID] = &Assistant{
 		ID:           seedID,
-		Names:        "John",
-		LastNames:    "Doe",
+		FirstName:    "John",
+		LastName:     "Doe",
 		Email:        "fakeemail@email.com",
 		PasswordHash: "password123",
 	}

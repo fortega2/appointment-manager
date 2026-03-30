@@ -25,8 +25,8 @@ const (
 	handlerInvalidAssistantID       = "not-an-id"
 	handlerAssistantPlainPassword   = "123456"
 	handlerBoomErrMsg               = "boom"
-	handlerCreateAssistantBody      = `{"names":"Jane","last_names":"Doe","email":"jane.doe@email.com","password":"123456"}`
-	handlerCreateAssistantBadBody   = `{"names":"","last_names":"Doe","email":"jane.doe@email.com","password":"123456"}`
+	handlerCreateAssistantBody      = `{"first_name":"Jane","last_name":"Doe","email":"jane.doe@email.com","password":"123456"}`
+	handlerCreateAssistantBadBody   = `{"first_name":"","last_name":"Doe","email":"jane.doe@email.com","password":"123456"}`
 	handlerCaseServiceError         = "service error"
 	handlerCaseSuccess              = "success"
 	handlerWrappedErrMsg            = "wrapped"
@@ -164,8 +164,8 @@ func TestListEndpoint(t *testing.T) {
 		recordID := uuid.MustParse(handlerAssistantFixedID)
 		expected := []assistant.Assistant{{
 			ID:           recordID,
-			Names:        handlerAssistantNames,
-			LastNames:    handlerAssistantLastNames,
+			FirstName:    handlerAssistantNames,
+			LastName:     handlerAssistantLastNames,
 			Email:        handlerAssistantEmail,
 			PasswordHash: "hidden",
 		}}
@@ -245,8 +245,8 @@ func TestGetEndpoint(t *testing.T) {
 
 		record := &assistant.Assistant{
 			ID:           uuid.MustParse(handlerAssistantFixedID),
-			Names:        handlerAssistantNames,
-			LastNames:    handlerAssistantLastNames,
+			FirstName:    handlerAssistantNames,
+			LastName:     handlerAssistantLastNames,
 			Email:        handlerAssistantEmail,
 			PasswordHash: "hidden",
 		}
@@ -287,11 +287,11 @@ func TestCreateEndpoint(t *testing.T) {
 
 		svc := new(mockService)
 		svc.On("Create", mock.Anything, assistant.CreateInput{
-			Names:     handlerAssistantNames,
-			LastNames: handlerAssistantLastNames,
+			FirstName: handlerAssistantNames,
+			LastName:  handlerAssistantLastNames,
 			Email:     handlerAssistantEmail,
 			Password:  handlerAssistantPlainPassword,
-		}).Return(uuid.Nil, assistant.ErrAssistantRequestNamesRequired).Once()
+		}).Return(uuid.Nil, assistant.ErrAssistantRequestFirstNameRequired).Once()
 
 		mux := newMuxWithHandler(t, svc)
 
@@ -309,8 +309,8 @@ func TestCreateEndpoint(t *testing.T) {
 
 		svc := new(mockService)
 		svc.On("Create", mock.Anything, assistant.CreateInput{
-			Names:     handlerAssistantNames,
-			LastNames: handlerAssistantLastNames,
+			FirstName: handlerAssistantNames,
+			LastName:  handlerAssistantLastNames,
 			Email:     handlerAssistantEmail,
 			Password:  handlerAssistantPlainPassword,
 		}).Return(uuid.Nil, errors.New(handlerBoomErrMsg)).Once()
@@ -331,8 +331,8 @@ func TestCreateEndpoint(t *testing.T) {
 
 		svc := new(mockService)
 		svc.On("Create", mock.Anything, assistant.CreateInput{
-			Names:     handlerAssistantNames,
-			LastNames: handlerAssistantLastNames,
+			FirstName: handlerAssistantNames,
+			LastName:  handlerAssistantLastNames,
 			Email:     handlerAssistantEmail,
 			Password:  handlerAssistantPlainPassword,
 		}).Return(uuid.Nil, assistant.ErrEmptyPasswordHash).Once()
@@ -354,8 +354,8 @@ func TestCreateEndpoint(t *testing.T) {
 		svc := new(mockService)
 		createdID := uuid.MustParse(handlerAssistantFixedID)
 		svc.On("Create", mock.Anything, assistant.CreateInput{
-			Names:     handlerAssistantNames,
-			LastNames: handlerAssistantLastNames,
+			FirstName: handlerAssistantNames,
+			LastName:  handlerAssistantLastNames,
 			Email:     handlerAssistantEmail,
 			Password:  handlerAssistantPlainPassword,
 		}).Return(createdID, nil).Once()
@@ -378,11 +378,11 @@ func TestCreateEndpoint(t *testing.T) {
 
 		svc := new(mockService)
 		svc.On("Create", mock.Anything, assistant.CreateInput{
-			Names:     "",
-			LastNames: handlerAssistantLastNames,
+			FirstName: "",
+			LastName:  handlerAssistantLastNames,
 			Email:     handlerAssistantEmail,
 			Password:  handlerAssistantPlainPassword,
-		}).Return(uuid.Nil, assistant.ErrAssistantRequestNamesRequired).Once()
+		}).Return(uuid.Nil, assistant.ErrAssistantRequestFirstNameRequired).Once()
 
 		mux := newMuxWithHandler(t, svc)
 

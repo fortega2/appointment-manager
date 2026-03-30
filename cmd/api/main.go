@@ -2,18 +2,22 @@ package main
 
 import (
 	"appointment-manager/internal/assistant"
+	"appointment-manager/internal/db"
 	"appointment-manager/internal/password"
 	"appointment-manager/internal/server"
 	"context"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 )
 
 const (
+	databaseURLEnv          = "DATABASE_URL"
 	serverAddr              = ":8080"
 	serverReadHeaderTimeout = 5 * time.Second
 	serverReadTimeout       = 10 * time.Second
@@ -36,7 +40,25 @@ func run() error {
 	}))
 	logger.Info("starting API server")
 
-	assistantRepo := assistant.NewMemRepository()
+	databaseURL := strings.TrimSpace(os.Getenv(databaseURLEnv))
+	if databaseURL == "" {
+		logger.Error("database URL is not set", slog.String("env", databaseURLEnv))
+		return fmt.Errorf("%s is required", databaseURLEnv)
+	}
+
+	pool, err := db.NewPostgresPool(context.Background(), databaseURL)
+	if err != nil {
+		logger.Error("failed to initialize postgres pool", slog.Any("error", err))
+		return err
+	}
+	defer pool.Close()
+
+	assistantRepo, err := assistant.NewPostgresRepository(pool)
+	if err != nil {
+		logger.Error("failed to create assistant postgres repository", slog.Any("error", err))
+		return err
+	}
+
 	passwordHasher := password.NewArgon2()
 	assistantService, err := assistant.NewService(assistantRepo, passwordHasher)
 	if err != nil {

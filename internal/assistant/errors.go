@@ -10,10 +10,12 @@ var (
 	ErrNilRepository     = errors.New("repository cannot be nil")
 	ErrNilPasswordHasher = errors.New("password hasher cannot be nil")
 	ErrNilService        = errors.New("service cannot be nil")
+	ErrNilPgxPool        = errors.New("pgx pool cannot be nil")
+
 	ErrEmptyPasswordHash = errors.New("password hash cannot be empty")
 
-	ErrAssistantRequestNamesRequired     = errors.New("names is required")
-	ErrAssistantRequestLastNamesRequired = errors.New("last names is required")
+	ErrAssistantRequestFirstNameRequired = errors.New("names is required")
+	ErrAssistantRequestLastNameRequired  = errors.New("last names is required")
 	ErrAssistantRequestEmailRequired     = errors.New("email is required")
 	ErrAssistantRequestPasswordRequired  = errors.New("password is required")
 )

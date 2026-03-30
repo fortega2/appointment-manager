@@ -29,8 +29,8 @@ func TestNewAssistant(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, assistantRecord)
 	assert.NotEmpty(t, assistantRecord.ID)
-	assert.Equal(t, assistantNames, assistantRecord.Names)
-	assert.Equal(t, assistantLastNames, assistantRecord.LastNames)
+	assert.Equal(t, assistantNames, assistantRecord.FirstName)
+	assert.Equal(t, assistantLastNames, assistantRecord.LastName)
 	assert.Equal(t, assistantEmail, assistantRecord.Email)
 	assert.Equal(t, assistantHashedPassword, assistantRecord.PasswordHash)
 }
@@ -52,7 +52,7 @@ func TestNewAssistantValidation(t *testing.T) {
 			lastNames:    assistantLastNames,
 			email:        assistantEmail,
 			passwordHash: assistantHash,
-			expectedErr:  assistant.ErrAssistantRequestNamesRequired,
+			expectedErr:  assistant.ErrAssistantRequestFirstNameRequired,
 		},
 		{
 			name:         "missing last names",
@@ -60,7 +60,7 @@ func TestNewAssistantValidation(t *testing.T) {
 			lastNames:    whitespaceLiteral,
 			email:        assistantEmail,
 			passwordHash: assistantHash,
-			expectedErr:  assistant.ErrAssistantRequestLastNamesRequired,
+			expectedErr:  assistant.ErrAssistantRequestLastNameRequired,
 		},
 		{
 			name:         "missing email",

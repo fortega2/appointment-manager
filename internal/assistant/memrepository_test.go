@@ -36,8 +36,8 @@ func TestNewMemRepository(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, assistants, 1)
 	assert.NotEmpty(t, assistants[0].ID)
-	assert.Equal(t, memAssistantSeedNames, assistants[0].Names)
-	assert.Equal(t, memAssistantLastNames, assistants[0].LastNames)
+	assert.Equal(t, memAssistantSeedNames, assistants[0].FirstName)
+	assert.Equal(t, memAssistantLastNames, assistants[0].LastName)
 	assert.Equal(t, memAssistantSeedEmail, assistants[0].Email)
 	assert.Equal(t, memAssistantSeedPassword, assistants[0].PasswordHash)
 }
@@ -49,8 +49,8 @@ func TestMemRepositoryCreateAndGet(t *testing.T) {
 	ctx := context.Background()
 
 	id, err := repo.Create(ctx, assistant.Assistant{
-		Names:        memAssistantNames,
-		LastNames:    memAssistantLastNames,
+		FirstName:    memAssistantNames,
+		LastName:     memAssistantLastNames,
 		Email:        memAssistantEmail,
 		PasswordHash: memAssistantHashedPassword,
 	})
@@ -62,8 +62,8 @@ func TestMemRepositoryCreateAndGet(t *testing.T) {
 	require.NoError(t, getErr)
 	require.NotNil(t, assistantRecord)
 	assert.Equal(t, id, assistantRecord.ID)
-	assert.Equal(t, memAssistantNames, assistantRecord.Names)
-	assert.Equal(t, memAssistantLastNames, assistantRecord.LastNames)
+	assert.Equal(t, memAssistantNames, assistantRecord.FirstName)
+	assert.Equal(t, memAssistantLastNames, assistantRecord.LastName)
 	assert.Equal(t, memAssistantEmail, assistantRecord.Email)
 	assert.Equal(t, memAssistantHashedPassword, assistantRecord.PasswordHash)
 }
@@ -95,11 +95,11 @@ func TestMemRepositoryGetReturnsCopy(t *testing.T) {
 
 	firstRead, firstErr := repo.Get(ctx, seedID)
 	require.NoError(t, firstErr)
-	firstRead.Names = memAssistantMutatedNames
+	firstRead.FirstName = memAssistantMutatedNames
 
 	secondRead, secondErr := repo.Get(ctx, seedID)
 	require.NoError(t, secondErr)
-	assert.Equal(t, memAssistantSeedNames, secondRead.Names)
+	assert.Equal(t, memAssistantSeedNames, secondRead.FirstName)
 }
 
 func TestMemRepositoryConcurrentAccess(t *testing.T) {
@@ -133,8 +133,8 @@ func TestMemRepositoryConcurrentAccess(t *testing.T) {
 			}
 
 			if _, createErr := repo.Create(ctx, assistant.Assistant{
-				Names:        fmt.Sprintf(memNameFmt, i),
-				LastNames:    memAssistantLastNames,
+				FirstName:    fmt.Sprintf(memNameFmt, i),
+				LastName:     memAssistantLastNames,
 				Email:        fmt.Sprintf(memPersonEmailFmt, i),
 				PasswordHash: memAssistantHashedPassword,
 			}); createErr != nil {

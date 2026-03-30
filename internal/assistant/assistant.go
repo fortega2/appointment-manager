@@ -9,18 +9,18 @@ import (
 
 type Assistant struct {
 	ID           uuid.UUID `json:"id"`
-	Names        string    `json:"names"`
-	LastNames    string    `json:"last_names"`
+	FirstName    string    `json:"first_name"`
+	LastName     string    `json:"last_name"`
 	Email        string    `json:"email"`
 	PasswordHash string    `json:"-"`
 }
 
-func NewAssistant(names, lastNames, email, passwordHash string) (*Assistant, error) {
-	if strings.TrimSpace(names) == "" {
-		return nil, ErrAssistantRequestNamesRequired
+func NewAssistant(firstName, lastName, email, passwordHash string) (*Assistant, error) {
+	if strings.TrimSpace(firstName) == "" {
+		return nil, ErrAssistantRequestFirstNameRequired
 	}
-	if strings.TrimSpace(lastNames) == "" {
-		return nil, ErrAssistantRequestLastNamesRequired
+	if strings.TrimSpace(lastName) == "" {
+		return nil, ErrAssistantRequestLastNameRequired
 	}
 	if strings.TrimSpace(email) == "" {
 		return nil, ErrAssistantRequestEmailRequired
@@ -31,8 +31,8 @@ func NewAssistant(names, lastNames, email, passwordHash string) (*Assistant, err
 
 	return &Assistant{
 		ID:           uuid.New(),
-		Names:        names,
-		LastNames:    lastNames,
+		FirstName:    firstName,
+		LastName:     lastName,
 		Email:        email,
 		PasswordHash: passwordHash,
 	}, nil

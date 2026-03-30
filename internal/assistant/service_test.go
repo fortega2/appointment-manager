@@ -130,8 +130,8 @@ func TestServiceList(t *testing.T) {
 
 		expected := []assistant.Assistant{{
 			ID:           uuid.MustParse(serviceAssistantFixedID),
-			Names:        serviceAssistantNames,
-			LastNames:    serviceAssistantLastNames,
+			FirstName:    serviceAssistantNames,
+			LastName:     serviceAssistantLastNames,
 			Email:        serviceAssistantEmail,
 			PasswordHash: serviceAssistantHash,
 		}}
@@ -177,8 +177,8 @@ func TestServiceGet(t *testing.T) {
 
 		record := &assistant.Assistant{
 			ID:           uuid.MustParse(serviceAssistantFixedID),
-			Names:        serviceAssistantNames,
-			LastNames:    serviceAssistantLastNames,
+			FirstName:    serviceAssistantNames,
+			LastName:     serviceAssistantLastNames,
 			Email:        serviceAssistantEmail,
 			PasswordHash: serviceAssistantHash,
 		}
@@ -205,8 +205,8 @@ func TestServiceCreate(t *testing.T) {
 		require.NoError(t, err)
 
 		id, createErr := svc.Create(context.Background(), assistant.CreateInput{
-			Names:     serviceAssistantNames,
-			LastNames: serviceAssistantLastNames,
+			FirstName: serviceAssistantNames,
+			LastName:  serviceAssistantLastNames,
 			Email:     serviceAssistantEmail,
 			Password:  "   ",
 		})
@@ -229,8 +229,8 @@ func TestServiceCreate(t *testing.T) {
 		hasher.On("Hash", serviceAssistantPassword).Return(emptyValue, errors.New(serviceBoomErrMsg)).Once()
 
 		id, createErr := svc.Create(context.Background(), assistant.CreateInput{
-			Names:     serviceAssistantNames,
-			LastNames: serviceAssistantLastNames,
+			FirstName: serviceAssistantNames,
+			LastName:  serviceAssistantLastNames,
 			Email:     serviceAssistantEmail,
 			Password:  serviceAssistantPassword,
 		})
@@ -252,8 +252,8 @@ func TestServiceCreate(t *testing.T) {
 		hasher.On("Hash", serviceAssistantPassword).Return("", nil).Once()
 
 		id, createErr := svc.Create(context.Background(), assistant.CreateInput{
-			Names:     serviceAssistantNames,
-			LastNames: serviceAssistantLastNames,
+			FirstName: serviceAssistantNames,
+			LastName:  serviceAssistantLastNames,
 			Email:     serviceAssistantEmail,
 			Password:  serviceAssistantPassword,
 		})
@@ -274,15 +274,15 @@ func TestServiceCreate(t *testing.T) {
 		require.NoError(t, err)
 
 		id, createErr := svc.Create(context.Background(), assistant.CreateInput{
-			Names:     "",
-			LastNames: serviceAssistantLastNames,
+			FirstName: "",
+			LastName:  serviceAssistantLastNames,
 			Email:     serviceAssistantEmail,
 			Password:  serviceAssistantPassword,
 		})
 
 		require.Error(t, createErr)
 		assert.Equal(t, uuid.Nil, id)
-		assert.True(t, errors.Is(createErr, assistant.ErrAssistantRequestNamesRequired))
+		assert.True(t, errors.Is(createErr, assistant.ErrAssistantRequestFirstNameRequired))
 		hasher.AssertNotCalled(t, "Hash", mock.Anything)
 		repo.AssertNotCalled(t, "Create", mock.Anything, mock.Anything)
 	})
@@ -297,15 +297,15 @@ func TestServiceCreate(t *testing.T) {
 
 		hasher.On("Hash", serviceAssistantPassword).Return(serviceAssistantHash, nil).Once()
 		repo.On("Create", mock.Anything, mock.MatchedBy(func(record assistant.Assistant) bool {
-			return record.Names == serviceAssistantNames &&
-				record.LastNames == serviceAssistantLastNames &&
+			return record.FirstName == serviceAssistantNames &&
+				record.LastName == serviceAssistantLastNames &&
 				record.Email == serviceAssistantEmail &&
 				record.PasswordHash == serviceAssistantHash
 		})).Return(uuid.Nil, errors.New(serviceBoomErrMsg)).Once()
 
 		id, createErr := svc.Create(context.Background(), assistant.CreateInput{
-			Names:     serviceAssistantNames,
-			LastNames: serviceAssistantLastNames,
+			FirstName: serviceAssistantNames,
+			LastName:  serviceAssistantLastNames,
 			Email:     serviceAssistantEmail,
 			Password:  serviceAssistantPassword,
 		})
@@ -327,15 +327,15 @@ func TestServiceCreate(t *testing.T) {
 		createdID := uuid.MustParse(serviceAssistantFixedID)
 		hasher.On("Hash", serviceAssistantPassword).Return(serviceAssistantHash, nil).Once()
 		repo.On("Create", mock.Anything, mock.MatchedBy(func(record assistant.Assistant) bool {
-			return record.Names == serviceAssistantNames &&
-				record.LastNames == serviceAssistantLastNames &&
+			return record.FirstName == serviceAssistantNames &&
+				record.LastName == serviceAssistantLastNames &&
 				record.Email == serviceAssistantEmail &&
 				record.PasswordHash == serviceAssistantHash
 		})).Return(createdID, nil).Once()
 
 		id, createErr := svc.Create(context.Background(), assistant.CreateInput{
-			Names:     serviceAssistantNames,
-			LastNames: serviceAssistantLastNames,
+			FirstName: serviceAssistantNames,
+			LastName:  serviceAssistantLastNames,
 			Email:     serviceAssistantEmail,
 			Password:  serviceAssistantPassword,
 		})
