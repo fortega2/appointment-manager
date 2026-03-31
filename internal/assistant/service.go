@@ -74,16 +74,16 @@ func (s *Service) Create(ctx context.Context, input CreateInput) (uuid.UUID, err
 
 func validateCreateInput(input CreateInput) error {
 	if strings.TrimSpace(input.FirstName) == "" {
-		return ErrAssistantRequestFirstNameRequired
+		return ErrFirstNameRequired
 	}
 	if strings.TrimSpace(input.LastName) == "" {
-		return ErrAssistantRequestLastNameRequired
+		return ErrLastNameRequired
 	}
 	if strings.TrimSpace(input.Email) == "" {
-		return ErrAssistantRequestEmailRequired
+		return ErrEmailRequired
 	}
 	if strings.TrimSpace(input.Password) == "" {
-		return ErrAssistantRequestPasswordRequired
+		return ErrPasswordRequired
 	}
 
 	return nil

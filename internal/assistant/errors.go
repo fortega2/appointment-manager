@@ -14,8 +14,9 @@ var (
 
 	ErrEmptyPasswordHash = errors.New("password hash cannot be empty")
 
-	ErrAssistantRequestFirstNameRequired = errors.New("names is required")
-	ErrAssistantRequestLastNameRequired  = errors.New("last names is required")
-	ErrAssistantRequestEmailRequired     = errors.New("email is required")
-	ErrAssistantRequestPasswordRequired  = errors.New("password is required")
+	ErrFirstNameRequired = errors.New("names is required")
+	ErrLastNameRequired  = errors.New("last names is required")
+	ErrEmailRequired     = errors.New("email is required")
+	ErrEmailHasNoSign    = errors.New("email must contain '@' sign")
+	ErrPasswordRequired  = errors.New("password is required")
 )

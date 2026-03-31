@@ -17,23 +17,24 @@ type Assistant struct {
 
 func NewAssistant(firstName, lastName, email, passwordHash string) (*Assistant, error) {
 	if strings.TrimSpace(firstName) == "" {
-		return nil, ErrAssistantRequestFirstNameRequired
+		return nil, ErrFirstNameRequired
 	}
 	if strings.TrimSpace(lastName) == "" {
-		return nil, ErrAssistantRequestLastNameRequired
+		return nil, ErrLastNameRequired
 	}
-	if strings.TrimSpace(email) == "" {
-		return nil, ErrAssistantRequestEmailRequired
+	if err := isValidEmail(email); err != nil {
+		return nil, err
 	}
 	if strings.TrimSpace(passwordHash) == "" {
-		return nil, ErrAssistantRequestPasswordRequired
+		return nil, ErrPasswordRequired
 	}
+	loweredEmail := strings.ToLower(email)
 
 	return &Assistant{
 		ID:           uuid.New(),
 		FirstName:    firstName,
 		LastName:     lastName,
-		Email:        email,
+		Email:        loweredEmail,
 		PasswordHash: passwordHash,
 	}, nil
 }
@@ -48,4 +49,14 @@ func ParseID(raw string) (uuid.UUID, error) {
 	}
 
 	return parsedID, nil
+}
+
+func isValidEmail(email string) error {
+	if strings.TrimSpace(email) == "" {
+		return ErrEmailRequired
+	}
+	if !strings.Contains(email, "@") {
+		return ErrEmailHasNoSign
+	}
+	return nil
 }

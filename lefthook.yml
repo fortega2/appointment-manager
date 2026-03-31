@@ -1,0 +1,9 @@
+pre-commit:
+  parallel: true
+  commands:
+    linter:
+      run: golangci-lint run
+    security:
+      run: govulncheck ./...
+    tests:
+      run: go test -short ./...

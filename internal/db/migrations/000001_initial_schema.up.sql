@@ -7,3 +7,11 @@ CREATE TABLE IF NOT EXISTS assistant (
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at TIMESTAMPTZ NULL
 );
+
+ALTER TABLE assistant
+ADD CONSTRAINT email_must_contain_at_sign
+CHECK (position('@' in email) > 0);
+
+ALTER TABLE assistant
+ADD CONSTRAINT email_lowercase
+CHECK (email = lower(email));

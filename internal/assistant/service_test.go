@@ -213,7 +213,7 @@ func TestServiceCreate(t *testing.T) {
 
 		require.Error(t, createErr)
 		assert.Equal(t, uuid.Nil, id)
-		assert.True(t, errors.Is(createErr, assistant.ErrAssistantRequestPasswordRequired))
+		assert.True(t, errors.Is(createErr, assistant.ErrPasswordRequired))
 		hasher.AssertNotCalled(t, "Hash", mock.Anything)
 		repo.AssertNotCalled(t, "Create", mock.Anything, mock.Anything)
 	})
@@ -282,7 +282,7 @@ func TestServiceCreate(t *testing.T) {
 
 		require.Error(t, createErr)
 		assert.Equal(t, uuid.Nil, id)
-		assert.True(t, errors.Is(createErr, assistant.ErrAssistantRequestFirstNameRequired))
+		assert.True(t, errors.Is(createErr, assistant.ErrFirstNameRequired))
 		hasher.AssertNotCalled(t, "Hash", mock.Anything)
 		repo.AssertNotCalled(t, "Create", mock.Anything, mock.Anything)
 	})

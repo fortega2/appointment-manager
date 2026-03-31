@@ -41,8 +41,8 @@ func TestPostgresRepositoryCreateListGet(t *testing.T) {
 		newID := uuid.New()
 		createdID, err := repo.Create(ctx, assistant.Assistant{
 			ID:           newID,
-			Names:        fmt.Sprintf(repoNamesFmt, i),
-			LastNames:    repoLastNames,
+			FirstName:    fmt.Sprintf(repoNamesFmt, i),
+			LastName:     repoLastNames,
 			Email:        fmt.Sprintf(repoEmailFmt, i),
 			PasswordHash: fmt.Sprintf(repoPasswordHashFmt, i),
 		})
@@ -60,8 +60,8 @@ func TestPostgresRepositoryCreateListGet(t *testing.T) {
 		require.NoError(t, getErr)
 		require.NotNil(t, record)
 		assert.Equal(t, id, record.ID)
-		assert.Equal(t, fmt.Sprintf(repoNamesFmt, i), record.Names)
-		assert.Equal(t, repoLastNames, record.LastNames)
+		assert.Equal(t, fmt.Sprintf(repoNamesFmt, i), record.FirstName)
+		assert.Equal(t, repoLastNames, record.LastName)
 		assert.Equal(t, fmt.Sprintf(repoEmailFmt, i), record.Email)
 		assert.Equal(t, fmt.Sprintf(repoPasswordHashFmt, i), record.PasswordHash)
 	}

@@ -26,7 +26,7 @@ func TestNewPostgresPoolAppliesMigrations(t *testing.T) {
 	ctx := context.Background()
 	testcontainers.SkipIfProviderIsNotHealthy(t)
 
-	databaseURL := startPostgresContainer(t, ctx)
+	databaseURL := startPostgresContainer(ctx, t)
 
 	pool, err := db.NewPostgresPool(ctx, databaseURL)
 	require.NoError(t, err)
@@ -42,7 +42,7 @@ func TestNewPostgresPoolAppliesMigrations(t *testing.T) {
 	assert.Equal(t, dbAssistantTableName, tableName)
 }
 
-func startPostgresContainer(t *testing.T, ctx context.Context) string {
+func startPostgresContainer(ctx context.Context, t *testing.T) string {
 	t.Helper()
 
 	container, err := postgres.Run(ctx,

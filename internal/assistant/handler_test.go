@@ -291,7 +291,7 @@ func TestCreateEndpoint(t *testing.T) {
 			LastName:  handlerAssistantLastNames,
 			Email:     handlerAssistantEmail,
 			Password:  handlerAssistantPlainPassword,
-		}).Return(uuid.Nil, assistant.ErrAssistantRequestFirstNameRequired).Once()
+		}).Return(uuid.Nil, assistant.ErrFirstNameRequired).Once()
 
 		mux := newMuxWithHandler(t, svc)
 
@@ -382,7 +382,7 @@ func TestCreateEndpoint(t *testing.T) {
 			LastName:  handlerAssistantLastNames,
 			Email:     handlerAssistantEmail,
 			Password:  handlerAssistantPlainPassword,
-		}).Return(uuid.Nil, assistant.ErrAssistantRequestFirstNameRequired).Once()
+		}).Return(uuid.Nil, assistant.ErrFirstNameRequired).Once()
 
 		mux := newMuxWithHandler(t, svc)
 

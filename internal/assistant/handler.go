@@ -158,8 +158,8 @@ func (h *Handler) createHandler() http.HandlerFunc {
 }
 
 func isValidationError(err error) bool {
-	return errors.Is(err, ErrAssistantRequestFirstNameRequired) ||
-		errors.Is(err, ErrAssistantRequestLastNameRequired) ||
-		errors.Is(err, ErrAssistantRequestEmailRequired) ||
-		errors.Is(err, ErrAssistantRequestPasswordRequired)
+	return errors.Is(err, ErrFirstNameRequired) ||
+		errors.Is(err, ErrLastNameRequired) ||
+		errors.Is(err, ErrEmailRequired) ||
+		errors.Is(err, ErrPasswordRequired)
 }

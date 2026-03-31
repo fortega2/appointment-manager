@@ -52,7 +52,7 @@ func TestNewAssistantValidation(t *testing.T) {
 			lastNames:    assistantLastNames,
 			email:        assistantEmail,
 			passwordHash: assistantHash,
-			expectedErr:  assistant.ErrAssistantRequestFirstNameRequired,
+			expectedErr:  assistant.ErrFirstNameRequired,
 		},
 		{
 			name:         "missing last names",
@@ -60,7 +60,7 @@ func TestNewAssistantValidation(t *testing.T) {
 			lastNames:    whitespaceLiteral,
 			email:        assistantEmail,
 			passwordHash: assistantHash,
-			expectedErr:  assistant.ErrAssistantRequestLastNameRequired,
+			expectedErr:  assistant.ErrLastNameRequired,
 		},
 		{
 			name:         "missing email",
@@ -68,7 +68,7 @@ func TestNewAssistantValidation(t *testing.T) {
 			lastNames:    assistantLastNames,
 			email:        "",
 			passwordHash: assistantHash,
-			expectedErr:  assistant.ErrAssistantRequestEmailRequired,
+			expectedErr:  assistant.ErrEmailRequired,
 		},
 		{
 			name:         "missing password",
@@ -76,7 +76,7 @@ func TestNewAssistantValidation(t *testing.T) {
 			lastNames:    assistantLastNames,
 			email:        assistantEmail,
 			passwordHash: twoSpacesLiteral,
-			expectedErr:  assistant.ErrAssistantRequestPasswordRequired,
+			expectedErr:  assistant.ErrPasswordRequired,
 		},
 	}
 
