@@ -1,0 +1,27 @@
+services:
+  postgres:
+    container_name: appointment-manager-postgres
+    hostname: appointment-manager-postgres
+    image: postgres:18.3-alpine3.23
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_data:
+    name: appointment-manager-postgres-data
+
+networks:
+  default:
+    name: appointment-manager-postgres-network
+    driver: bridge
