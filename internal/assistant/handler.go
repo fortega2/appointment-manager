@@ -1,6 +1,7 @@
 package assistant
 
 import (
+	"appointment-manager/internal/web"
 	"context"
 	"encoding/json"
 	"errors"
@@ -14,6 +15,13 @@ import (
 const (
 	contentTypeHeader = "Content-Type"
 	contentTypeJSON   = "application/json"
+
+	createRequestBodyMaxBytes int64 = 1 << 20
+
+	problemTypeInvalidAssistantID = "/problems/invalid-assistant-id"
+	problemTypeResourceNotFound   = "/problems/resource-not-found"
+	problemTypeValidationFailed   = "/problems/validation-failed"
+	problemTypeInternalServer     = "/problems/internal-server-error"
 
 	failedToCreateAssistantMsg = "failed to create assistant"
 )
@@ -68,14 +76,26 @@ func (h *Handler) listHandler() http.HandlerFunc {
 		assistants, err := h.service.List(r.Context())
 		if err != nil {
 			h.logger.Error("failed to list assistants", slog.Any("error", err))
-			http.Error(w, "failed to list assistants", http.StatusInternalServerError)
+			web.WriteProblem(w, web.ProblemDetail{
+				Type:     problemTypeInternalServer,
+				Title:    http.StatusText(http.StatusInternalServerError),
+				Status:   http.StatusInternalServerError,
+				Detail:   "failed to list assistants",
+				Instance: r.URL.Path,
+			})
 			return
 		}
 
 		w.Header().Set(contentTypeHeader, contentTypeJSON)
 		if err := json.NewEncoder(w).Encode(assistants); err != nil {
 			h.logger.Error("failed to encode assistants response", slog.Any("error", err))
-			http.Error(w, "failed to encode assistants response", http.StatusInternalServerError)
+			web.WriteProblem(w, web.ProblemDetail{
+				Type:     problemTypeInternalServer,
+				Title:    http.StatusText(http.StatusInternalServerError),
+				Status:   http.StatusInternalServerError,
+				Detail:   "failed to encode assistants response",
+				Instance: r.URL.Path,
+			})
 			return
 		}
 	}
@@ -85,20 +105,38 @@ func (h *Handler) getHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		reqAssistID := r.PathValue("id")
 		if reqAssistID == "" {
-			http.Error(w, "assistant ID not found", http.StatusBadRequest)
+			web.WriteProblem(w, web.ProblemDetail{
+				Type:     problemTypeInvalidAssistantID,
+				Title:    http.StatusText(http.StatusBadRequest),
+				Status:   http.StatusBadRequest,
+				Detail:   "assistant ID not found",
+				Instance: r.URL.Path,
+			})
 			return
 		}
 
 		assistID, err := ParseID(reqAssistID)
 		if err != nil {
-			http.Error(w, "invalid assistant ID", http.StatusBadRequest)
+			web.WriteProblem(w, web.ProblemDetail{
+				Type:     problemTypeInvalidAssistantID,
+				Title:    http.StatusText(http.StatusBadRequest),
+				Status:   http.StatusBadRequest,
+				Detail:   "invalid assistant ID",
+				Instance: r.URL.Path,
+			})
 			return
 		}
 
 		assistant, err := h.service.Get(r.Context(), assistID)
 		if err != nil {
 			if errors.Is(err, ErrAssistantNotFound) {
-				http.Error(w, "assistant not found", http.StatusNotFound)
+				web.WriteProblem(w, web.ProblemDetail{
+					Type:     problemTypeResourceNotFound,
+					Title:    http.StatusText(http.StatusNotFound),
+					Status:   http.StatusNotFound,
+					Detail:   "assistant not found",
+					Instance: r.URL.Path,
+				})
 				return
 			}
 
@@ -106,7 +144,13 @@ func (h *Handler) getHandler() http.HandlerFunc {
 				"failed to get assistant",
 				slog.String("assistant_id", assistID.String()),
 				slog.Any("error", err))
-			http.Error(w, "failed to get assistant", http.StatusInternalServerError)
+			web.WriteProblem(w, web.ProblemDetail{
+				Type:     problemTypeInternalServer,
+				Title:    http.StatusText(http.StatusInternalServerError),
+				Status:   http.StatusInternalServerError,
+				Detail:   "failed to get assistant",
+				Instance: r.URL.Path,
+			})
 			return
 		}
 
@@ -116,7 +160,13 @@ func (h *Handler) getHandler() http.HandlerFunc {
 				"failed to encode assistant response",
 				slog.String("assistant_id", assistID.String()),
 				slog.Any("error", err))
-			http.Error(w, "failed to encode assistant response", http.StatusInternalServerError)
+			web.WriteProblem(w, web.ProblemDetail{
+				Type:     problemTypeInternalServer,
+				Title:    http.StatusText(http.StatusInternalServerError),
+				Status:   http.StatusInternalServerError,
+				Detail:   "failed to encode assistant response",
+				Instance: r.URL.Path,
+			})
 			return
 		}
 	}
@@ -132,9 +182,10 @@ type request struct {
 func (h *Handler) createHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var req request
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			h.logger.Error("failed to decode assistant request", slog.Any("error", err))
-			http.Error(w, "invalid request body", http.StatusBadRequest)
+		problem := web.DecodeJSON(w, r, createRequestBodyMaxBytes, &req)
+		if problem != nil {
+			h.logger.Error("failed to decode assistant request", slog.Any("problem", problem))
+			web.WriteProblem(w, *problem)
 			return
 		}
 
@@ -142,12 +193,24 @@ func (h *Handler) createHandler() http.HandlerFunc {
 		if err != nil {
 			if isValidationError(err) {
 				h.logger.Error("invalid assistant request", slog.Any("error", err))
-				http.Error(w, err.Error(), http.StatusUnprocessableEntity)
+				web.WriteProblem(w, web.ProblemDetail{
+					Type:     problemTypeValidationFailed,
+					Title:    http.StatusText(http.StatusUnprocessableEntity),
+					Status:   http.StatusUnprocessableEntity,
+					Detail:   err.Error(),
+					Instance: r.URL.Path,
+				})
 				return
 			}
 
 			h.logger.Error(failedToCreateAssistantMsg, slog.Any("error", err))
-			http.Error(w, failedToCreateAssistantMsg, http.StatusInternalServerError)
+			web.WriteProblem(w, web.ProblemDetail{
+				Type:     problemTypeInternalServer,
+				Title:    http.StatusText(http.StatusInternalServerError),
+				Status:   http.StatusInternalServerError,
+				Detail:   failedToCreateAssistantMsg,
+				Instance: r.URL.Path,
+			})
 			return
 		}
 

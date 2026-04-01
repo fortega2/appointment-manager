@@ -32,12 +32,14 @@ const (
 	handlerWrappedErrMsg            = "wrapped"
 	handlerContentType              = "Content-Type"
 	handlerApplicationJSON          = "application/json"
+	handlerApplicationProblemJSON   = "application/problem+json"
 	handlerLocationHeader           = "Location"
 	handlerCaseInvalidID            = "invalid id"
 	handlerCaseNotFound             = "not found"
 	handlerCaseValidationError      = "validation error"
 	handlerCaseEmptyHashError       = "empty hash error"
 	handlerCaseInvalidJSON          = "invalid json"
+	handlerCaseMissingContentType   = "missing content type"
 	handlerCaseNilLogger            = "nil logger"
 	handlerCaseNilService           = "nil service"
 	handlerCaseRegisterDoesNotPanic = "register does not panic"
@@ -88,6 +90,18 @@ func newMuxWithHandler(t *testing.T, service *mockService) *http.ServeMux {
 	h.RegisterHandlers(mux)
 
 	return mux
+}
+
+func newCreateAssistantRequest(body string) *http.Request {
+	req := httptest.NewRequestWithContext(
+		context.Background(),
+		http.MethodPost,
+		handlerAssistantsPath,
+		bytes.NewBufferString(body),
+	)
+	req.Header.Set(handlerContentType, handlerApplicationJSON)
+
+	return req
 }
 
 func TestNewHandlerValidation(t *testing.T) {
@@ -274,12 +288,32 @@ func TestCreateEndpoint(t *testing.T) {
 
 		mux := newMuxWithHandler(t, new(mockService))
 
-		req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, handlerAssistantsPath, bytes.NewBufferString("{"))
+		req := newCreateAssistantRequest("{")
 		rec := httptest.NewRecorder()
 
 		mux.ServeHTTP(rec, req)
 
 		assert.Equal(t, http.StatusBadRequest, rec.Code)
+		assert.Equal(t, handlerApplicationProblemJSON, rec.Header().Get(handlerContentType))
+	})
+
+	t.Run(handlerCaseMissingContentType, func(t *testing.T) {
+		t.Parallel()
+
+		mux := newMuxWithHandler(t, new(mockService))
+
+		req := httptest.NewRequestWithContext(
+			context.Background(),
+			http.MethodPost,
+			handlerAssistantsPath,
+			bytes.NewBufferString(handlerCreateAssistantBody),
+		)
+		rec := httptest.NewRecorder()
+
+		mux.ServeHTTP(rec, req)
+
+		assert.Equal(t, http.StatusUnsupportedMediaType, rec.Code)
+		assert.Equal(t, handlerApplicationProblemJSON, rec.Header().Get(handlerContentType))
 	})
 
 	t.Run(handlerCaseValidationError, func(t *testing.T) {
@@ -295,7 +329,7 @@ func TestCreateEndpoint(t *testing.T) {
 
 		mux := newMuxWithHandler(t, svc)
 
-		req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, handlerAssistantsPath, bytes.NewBufferString(handlerCreateAssistantBody))
+		req := newCreateAssistantRequest(handlerCreateAssistantBody)
 		rec := httptest.NewRecorder()
 
 		mux.ServeHTTP(rec, req)
@@ -317,7 +351,7 @@ func TestCreateEndpoint(t *testing.T) {
 
 		mux := newMuxWithHandler(t, svc)
 
-		req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, handlerAssistantsPath, bytes.NewBufferString(handlerCreateAssistantBody))
+		req := newCreateAssistantRequest(handlerCreateAssistantBody)
 		rec := httptest.NewRecorder()
 
 		mux.ServeHTTP(rec, req)
@@ -339,7 +373,7 @@ func TestCreateEndpoint(t *testing.T) {
 
 		mux := newMuxWithHandler(t, svc)
 
-		req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, handlerAssistantsPath, bytes.NewBufferString(handlerCreateAssistantBody))
+		req := newCreateAssistantRequest(handlerCreateAssistantBody)
 		rec := httptest.NewRecorder()
 
 		mux.ServeHTTP(rec, req)
@@ -362,7 +396,7 @@ func TestCreateEndpoint(t *testing.T) {
 
 		mux := newMuxWithHandler(t, svc)
 
-		req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, handlerAssistantsPath, bytes.NewBufferString(handlerCreateAssistantBody))
+		req := newCreateAssistantRequest(handlerCreateAssistantBody)
 		rec := httptest.NewRecorder()
 
 		mux.ServeHTTP(rec, req)
@@ -386,7 +420,7 @@ func TestCreateEndpoint(t *testing.T) {
 
 		mux := newMuxWithHandler(t, svc)
 
-		req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, handlerAssistantsPath, bytes.NewBufferString(handlerCreateAssistantBadBody))
+		req := newCreateAssistantRequest(handlerCreateAssistantBadBody)
 		rec := httptest.NewRecorder()
 
 		mux.ServeHTTP(rec, req)
