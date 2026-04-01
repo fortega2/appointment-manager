@@ -3,6 +3,7 @@ package main
 import (
 	"appointment-manager/internal/assistant"
 	"appointment-manager/internal/db"
+	"appointment-manager/internal/middleware"
 	"appointment-manager/internal/password"
 	"appointment-manager/internal/server"
 	"context"
@@ -74,11 +75,13 @@ func run() error {
 
 	mux := http.NewServeMux()
 	assistantHandler.RegisterHandlers(mux)
+	handler := middleware.RequestID()(mux)
+	handler = middleware.RequestLogger(logger)(handler)
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	if err := server.Start(ctx, logger, mux, serverAddr, server.Config{
+	if err := server.Start(ctx, logger, handler, serverAddr, server.Config{
 		ReadHeaderTimeout: serverReadHeaderTimeout,
 		ReadTimeout:       serverReadTimeout,
 		WriteTimeout:      serverWriteTimeout,
