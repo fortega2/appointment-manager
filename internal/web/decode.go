@@ -12,15 +12,15 @@ import (
 )
 
 const (
-	problemTypeUnsupportedMediaType = "/problems/unsupported-media-type"
-	problemTypeRequestBodyTooLarge  = "/problems/request-body-too-large"
-	problemTypeInvalidJSON          = "/problems/invalid-json"
+	problemTypeUnsupportedMediaType = ProblemTypeUnsupportedMediaType
+	problemTypeRequestBodyTooLarge  = ProblemTypeRequestBodyTooLarge
+	problemTypeInvalidJSON          = ProblemTypeInvalidJSON
 )
 
 func DecodeJSON(w http.ResponseWriter, r *http.Request, maxBodyBytes int64, dst any) *ProblemDetail {
 	if err := validateDecodeTarget(dst); err != nil {
 		return &ProblemDetail{
-			Type:     "/problems/internal-server-error",
+			Type:     ProblemTypeInternalServerError,
 			Title:    http.StatusText(http.StatusInternalServerError),
 			Status:   http.StatusInternalServerError,
 			Detail:   err.Error(),
@@ -30,7 +30,7 @@ func DecodeJSON(w http.ResponseWriter, r *http.Request, maxBodyBytes int64, dst 
 
 	if maxBodyBytes <= 0 {
 		return &ProblemDetail{
-			Type:     "/problems/internal-server-error",
+			Type:     ProblemTypeInternalServerError,
 			Title:    http.StatusText(http.StatusInternalServerError),
 			Status:   http.StatusInternalServerError,
 			Detail:   "invalid request body size limit",

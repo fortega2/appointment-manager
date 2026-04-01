@@ -34,7 +34,7 @@ func TestPostgresRepositoryCreateListGet(t *testing.T) {
 	testcontainers.SkipIfProviderIsNotHealthy(t)
 	ctx := context.Background()
 
-	repo := newIntegrationRepository(t, ctx)
+	repo := newIntegrationRepository(ctx, t)
 
 	createdIDs := make([]uuid.UUID, 0, 2)
 	for i := range 2 {
@@ -71,7 +71,7 @@ func TestPostgresRepositoryGetNotFound(t *testing.T) {
 	testcontainers.SkipIfProviderIsNotHealthy(t)
 	ctx := context.Background()
 
-	repo := newIntegrationRepository(t, ctx)
+	repo := newIntegrationRepository(ctx, t)
 
 	missingID := uuid.MustParse(repoMissingIDLiteral)
 	record, err := repo.Get(ctx, missingID)
@@ -81,10 +81,40 @@ func TestPostgresRepositoryGetNotFound(t *testing.T) {
 	assert.True(t, errors.Is(err, assistant.ErrAssistantNotFound))
 }
 
-func newIntegrationRepository(t *testing.T, ctx context.Context) *assistant.PostgresRepository {
+func TestPostgresRepositoryCreateDuplicateEmail(t *testing.T) {
+	testcontainers.SkipIfProviderIsNotHealthy(t)
+	ctx := context.Background()
+
+	repo := newIntegrationRepository(ctx, t)
+
+	duplicateEmail := "duplicate@email.com"
+	firstID, err := repo.Create(ctx, assistant.Assistant{
+		ID:           uuid.New(),
+		FirstName:    "First",
+		LastName:     "Assistant",
+		Email:        duplicateEmail,
+		PasswordHash: "hash-1",
+	})
+	require.NoError(t, err)
+	assert.NotEqual(t, uuid.Nil, firstID)
+
+	secondID, err := repo.Create(ctx, assistant.Assistant{
+		ID:           uuid.New(),
+		FirstName:    "Second",
+		LastName:     "Assistant",
+		Email:        duplicateEmail,
+		PasswordHash: "hash-2",
+	})
+
+	require.Error(t, err)
+	assert.Equal(t, uuid.Nil, secondID)
+	assert.True(t, errors.Is(err, assistant.ErrEmailAlreadyExists))
+}
+
+func newIntegrationRepository(ctx context.Context, t *testing.T) *assistant.PostgresRepository {
 	t.Helper()
 
-	databaseURL := startAssistantPostgresContainer(t, ctx)
+	databaseURL := startAssistantPostgresContainer(ctx, t)
 
 	pool, err := db.NewPostgresPool(ctx, databaseURL)
 	require.NoError(t, err)
@@ -96,7 +126,7 @@ func newIntegrationRepository(t *testing.T, ctx context.Context) *assistant.Post
 	return repo
 }
 
-func startAssistantPostgresContainer(t *testing.T, ctx context.Context) string {
+func startAssistantPostgresContainer(ctx context.Context, t *testing.T) string {
 	t.Helper()
 
 	container, err := postgres.Run(ctx,

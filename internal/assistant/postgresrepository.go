@@ -7,12 +7,16 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 const (
-	listErrMsg = "List: %w"
-	listQuery  = `
+	constraintAssistantEmailUnique = "assistant_email_key"
+	pgErrUniqueViolation           = "23505"
+	listErrMsg                     = "List: %w"
+
+	listQuery = `
 		SELECT
 			id,
 			first_name,
@@ -116,8 +120,20 @@ func (r *PostgresRepository) Create(ctx context.Context, assistant Assistant) (u
 		assistant.PasswordHash,
 	)
 	if err != nil {
+		if isUniqueEmailViolation(err) {
+			return uuid.Nil, ErrEmailAlreadyExists
+		}
 		return uuid.Nil, fmt.Errorf("Create: %w", err)
 	}
 
 	return assistant.ID, nil
+}
+
+func isUniqueEmailViolation(err error) bool {
+	pgErr, ok := errors.AsType[*pgconn.PgError](err)
+	if !ok {
+		return false
+	}
+
+	return pgErr.Code == pgErrUniqueViolation && pgErr.ConstraintName == constraintAssistantEmailUnique
 }

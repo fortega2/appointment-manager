@@ -5,7 +5,17 @@ import (
 	"net/http"
 )
 
-const problemJSONContentType = "application/problem+json"
+const (
+	problemJSONContentType = "application/problem+json"
+
+	ProblemTypeInvalidJSON          = "/problems/invalid-json"
+	ProblemTypeUnsupportedMediaType = "/problems/unsupported-media-type"
+	ProblemTypeRequestBodyTooLarge  = "/problems/request-body-too-large"
+	ProblemTypeValidationFailed     = "/problems/validation-failed"
+	ProblemTypeResourceNotFound     = "/problems/resource-not-found"
+	ProblemTypeConflict             = "/problems/conflict"
+	ProblemTypeInternalServerError  = "/problems/internal-server-error"
+)
 
 type ProblemDetail struct {
 	Type     string `json:"type"`
@@ -13,6 +23,20 @@ type ProblemDetail struct {
 	Status   int    `json:"status"`
 	Detail   string `json:"detail,omitempty"`
 	Instance string `json:"instance,omitempty"`
+}
+
+func NewProblem(status int, problemType, detail, instance string) ProblemDetail {
+	return ProblemDetail{
+		Type:     problemType,
+		Title:    http.StatusText(status),
+		Status:   status,
+		Detail:   detail,
+		Instance: instance,
+	}
+}
+
+func NewInternalServerProblem(detail, instance string) ProblemDetail {
+	return NewProblem(http.StatusInternalServerError, ProblemTypeInternalServerError, detail, instance)
 }
 
 func WriteProblem(w http.ResponseWriter, problem ProblemDetail) {

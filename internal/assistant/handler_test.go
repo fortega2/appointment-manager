@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/google/uuid"
@@ -26,9 +27,13 @@ const (
 	handlerAssistantPlainPassword   = "123456"
 	handlerBoomErrMsg               = "boom"
 	handlerCreateAssistantBody      = `{"first_name":"Jane","last_name":"Doe","email":"jane.doe@email.com","password":"123456"}`
+	handlerCreateAssistantCharset   = "application/json; charset=utf-8"
 	handlerCreateAssistantBadBody   = `{"first_name":"","last_name":"Doe","email":"jane.doe@email.com","password":"123456"}`
+	handlerCreateAssistantUnknown   = `{"first_name":"Jane","last_name":"Doe","email":"jane.doe@email.com","password":"123456","extra":"field"}`
+	handlerCreateAssistantMultiple  = `{"first_name":"Jane","last_name":"Doe","email":"jane.doe@email.com","password":"123456"}{"first_name":"Ana"}`
 	handlerCaseServiceError         = "service error"
 	handlerCaseSuccess              = "success"
+	handlerCaseConflict             = "conflict"
 	handlerWrappedErrMsg            = "wrapped"
 	handlerContentType              = "Content-Type"
 	handlerApplicationJSON          = "application/json"
@@ -40,6 +45,10 @@ const (
 	handlerCaseEmptyHashError       = "empty hash error"
 	handlerCaseInvalidJSON          = "invalid json"
 	handlerCaseMissingContentType   = "missing content type"
+	handlerCaseUnknownField         = "unknown field"
+	handlerCaseMultipleJSON         = "multiple json values"
+	handlerCaseBodyTooLarge         = "body too large"
+	handlerCaseJSONCharset          = "json charset"
 	handlerCaseNilLogger            = "nil logger"
 	handlerCaseNilService           = "nil service"
 	handlerCaseRegisterDoesNotPanic = "register does not panic"
@@ -93,13 +102,19 @@ func newMuxWithHandler(t *testing.T, service *mockService) *http.ServeMux {
 }
 
 func newCreateAssistantRequest(body string) *http.Request {
+	return newCreateAssistantRequestWithContentType(body, handlerApplicationJSON)
+}
+
+func newCreateAssistantRequestWithContentType(body, contentType string) *http.Request {
 	req := httptest.NewRequestWithContext(
 		context.Background(),
 		http.MethodPost,
 		handlerAssistantsPath,
 		bytes.NewBufferString(body),
 	)
-	req.Header.Set(handlerContentType, handlerApplicationJSON)
+	if contentType != "" {
+		req.Header.Set(handlerContentType, contentType)
+	}
 
 	return req
 }
@@ -286,7 +301,8 @@ func TestCreateEndpoint(t *testing.T) {
 	t.Run(handlerCaseInvalidJSON, func(t *testing.T) {
 		t.Parallel()
 
-		mux := newMuxWithHandler(t, new(mockService))
+		svc := new(mockService)
+		mux := newMuxWithHandler(t, svc)
 
 		req := newCreateAssistantRequest("{")
 		rec := httptest.NewRecorder()
@@ -295,25 +311,95 @@ func TestCreateEndpoint(t *testing.T) {
 
 		assert.Equal(t, http.StatusBadRequest, rec.Code)
 		assert.Equal(t, handlerApplicationProblemJSON, rec.Header().Get(handlerContentType))
+		svc.AssertNumberOfCalls(t, "Create", 0)
 	})
 
 	t.Run(handlerCaseMissingContentType, func(t *testing.T) {
 		t.Parallel()
 
-		mux := newMuxWithHandler(t, new(mockService))
+		svc := new(mockService)
+		mux := newMuxWithHandler(t, svc)
 
-		req := httptest.NewRequestWithContext(
-			context.Background(),
-			http.MethodPost,
-			handlerAssistantsPath,
-			bytes.NewBufferString(handlerCreateAssistantBody),
-		)
+		req := newCreateAssistantRequestWithContentType(handlerCreateAssistantBody, "")
 		rec := httptest.NewRecorder()
 
 		mux.ServeHTTP(rec, req)
 
 		assert.Equal(t, http.StatusUnsupportedMediaType, rec.Code)
 		assert.Equal(t, handlerApplicationProblemJSON, rec.Header().Get(handlerContentType))
+		svc.AssertNumberOfCalls(t, "Create", 0)
+	})
+
+	t.Run(handlerCaseUnknownField, func(t *testing.T) {
+		t.Parallel()
+
+		svc := new(mockService)
+		mux := newMuxWithHandler(t, svc)
+
+		req := newCreateAssistantRequest(handlerCreateAssistantUnknown)
+		rec := httptest.NewRecorder()
+
+		mux.ServeHTTP(rec, req)
+
+		assert.Equal(t, http.StatusBadRequest, rec.Code)
+		assert.Equal(t, handlerApplicationProblemJSON, rec.Header().Get(handlerContentType))
+		svc.AssertNumberOfCalls(t, "Create", 0)
+	})
+
+	t.Run(handlerCaseMultipleJSON, func(t *testing.T) {
+		t.Parallel()
+
+		svc := new(mockService)
+		mux := newMuxWithHandler(t, svc)
+
+		req := newCreateAssistantRequest(handlerCreateAssistantMultiple)
+		rec := httptest.NewRecorder()
+
+		mux.ServeHTTP(rec, req)
+
+		assert.Equal(t, http.StatusBadRequest, rec.Code)
+		assert.Equal(t, handlerApplicationProblemJSON, rec.Header().Get(handlerContentType))
+		svc.AssertNumberOfCalls(t, "Create", 0)
+	})
+
+	t.Run(handlerCaseBodyTooLarge, func(t *testing.T) {
+		t.Parallel()
+
+		svc := new(mockService)
+		mux := newMuxWithHandler(t, svc)
+
+		hugeBody := `{"first_name":"` + strings.Repeat("A", 1<<20) + `","last_name":"Doe","email":"jane.doe@email.com","password":"123456"}`
+		req := newCreateAssistantRequest(hugeBody)
+		rec := httptest.NewRecorder()
+
+		mux.ServeHTTP(rec, req)
+
+		assert.Equal(t, http.StatusRequestEntityTooLarge, rec.Code)
+		assert.Equal(t, handlerApplicationProblemJSON, rec.Header().Get(handlerContentType))
+		svc.AssertNumberOfCalls(t, "Create", 0)
+	})
+
+	t.Run(handlerCaseJSONCharset, func(t *testing.T) {
+		t.Parallel()
+
+		svc := new(mockService)
+		createdID := uuid.MustParse(handlerAssistantFixedID)
+		svc.On("Create", mock.Anything, assistant.CreateInput{
+			FirstName: handlerAssistantNames,
+			LastName:  handlerAssistantLastNames,
+			Email:     handlerAssistantEmail,
+			Password:  handlerAssistantPlainPassword,
+		}).Return(createdID, nil).Once()
+
+		mux := newMuxWithHandler(t, svc)
+
+		req := newCreateAssistantRequestWithContentType(handlerCreateAssistantBody, handlerCreateAssistantCharset)
+		rec := httptest.NewRecorder()
+
+		mux.ServeHTTP(rec, req)
+
+		assert.Equal(t, http.StatusCreated, rec.Code)
+		svc.AssertExpectations(t)
 	})
 
 	t.Run(handlerCaseValidationError, func(t *testing.T) {
@@ -357,6 +443,29 @@ func TestCreateEndpoint(t *testing.T) {
 		mux.ServeHTTP(rec, req)
 
 		assert.Equal(t, http.StatusInternalServerError, rec.Code)
+		svc.AssertExpectations(t)
+	})
+
+	t.Run(handlerCaseConflict, func(t *testing.T) {
+		t.Parallel()
+
+		svc := new(mockService)
+		svc.On("Create", mock.Anything, assistant.CreateInput{
+			FirstName: handlerAssistantNames,
+			LastName:  handlerAssistantLastNames,
+			Email:     handlerAssistantEmail,
+			Password:  handlerAssistantPlainPassword,
+		}).Return(uuid.Nil, assistant.ErrEmailAlreadyExists).Once()
+
+		mux := newMuxWithHandler(t, svc)
+
+		req := newCreateAssistantRequest(handlerCreateAssistantBody)
+		rec := httptest.NewRecorder()
+
+		mux.ServeHTTP(rec, req)
+
+		assert.Equal(t, http.StatusConflict, rec.Code)
+		assert.Equal(t, handlerApplicationProblemJSON, rec.Header().Get(handlerContentType))
 		svc.AssertExpectations(t)
 	})
 
