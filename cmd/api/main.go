@@ -86,7 +86,7 @@ func run() error {
 		MaxHeaderBytes:    serverMaxHeaderBytes,
 		ShutdownTimeout:   serverShutdownTimeout,
 	}); err != nil {
-		logger.Error("server error", slog.Any("error", err))
+		logger.ErrorContext(ctx, "server error", slog.Any("error", err))
 		return err
 	}
 

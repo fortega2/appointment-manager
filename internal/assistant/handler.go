@@ -68,14 +68,14 @@ func (h *Handler) listHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		assistants, err := h.service.List(r.Context())
 		if err != nil {
-			h.logger.Error("failed to list assistants", slog.Any("error", err))
+			h.logger.ErrorContext(r.Context(), "failed to list assistants", slog.Any("error", err))
 			web.WriteProblem(w, problemListAssistants(r.URL.Path))
 			return
 		}
 
 		w.Header().Set(contentTypeHeader, contentTypeJSON)
 		if err := json.NewEncoder(w).Encode(assistants); err != nil {
-			h.logger.Error("failed to encode assistants response", slog.Any("error", err))
+			h.logger.ErrorContext(r.Context(), "failed to encode assistants response", slog.Any("error", err))
 			web.WriteProblem(w, problemEncodeAssistantsResponse(r.URL.Path))
 			return
 		}
@@ -103,7 +103,8 @@ func (h *Handler) getHandler() http.HandlerFunc {
 				return
 			}
 
-			h.logger.Error(
+			h.logger.ErrorContext(
+				r.Context(),
 				"failed to get assistant",
 				slog.String("assistant_id", assistID.String()),
 				slog.Any("error", err))
@@ -113,7 +114,8 @@ func (h *Handler) getHandler() http.HandlerFunc {
 
 		w.Header().Set(contentTypeHeader, contentTypeJSON)
 		if err := json.NewEncoder(w).Encode(assistant); err != nil {
-			h.logger.Error(
+			h.logger.ErrorContext(
+				r.Context(),
 				"failed to encode assistant response",
 				slog.String("assistant_id", assistID.String()),
 				slog.Any("error", err))
@@ -135,19 +137,15 @@ func (h *Handler) createHandler() http.HandlerFunc {
 		var req request
 		problem := web.DecodeJSON(w, r, createRequestBodyMaxBytes, &req)
 		if problem != nil {
-			h.logger.Error("failed to decode assistant request", slog.Any("problem", problem))
 			web.WriteProblem(w, *problem)
 			return
 		}
 
 		id, err := h.service.Create(r.Context(), CreateInput(req))
 		if err != nil {
-			if isValidationError(err) {
-				h.logger.Error("invalid assistant request", slog.Any("error", err))
-			} else {
-				h.logger.Error(detailFailedToCreateAssistant, slog.Any("error", err))
+			if !isValidationError(err) && !errors.Is(err, ErrEmailAlreadyExists) {
+				h.logger.ErrorContext(r.Context(), "failed to create assistant", slog.Any("error", err))
 			}
-
 			web.WriteProblem(w, problemFromCreateError(err, r.URL.Path))
 			return
 		}

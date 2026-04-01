@@ -71,7 +71,7 @@ func Start(ctx context.Context, logger *slog.Logger, handler http.Handler, addr 
 
 	go func() {
 		defer close(errCh)
-		logger.Info("server listening", slog.String("addr", addr))
+		logger.InfoContext(ctx, "server listening", slog.String("addr", addr))
 
 		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			errCh <- fmt.Errorf("listen and serve: %w", err)
@@ -82,7 +82,7 @@ func Start(ctx context.Context, logger *slog.Logger, handler http.Handler, addr 
 	case err := <-errCh:
 		return err
 	case <-ctx.Done():
-		logger.Info("shutdown signal received, shutting down HTTP server")
+		logger.InfoContext(ctx, "shutdown signal received, shutting down HTTP server")
 		shutCtx, cancel := context.WithTimeout(context.Background(), cfg.ShutdownTimeout)
 		defer cancel()
 		return shutdown(shutCtx, srv, logger)
@@ -93,6 +93,6 @@ func shutdown(ctx context.Context, srv *http.Server, logger *slog.Logger) error 
 	if err := srv.Shutdown(ctx); err != nil {
 		return fmt.Errorf("server: shutdown: %w", err)
 	}
-	logger.Info("HTTP server shutdown complete")
+	logger.InfoContext(ctx, "HTTP server shutdown complete")
 	return nil
 }
