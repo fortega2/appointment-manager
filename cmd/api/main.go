@@ -75,8 +75,12 @@ func run() error {
 
 	mux := http.NewServeMux()
 	assistantHandler.RegisterHandlers(mux)
-	handler := middleware.RequestID()(mux)
-	handler = middleware.RequestLogger(logger)(handler)
+	handler := middleware.Chain(
+		mux,
+		middleware.RequestID(),
+		middleware.Gzip(),
+		middleware.RequestLogger(logger),
+	)
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
