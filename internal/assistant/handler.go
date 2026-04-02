@@ -1,6 +1,7 @@
 package assistant
 
 import (
+	"appointment-manager/internal/domain"
 	"appointment-manager/internal/web"
 	"context"
 	"encoding/json"
@@ -90,7 +91,7 @@ func (h *Handler) getHandler() http.HandlerFunc {
 			return
 		}
 
-		assistID, err := ParseID(reqAssistID)
+		assistID, err := domain.ParseID(reqAssistID)
 		if err != nil {
 			web.WriteProblem(w, problemInvalidAssistantID(r.URL.Path))
 			return

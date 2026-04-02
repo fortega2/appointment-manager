@@ -2,6 +2,7 @@ package assistant_test
 
 import (
 	"appointment-manager/internal/assistant"
+	"appointment-manager/internal/domain"
 	"errors"
 	"testing"
 
@@ -99,7 +100,7 @@ func TestParseID(t *testing.T) {
 	assistantRecord, err := assistant.NewAssistant(assistantNames, assistantLastNames, assistantEmail, assistantHash)
 	require.NoError(t, err)
 
-	parsedID, parseErr := assistant.ParseID(assistantRecord.ID.String())
+	parsedID, parseErr := domain.ParseID(assistantRecord.ID.String())
 
 	require.NoError(t, parseErr)
 	assert.Equal(t, assistantRecord.ID, parsedID)
@@ -113,15 +114,15 @@ func TestParseIDValidation(t *testing.T) {
 		raw      string
 		expected error
 	}{
-		{name: "empty", raw: "", expected: assistant.ErrInvalidID},
-		{name: "invalid uuid", raw: invalidAssistantID, expected: assistant.ErrInvalidID},
+		{name: "empty", raw: "", expected: domain.ErrInvalidID},
+		{name: "invalid uuid", raw: invalidAssistantID, expected: domain.ErrInvalidID},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			parsedID, err := assistant.ParseID(tt.raw)
+			parsedID, err := domain.ParseID(tt.raw)
 
 			require.Error(t, err)
 			assert.Equal(t, uuid.Nil, parsedID)

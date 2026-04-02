@@ -1,7 +1,6 @@
 package assistant
 
 import (
-	"fmt"
 	"strings"
 
 	"github.com/google/uuid"
@@ -37,18 +36,6 @@ func NewAssistant(firstName, lastName, email, passwordHash string) (*Assistant, 
 		Email:        loweredEmail,
 		PasswordHash: passwordHash,
 	}, nil
-}
-
-func ParseID(raw string) (uuid.UUID, error) {
-	if raw == "" {
-		return uuid.Nil, ErrInvalidID
-	}
-	parsedID, err := uuid.Parse(raw)
-	if err != nil {
-		return uuid.Nil, fmt.Errorf("%w: %w", ErrInvalidID, err)
-	}
-
-	return parsedID, nil
 }
 
 func isValidEmail(email string) error {
