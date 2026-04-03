@@ -1,6 +1,7 @@
 package main
 
 import (
+	"appointment-manager/internal/appointment"
 	"appointment-manager/internal/assistant"
 	"appointment-manager/internal/db"
 	"appointment-manager/internal/middleware"
@@ -73,8 +74,15 @@ func run() error {
 		return err
 	}
 
+	appointmentHandler, err := appointment.NewHandler(logger, pool)
+	if err != nil {
+		logger.Error("failed to create appointment handler", slog.Any("error", err))
+		return err
+	}
+
 	mux := http.NewServeMux()
 	assistantHandler.RegisterHandlers(mux)
+	appointmentHandler.RegisterHandlers(mux)
 	handler := middleware.Chain(
 		mux,
 		middleware.RequestID(),
