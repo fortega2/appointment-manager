@@ -16,11 +16,19 @@ import (
 const (
 	contentTypeHeader = "Content-Type"
 	contentTypeJSON   = "application/json"
+
+	defaultPage          = 1
+	defaultLimit         = 20
+	maxLimit             = 100
+	queryParamsErrFormat = "%w: %q"
 )
 
 var (
-	ErrNilLogger = errors.New("logger cannot be nil")
-	ErrNilDB     = errors.New("database connection cannot be nil")
+	ErrNilLogger     = errors.New("logger cannot be nil")
+	ErrNilDB         = errors.New("database connection cannot be nil")
+	ErrInvalidPage   = errors.New("invalid page")
+	ErrInvalidLimit  = errors.New("invalid limit")
+	ErrInvalidStatus = errors.New("invalid status")
 )
 
 type Handler struct {
@@ -50,16 +58,16 @@ func (h *Handler) listAppointments() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		page, limit, stQuery, err := h.parseQueryParams(r)
 		if err != nil {
-			h.logger.ErrorContext(
-				r.Context(),
-				"failed to parse pagination parameters",
-				slog.Any("error", err),
-			)
-			web.WriteProblem(w, web.NewInternalServerProblem("failed to parse pagination parameters", r.URL.Path))
+			web.WriteProblem(w, web.NewProblem(
+				http.StatusBadRequest,
+				web.ProblemTypeValidationFailed,
+				"invalid list query parameters",
+				r.URL.Path,
+			))
 			return
 		}
 
-		appointments, err := h.fetchAppointmentsFromDb(r.Context(), limit, page, stQuery)
+		appointments, err := h.fetchAppointmentsFromDb(r.Context(), stQuery, limit, page)
 		if err != nil {
 			h.logger.ErrorContext(r.Context(), "failed to fetch appointments from database", slog.Any("error", err))
 			web.WriteProblem(w, web.NewInternalServerProblem("failed to fetch appointments", r.URL.Path))
@@ -75,42 +83,49 @@ func (h *Handler) listAppointments() http.HandlerFunc {
 	}
 }
 
-func (h *Handler) parseQueryParams(r *http.Request) (uint, uint, Status, error) {
+func (h *Handler) parseQueryParams(r *http.Request) (int, int, Status, error) {
 	pQuery := r.URL.Query().Get("page")
 	lQuery := r.URL.Query().Get("limit")
 	sQuery := r.URL.Query().Get("status")
 
 	if pQuery == "" {
-		pQuery = "1"
+		pQuery = strconv.Itoa(defaultPage)
 	}
 
 	if lQuery == "" {
-		lQuery = "20"
+		lQuery = strconv.Itoa(defaultLimit)
 	}
 
 	if sQuery == "" {
 		sQuery = fmt.Sprint(StatusConfirmed)
 	}
 
-	pageNum, err := strconv.ParseUint(pQuery, 10, 64)
+	pageNum, err := strconv.Atoi(pQuery)
+	if err != nil || pageNum < defaultPage {
+		return 0, 0, 0, fmt.Errorf(queryParamsErrFormat, ErrInvalidPage, pQuery)
+	}
+
+	limitNum, err := strconv.Atoi(lQuery)
+	if err != nil || limitNum < 1 || limitNum > maxLimit {
+		return 0, 0, 0, fmt.Errorf(queryParamsErrFormat, ErrInvalidLimit, lQuery)
+	}
+
+	statusNum, err := strconv.Atoi(sQuery)
+	if err != nil {
+		return 0, 0, 0, fmt.Errorf(queryParamsErrFormat, ErrInvalidStatus, sQuery)
+	}
+
+	parsedStatus, err := parseStatus(statusNum)
 	if err != nil {
 		return 0, 0, 0, err
 	}
 
-	limitNum, err := strconv.ParseUint(lQuery, 10, 64)
-	if err != nil {
-		return 0, 0, 0, err
-	}
-
-	statusNum, err := strconv.ParseUint(sQuery, 10, 64)
-	if err != nil {
-		return 0, 0, 0, err
-	}
-
-	return uint(pageNum), uint(limitNum), Status(statusNum), nil
+	return pageNum, limitNum, parsedStatus, nil
 }
 
-func (h *Handler) fetchAppointmentsFromDb(ctx context.Context, limit uint, page uint, status Status) ([]Appointment, error) {
+func (h *Handler) fetchAppointmentsFromDb(ctx context.Context, status Status, limit int, page int) ([]Appointment, error) {
+	offset := (page - 1) * limit
+
 	rows, err := h.db.Query(
 		ctx,
 		`SELECT
@@ -123,16 +138,16 @@ func (h *Handler) fetchAppointmentsFromDb(ctx context.Context, limit uint, page 
 		FROM
 			appointment
 		WHERE
-			status = $3
+			status = $1
 		ORDER BY
 			created_at
 		LIMIT
-			$1
+			$2
 		OFFSET
-			$2`,
-		limit,
-		(page-1)*limit,
+			$3`,
 		status,
+		limit,
+		offset,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("query appointments: %w", err)
@@ -159,4 +174,19 @@ func (h *Handler) fetchAppointmentsFromDb(ctx context.Context, limit uint, page 
 	}
 
 	return appointments, nil
+}
+
+func parseStatus(value int) (Status, error) {
+	switch value {
+	case int(StatusConfirmed):
+		return StatusConfirmed, nil
+	case int(StatusCancelled):
+		return StatusCancelled, nil
+	case int(StatusAbsent):
+		return StatusAbsent, nil
+	case int(StatusAttended):
+		return StatusAttended, nil
+	default:
+		return 0, fmt.Errorf("%w: %d", ErrInvalidStatus, value)
+	}
 }

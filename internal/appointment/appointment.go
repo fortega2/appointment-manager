@@ -4,7 +4,7 @@ import (
 	"github.com/google/uuid"
 )
 
-type Status uint
+type Status int16
 
 const (
 	StatusConfirmed Status = iota + 1
