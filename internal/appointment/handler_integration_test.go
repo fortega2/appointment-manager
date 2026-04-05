@@ -12,6 +12,9 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"slices"
+	"strings"
+	"sync"
 	"testing"
 
 	"github.com/google/uuid"
@@ -34,6 +37,8 @@ const (
 	contentTypeJSON      = "application/json"
 	problemContentType   = "application/problem+json"
 	writeFailureMessage  = "write failed"
+
+	statusConfirmedValue int16 = 1
 )
 
 func TestListEndpointFiltersAndPaginatesByStatus(t *testing.T) {
@@ -157,10 +162,275 @@ func TestListEndpointReturnsInternalServerErrorWhenResponseWriteFails(t *testing
 	assert.NotEmpty(t, writer.body.String())
 }
 
+func TestCreateEndpointStoresConfirmedStatusAndNullNotes(t *testing.T) {
+	testcontainers.SkipIfProviderIsNotHealthy(t)
+	ctx := context.Background()
+
+	pool := newIntegrationPool(ctx, t)
+
+	professionalID := uuid.New()
+	assistantID := uuid.New()
+	patientID := uuid.New()
+	slotOneID := uuid.New()
+	slotTwoID := uuid.New()
+
+	insertProfessional(ctx, t, pool, professionalID)
+	insertAssistant(ctx, t, pool, assistantID)
+	insertPatient(ctx, t, pool, patientID)
+	insertSlot(ctx, t, pool, slotOneID, professionalID, "2026-02-01", "09:00:00+00", "09:30:00+00", 2, false)
+	insertSlot(ctx, t, pool, slotTwoID, professionalID, "2026-02-01", "10:00:00+00", "10:30:00+00", 2, false)
+
+	h, err := appointment.NewHandler(newIntegrationLogger(), pool)
+	require.NoError(t, err)
+
+	mux := http.NewServeMux()
+	h.RegisterHandlers(mux)
+
+	emptyNotes := ""
+	firstRec := performCreateRequest(ctx, mux, createRequestBody(t, slotOneID, patientID, professionalID, assistantID, &emptyNotes))
+	assert.Equal(t, http.StatusCreated, firstRec.Code)
+	assert.Equal(t, contentTypeJSON, firstRec.Header().Get(contentTypeHeader))
+
+	firstAppointmentID := appointmentIDFromLocation(t, firstRec.Header().Get("Location"))
+	firstStatus, firstNotes := fetchAppointmentStatusAndNotes(ctx, t, pool, firstAppointmentID)
+	assert.Equal(t, statusConfirmedValue, firstStatus)
+	assert.Nil(t, firstNotes)
+
+	secondRec := performCreateRequest(ctx, mux, createRequestBody(t, slotTwoID, patientID, professionalID, assistantID, nil))
+	assert.Equal(t, http.StatusCreated, secondRec.Code)
+	assert.Equal(t, contentTypeJSON, secondRec.Header().Get(contentTypeHeader))
+
+	secondAppointmentID := appointmentIDFromLocation(t, secondRec.Header().Get("Location"))
+	secondStatus, secondNotes := fetchAppointmentStatusAndNotes(ctx, t, pool, secondAppointmentID)
+	assert.Equal(t, statusConfirmedValue, secondStatus)
+	assert.Nil(t, secondNotes)
+}
+
+func TestCreateEndpointRejectsBlockedSlot(t *testing.T) {
+	testcontainers.SkipIfProviderIsNotHealthy(t)
+	ctx := context.Background()
+
+	pool := newIntegrationPool(ctx, t)
+
+	professionalID := uuid.New()
+	assistantID := uuid.New()
+	patientID := uuid.New()
+	blockedSlotID := uuid.New()
+
+	insertProfessional(ctx, t, pool, professionalID)
+	insertAssistant(ctx, t, pool, assistantID)
+	insertPatient(ctx, t, pool, patientID)
+	insertSlot(ctx, t, pool, blockedSlotID, professionalID, "2026-02-02", "09:00:00+00", "09:30:00+00", 2, true)
+
+	h, err := appointment.NewHandler(newIntegrationLogger(), pool)
+	require.NoError(t, err)
+
+	mux := http.NewServeMux()
+	h.RegisterHandlers(mux)
+
+	rec := performCreateRequest(ctx, mux, createRequestBody(t, blockedSlotID, patientID, professionalID, assistantID, nil))
+	assert.Equal(t, http.StatusConflict, rec.Code)
+	assert.Equal(t, problemContentType, rec.Header().Get(contentTypeHeader))
+	assert.Equal(t, appointment.ErrSlotBlocked.Error(), decodeProblemDetail(t, rec).Detail)
+
+	assert.Equal(t, int64(0), countConfirmedAppointmentsForSlot(ctx, t, pool, blockedSlotID))
+}
+
+func TestCreateEndpointRejectsSlotWithoutAvailability(t *testing.T) {
+	testcontainers.SkipIfProviderIsNotHealthy(t)
+	ctx := context.Background()
+
+	pool := newIntegrationPool(ctx, t)
+
+	professionalID := uuid.New()
+	assistantID := uuid.New()
+	patientOneID := uuid.New()
+	patientTwoID := uuid.New()
+	slotID := uuid.New()
+
+	insertProfessional(ctx, t, pool, professionalID)
+	insertAssistant(ctx, t, pool, assistantID)
+	insertPatient(ctx, t, pool, patientOneID)
+	insertPatient(ctx, t, pool, patientTwoID)
+	insertSlot(ctx, t, pool, slotID, professionalID, "2026-02-03", "10:00:00+00", "10:30:00+00", 1, false)
+	insertAppointment(ctx, t, pool, uuid.New(), slotID, patientOneID, professionalID, assistantID, statusConfirmedValue, nil)
+
+	h, err := appointment.NewHandler(newIntegrationLogger(), pool)
+	require.NoError(t, err)
+
+	mux := http.NewServeMux()
+	h.RegisterHandlers(mux)
+
+	rec := performCreateRequest(ctx, mux, createRequestBody(t, slotID, patientTwoID, professionalID, assistantID, nil))
+	assert.Equal(t, http.StatusConflict, rec.Code)
+	assert.Equal(t, problemContentType, rec.Header().Get(contentTypeHeader))
+	assert.Equal(t, appointment.ErrSlotWithoutAvailability.Error(), decodeProblemDetail(t, rec).Detail)
+
+	assert.Equal(t, int64(1), countConfirmedAppointmentsForSlot(ctx, t, pool, slotID))
+}
+
+func TestCreateEndpointRejectsOverlappingAppointments(t *testing.T) {
+	testcontainers.SkipIfProviderIsNotHealthy(t)
+	ctx := context.Background()
+
+	pool := newIntegrationPool(ctx, t)
+
+	professionalOneID := uuid.New()
+	professionalTwoID := uuid.New()
+	assistantID := uuid.New()
+	patientID := uuid.New()
+	slotOneID := uuid.New()
+	slotTwoID := uuid.New()
+
+	insertProfessional(ctx, t, pool, professionalOneID)
+	insertProfessional(ctx, t, pool, professionalTwoID)
+	insertAssistant(ctx, t, pool, assistantID)
+	insertPatient(ctx, t, pool, patientID)
+	insertSlot(ctx, t, pool, slotOneID, professionalOneID, "2026-02-04", "12:00:00+00", "13:00:00+00", 2, false)
+	insertSlot(ctx, t, pool, slotTwoID, professionalTwoID, "2026-02-04", "12:30:00+00", "13:30:00+00", 2, false)
+	insertAppointment(ctx, t, pool, uuid.New(), slotOneID, patientID, professionalOneID, assistantID, statusConfirmedValue, nil)
+
+	h, err := appointment.NewHandler(newIntegrationLogger(), pool)
+	require.NoError(t, err)
+
+	mux := http.NewServeMux()
+	h.RegisterHandlers(mux)
+
+	rec := performCreateRequest(ctx, mux, createRequestBody(t, slotTwoID, patientID, professionalTwoID, assistantID, nil))
+	assert.Equal(t, http.StatusConflict, rec.Code)
+	assert.Equal(t, problemContentType, rec.Header().Get(contentTypeHeader))
+	assert.Equal(t, appointment.ErrMultipleActiveAppointmentsDetected.Error(), decodeProblemDetail(t, rec).Detail)
+
+	assert.Equal(t, int64(1), countConfirmedAppointmentsForPatient(ctx, t, pool, patientID))
+}
+
+func TestCreateEndpointReturnsUnprocessableEntityForInvalidReference(t *testing.T) {
+	testcontainers.SkipIfProviderIsNotHealthy(t)
+	ctx := context.Background()
+
+	pool := newIntegrationPool(ctx, t)
+
+	professionalID := uuid.New()
+	assistantID := uuid.New()
+	patientID := uuid.New()
+	slotID := uuid.New()
+
+	insertProfessional(ctx, t, pool, professionalID)
+	insertAssistant(ctx, t, pool, assistantID)
+	insertPatient(ctx, t, pool, patientID)
+	insertSlot(ctx, t, pool, slotID, professionalID, "2026-02-05", "15:00:00+00", "15:30:00+00", 2, false)
+
+	h, err := appointment.NewHandler(newIntegrationLogger(), pool)
+	require.NoError(t, err)
+
+	mux := http.NewServeMux()
+	h.RegisterHandlers(mux)
+
+	rec := performCreateRequest(ctx, mux, createRequestBody(t, slotID, patientID, uuid.New(), assistantID, nil))
+	assert.Equal(t, http.StatusUnprocessableEntity, rec.Code)
+	assert.Equal(t, problemContentType, rec.Header().Get(contentTypeHeader))
+	assert.Equal(t, appointment.ErrInvalidAppointmentReference.Error(), decodeProblemDetail(t, rec).Detail)
+
+	assert.Equal(t, int64(0), countConfirmedAppointmentsForSlot(ctx, t, pool, slotID))
+}
+
+func TestCreateEndpointConcurrentRequestsRespectSlotCapacity(t *testing.T) {
+	testcontainers.SkipIfProviderIsNotHealthy(t)
+	ctx := context.Background()
+
+	pool := newIntegrationPool(ctx, t)
+
+	professionalID := uuid.New()
+	assistantID := uuid.New()
+	patientOneID := uuid.New()
+	patientTwoID := uuid.New()
+	slotID := uuid.New()
+
+	insertProfessional(ctx, t, pool, professionalID)
+	insertAssistant(ctx, t, pool, assistantID)
+	insertPatient(ctx, t, pool, patientOneID)
+	insertPatient(ctx, t, pool, patientTwoID)
+	insertSlot(ctx, t, pool, slotID, professionalID, "2026-02-06", "10:00:00+00", "10:30:00+00", 1, false)
+
+	h, err := appointment.NewHandler(newIntegrationLogger(), pool)
+	require.NoError(t, err)
+
+	mux := http.NewServeMux()
+	h.RegisterHandlers(mux)
+
+	responses := performConcurrentCreateRequests(
+		ctx,
+		mux,
+		createRequestBody(t, slotID, patientOneID, professionalID, assistantID, nil),
+		createRequestBody(t, slotID, patientTwoID, professionalID, assistantID, nil),
+	)
+
+	statusCodes := statusCodesFromCreateResponses(responses)
+	assert.Equal(t, []int{http.StatusCreated, http.StatusConflict}, statusCodes)
+	assert.Equal(t, appointment.ErrSlotWithoutAvailability.Error(), conflictDetailFromCreateResponses(responses))
+	assert.Equal(t, int64(1), countConfirmedAppointmentsForSlot(ctx, t, pool, slotID))
+}
+
+func TestCreateEndpointConcurrentRequestsPreventOverlappingAppointments(t *testing.T) {
+	testcontainers.SkipIfProviderIsNotHealthy(t)
+	ctx := context.Background()
+
+	pool := newIntegrationPool(ctx, t)
+
+	professionalOneID := uuid.New()
+	professionalTwoID := uuid.New()
+	assistantID := uuid.New()
+	patientID := uuid.New()
+	slotOneID := uuid.New()
+	slotTwoID := uuid.New()
+
+	insertProfessional(ctx, t, pool, professionalOneID)
+	insertProfessional(ctx, t, pool, professionalTwoID)
+	insertAssistant(ctx, t, pool, assistantID)
+	insertPatient(ctx, t, pool, patientID)
+	insertSlot(ctx, t, pool, slotOneID, professionalOneID, "2026-02-07", "12:00:00+00", "13:00:00+00", 2, false)
+	insertSlot(ctx, t, pool, slotTwoID, professionalTwoID, "2026-02-07", "12:30:00+00", "13:30:00+00", 2, false)
+
+	h, err := appointment.NewHandler(newIntegrationLogger(), pool)
+	require.NoError(t, err)
+
+	mux := http.NewServeMux()
+	h.RegisterHandlers(mux)
+
+	responses := performConcurrentCreateRequests(
+		ctx,
+		mux,
+		createRequestBody(t, slotOneID, patientID, professionalOneID, assistantID, nil),
+		createRequestBody(t, slotTwoID, patientID, professionalTwoID, assistantID, nil),
+	)
+
+	statusCodes := statusCodesFromCreateResponses(responses)
+	assert.Equal(t, []int{http.StatusCreated, http.StatusConflict}, statusCodes)
+	assert.Equal(t, appointment.ErrMultipleActiveAppointmentsDetected.Error(), conflictDetailFromCreateResponses(responses))
+	assert.Equal(t, int64(1), countConfirmedAppointmentsForPatient(ctx, t, pool, patientID))
+}
+
 type appointmentFixture struct {
 	confirmedOldestID uuid.UUID
 	confirmedNewestID uuid.UUID
 	cancelledID       uuid.UUID
+}
+
+type createAppointmentRequest struct {
+	SlotID         string  `json:"slot_id"`
+	PatientID      string  `json:"patient_id"`
+	ProfessionalID string  `json:"professional_id"`
+	AssistantID    string  `json:"assistant_id"`
+	Notes          *string `json:"notes,omitempty"`
+}
+
+type problemResponse struct {
+	Detail string `json:"detail"`
+}
+
+type createResponse struct {
+	StatusCode int
+	Detail     string
 }
 
 func seedAppointments(ctx context.Context, t *testing.T, pool *pgxpool.Pool) appointmentFixture {
@@ -256,6 +526,239 @@ func newIntegrationPool(ctx context.Context, t *testing.T) *pgxpool.Pool {
 	t.Cleanup(pool.Close)
 
 	return pool
+}
+
+func createRequestBody(
+	t *testing.T,
+	slotID uuid.UUID,
+	patientID uuid.UUID,
+	professionalID uuid.UUID,
+	assistantID uuid.UUID,
+	notes *string,
+) []byte {
+	t.Helper()
+
+	body, err := json.Marshal(createAppointmentRequest{
+		SlotID:         slotID.String(),
+		PatientID:      patientID.String(),
+		ProfessionalID: professionalID.String(),
+		AssistantID:    assistantID.String(),
+		Notes:          notes,
+	})
+	require.NoError(t, err)
+
+	return body
+}
+
+func performCreateRequest(ctx context.Context, mux *http.ServeMux, body []byte) *httptest.ResponseRecorder {
+	req := httptest.NewRequestWithContext(ctx, http.MethodPost, appointmentsEndpoint, bytes.NewReader(body))
+	req.Header.Set(contentTypeHeader, contentTypeJSON)
+
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	return rec
+}
+
+func appointmentIDFromLocation(t *testing.T, location string) uuid.UUID {
+	t.Helper()
+
+	require.True(t, strings.HasPrefix(location, appointmentsEndpoint+"/"))
+	id, err := uuid.Parse(strings.TrimPrefix(location, appointmentsEndpoint+"/"))
+	require.NoError(t, err)
+
+	return id
+}
+
+func fetchAppointmentStatusAndNotes(ctx context.Context, t *testing.T, pool *pgxpool.Pool, appointmentID uuid.UUID) (int16, *string) {
+	t.Helper()
+
+	var status int16
+	var notes *string
+	err := pool.QueryRow(ctx, `
+		SELECT
+			status,
+			notes
+		FROM
+			appointment
+		WHERE
+			id = $1
+	`, appointmentID).Scan(&status, &notes)
+	require.NoError(t, err)
+
+	return status, notes
+}
+
+func decodeProblemDetail(t *testing.T, rec *httptest.ResponseRecorder) problemResponse {
+	t.Helper()
+
+	var problem problemResponse
+	err := json.Unmarshal(rec.Body.Bytes(), &problem)
+	require.NoError(t, err)
+
+	return problem
+}
+
+func decodeProblemDetailFromBody(body []byte) problemResponse {
+	var problem problemResponse
+	if err := json.Unmarshal(body, &problem); err != nil {
+		return problemResponse{}
+	}
+
+	return problem
+}
+
+func performConcurrentCreateRequests(ctx context.Context, mux *http.ServeMux, bodies ...[]byte) []createResponse {
+	responses := make([]createResponse, len(bodies))
+	start := make(chan struct{})
+
+	var wg sync.WaitGroup
+	for i := range bodies {
+		i := i
+		wg.Go(func() {
+			<-start
+
+			rec := performCreateRequest(ctx, mux, bodies[i])
+			responses[i] = createResponse{StatusCode: rec.Code}
+			if rec.Code >= http.StatusBadRequest {
+				responses[i].Detail = decodeProblemDetailFromBody(rec.Body.Bytes()).Detail
+			}
+		})
+	}
+
+	close(start)
+	wg.Wait()
+
+	return responses
+}
+
+func statusCodesFromCreateResponses(responses []createResponse) []int {
+	statusCodes := make([]int, 0, len(responses))
+	for i := range responses {
+		statusCodes = append(statusCodes, responses[i].StatusCode)
+	}
+
+	slices.Sort(statusCodes)
+
+	return statusCodes
+}
+
+func conflictDetailFromCreateResponses(responses []createResponse) string {
+	for i := range responses {
+		if responses[i].StatusCode == http.StatusConflict {
+			return responses[i].Detail
+		}
+	}
+
+	return ""
+}
+
+func countConfirmedAppointmentsForSlot(ctx context.Context, t *testing.T, pool *pgxpool.Pool, slotID uuid.UUID) int64 {
+	t.Helper()
+
+	var total int64
+	err := pool.QueryRow(ctx, `
+		SELECT
+			COUNT(*)
+		FROM
+			appointment
+		WHERE
+			slot_id = $1
+			AND status = $2
+	`, slotID, statusConfirmedValue).Scan(&total)
+	require.NoError(t, err)
+
+	return total
+}
+
+func countConfirmedAppointmentsForPatient(ctx context.Context, t *testing.T, pool *pgxpool.Pool, patientID uuid.UUID) int64 {
+	t.Helper()
+
+	var total int64
+	err := pool.QueryRow(ctx, `
+		SELECT
+			COUNT(*)
+		FROM
+			appointment
+		WHERE
+			patient_id = $1
+			AND status = $2
+	`, patientID, statusConfirmedValue).Scan(&total)
+	require.NoError(t, err)
+
+	return total
+}
+
+func insertProfessional(ctx context.Context, t *testing.T, pool *pgxpool.Pool, professionalID uuid.UUID) {
+	t.Helper()
+
+	_, err := pool.Exec(ctx, `
+		INSERT INTO professional (id, first_name, last_name, phone, specialty, active)
+		VALUES ($1, 'Laura', 'Gomez', '1133334444', 'kinesiology', true)
+	`, professionalID)
+	require.NoError(t, err)
+}
+
+func insertAssistant(ctx context.Context, t *testing.T, pool *pgxpool.Pool, assistantID uuid.UUID) {
+	t.Helper()
+
+	_, err := pool.Exec(ctx, `
+		INSERT INTO assistant (id, first_name, last_name, email, password_hash)
+		VALUES ($1, 'Ana', 'Perez', $2, 'hashed')
+	`, assistantID, assistantID.String()+"@clinic.test")
+	require.NoError(t, err)
+}
+
+func insertPatient(ctx context.Context, t *testing.T, pool *pgxpool.Pool, patientID uuid.UUID) {
+	t.Helper()
+
+	_, err := pool.Exec(ctx, `
+		INSERT INTO patient (id, first_name, last_name, phone, email, health_insurance, insurance_number, clinical_notes)
+		VALUES ($1, 'Pablo', 'Sosa', '1111111111', $2, 1, $3, NULL)
+	`, patientID, patientID.String()+"@clinic.test", patientID.String()[:11])
+	require.NoError(t, err)
+}
+
+func insertSlot(
+	ctx context.Context,
+	t *testing.T,
+	pool *pgxpool.Pool,
+	slotID uuid.UUID,
+	professionalID uuid.UUID,
+	date string,
+	startTime string,
+	endTime string,
+	maxCapacity int16,
+	blocked bool,
+) {
+	t.Helper()
+
+	_, err := pool.Exec(ctx, `
+		INSERT INTO slot (id, professional_id, date, start_time, end_time, max_capacity, blocked)
+		VALUES ($1, $2, $3, $4, $5, $6, $7)
+	`, slotID, professionalID, date, startTime, endTime, maxCapacity, blocked)
+	require.NoError(t, err)
+}
+
+func insertAppointment(
+	ctx context.Context,
+	t *testing.T,
+	pool *pgxpool.Pool,
+	appointmentID uuid.UUID,
+	slotID uuid.UUID,
+	patientID uuid.UUID,
+	professionalID uuid.UUID,
+	assistantID uuid.UUID,
+	status int16,
+	notes *string,
+) {
+	t.Helper()
+
+	_, err := pool.Exec(ctx, `
+		INSERT INTO appointment (id, slot_id, patient_id, professional_id, assistant_id, status, notes)
+		VALUES ($1, $2, $3, $4, $5, $6, $7)
+	`, appointmentID, slotID, patientID, professionalID, assistantID, status, notes)
+	require.NoError(t, err)
 }
 
 func newIntegrationLogger() *slog.Logger {
