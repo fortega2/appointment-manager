@@ -16,6 +16,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -26,7 +27,7 @@ import (
 )
 
 const (
-	integrationImage    = "postgres:18-alpine"
+	integrationImage    = "postgres:18.3-alpine3.23"
 	integrationDBName   = "appointment_manager"
 	integrationDBUser   = "appointment_user"
 	integrationDBPass   = "appointment_password"
@@ -39,6 +40,9 @@ const (
 	writeFailureMessage  = "write failed"
 
 	statusConfirmedValue int16 = 1
+	statusCancelledValue int16 = 2
+	statusAbsentValue    int16 = 3
+	statusAttendedValue  int16 = 4
 )
 
 func TestListEndpointFiltersAndPaginatesByStatus(t *testing.T) {
@@ -48,11 +52,7 @@ func TestListEndpointFiltersAndPaginatesByStatus(t *testing.T) {
 	pool := newIntegrationPool(ctx, t)
 	fixture := seedAppointments(ctx, t, pool)
 
-	h, err := appointment.NewHandler(newIntegrationLogger(), pool)
-	require.NoError(t, err)
-
-	mux := http.NewServeMux()
-	h.RegisterHandlers(mux)
+	mux := newIntegrationMux(t, pool)
 
 	reqPage1 := httptest.NewRequestWithContext(ctx, http.MethodGet, appointmentsEndpoint+"?status=1&limit=1&page=1", nil)
 	recPage1 := httptest.NewRecorder()
@@ -62,8 +62,7 @@ func TestListEndpointFiltersAndPaginatesByStatus(t *testing.T) {
 	assert.Equal(t, contentTypeJSON, recPage1.Header().Get(contentTypeHeader))
 
 	var page1 []appointment.Appointment
-	err = json.Unmarshal(recPage1.Body.Bytes(), &page1)
-	require.NoError(t, err)
+	require.NoError(t, json.Unmarshal(recPage1.Body.Bytes(), &page1))
 	require.Len(t, page1, 1)
 	assert.Equal(t, fixture.confirmedOldestID, page1[0].ID)
 
@@ -74,8 +73,7 @@ func TestListEndpointFiltersAndPaginatesByStatus(t *testing.T) {
 	assert.Equal(t, http.StatusOK, recPage2.Code)
 
 	var page2 []appointment.Appointment
-	err = json.Unmarshal(recPage2.Body.Bytes(), &page2)
-	require.NoError(t, err)
+	require.NoError(t, json.Unmarshal(recPage2.Body.Bytes(), &page2))
 	require.Len(t, page2, 1)
 	assert.Equal(t, fixture.confirmedNewestID, page2[0].ID)
 
@@ -86,8 +84,7 @@ func TestListEndpointFiltersAndPaginatesByStatus(t *testing.T) {
 	assert.Equal(t, http.StatusOK, recCancelled.Code)
 
 	var cancelled []appointment.Appointment
-	err = json.Unmarshal(recCancelled.Body.Bytes(), &cancelled)
-	require.NoError(t, err)
+	require.NoError(t, json.Unmarshal(recCancelled.Body.Bytes(), &cancelled))
 	require.Len(t, cancelled, 1)
 	assert.Equal(t, fixture.cancelledID, cancelled[0].ID)
 }
@@ -99,11 +96,7 @@ func TestListEndpointDefaultsToConfirmedStatus(t *testing.T) {
 	pool := newIntegrationPool(ctx, t)
 	fixture := seedAppointments(ctx, t, pool)
 
-	h, err := appointment.NewHandler(newIntegrationLogger(), pool)
-	require.NoError(t, err)
-
-	mux := http.NewServeMux()
-	h.RegisterHandlers(mux)
+	mux := newIntegrationMux(t, pool)
 
 	req := httptest.NewRequestWithContext(ctx, http.MethodGet, appointmentsEndpoint, nil)
 	rec := httptest.NewRecorder()
@@ -112,8 +105,7 @@ func TestListEndpointDefaultsToConfirmedStatus(t *testing.T) {
 	assert.Equal(t, http.StatusOK, rec.Code)
 
 	var listed []appointment.Appointment
-	err = json.Unmarshal(rec.Body.Bytes(), &listed)
-	require.NoError(t, err)
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &listed))
 	require.Len(t, listed, 2)
 	assert.Equal(t, fixture.confirmedOldestID, listed[0].ID)
 	assert.Equal(t, fixture.confirmedNewestID, listed[1].ID)
@@ -125,11 +117,7 @@ func TestListEndpointReturnsInternalServerErrorWhenDatabaseUnavailable(t *testin
 
 	pool := newIntegrationPool(ctx, t)
 
-	h, err := appointment.NewHandler(newIntegrationLogger(), pool)
-	require.NoError(t, err)
-
-	mux := http.NewServeMux()
-	h.RegisterHandlers(mux)
+	mux := newIntegrationMux(t, pool)
 
 	pool.Close()
 
@@ -147,11 +135,7 @@ func TestListEndpointReturnsInternalServerErrorWhenResponseWriteFails(t *testing
 
 	pool := newIntegrationPool(ctx, t)
 
-	h, err := appointment.NewHandler(newIntegrationLogger(), pool)
-	require.NoError(t, err)
-
-	mux := http.NewServeMux()
-	h.RegisterHandlers(mux)
+	mux := newIntegrationMux(t, pool)
 
 	req := httptest.NewRequestWithContext(ctx, http.MethodGet, appointmentsEndpoint, nil)
 	writer := newFailFirstWriteResponseWriter()
@@ -180,11 +164,7 @@ func TestCreateEndpointStoresConfirmedStatusAndNullNotes(t *testing.T) {
 	insertSlot(ctx, t, pool, slotOneID, professionalID, "2026-02-01", "09:00:00+00", "09:30:00+00", 2, false)
 	insertSlot(ctx, t, pool, slotTwoID, professionalID, "2026-02-01", "10:00:00+00", "10:30:00+00", 2, false)
 
-	h, err := appointment.NewHandler(newIntegrationLogger(), pool)
-	require.NoError(t, err)
-
-	mux := http.NewServeMux()
-	h.RegisterHandlers(mux)
+	mux := newIntegrationMux(t, pool)
 
 	emptyNotes := ""
 	firstRec := performCreateRequest(ctx, mux, createRequestBody(t, slotOneID, patientID, professionalID, assistantID, &emptyNotes))
@@ -222,11 +202,7 @@ func TestCreateEndpointRejectsBlockedSlot(t *testing.T) {
 	insertPatient(ctx, t, pool, patientID)
 	insertSlot(ctx, t, pool, blockedSlotID, professionalID, "2026-02-02", "09:00:00+00", "09:30:00+00", 2, true)
 
-	h, err := appointment.NewHandler(newIntegrationLogger(), pool)
-	require.NoError(t, err)
-
-	mux := http.NewServeMux()
-	h.RegisterHandlers(mux)
+	mux := newIntegrationMux(t, pool)
 
 	rec := performCreateRequest(ctx, mux, createRequestBody(t, blockedSlotID, patientID, professionalID, assistantID, nil))
 	assert.Equal(t, http.StatusConflict, rec.Code)
@@ -255,11 +231,7 @@ func TestCreateEndpointRejectsSlotWithoutAvailability(t *testing.T) {
 	insertSlot(ctx, t, pool, slotID, professionalID, "2026-02-03", "10:00:00+00", "10:30:00+00", 1, false)
 	insertAppointment(ctx, t, pool, uuid.New(), slotID, patientOneID, professionalID, assistantID, statusConfirmedValue, nil)
 
-	h, err := appointment.NewHandler(newIntegrationLogger(), pool)
-	require.NoError(t, err)
-
-	mux := http.NewServeMux()
-	h.RegisterHandlers(mux)
+	mux := newIntegrationMux(t, pool)
 
 	rec := performCreateRequest(ctx, mux, createRequestBody(t, slotID, patientTwoID, professionalID, assistantID, nil))
 	assert.Equal(t, http.StatusConflict, rec.Code)
@@ -290,11 +262,7 @@ func TestCreateEndpointRejectsOverlappingAppointments(t *testing.T) {
 	insertSlot(ctx, t, pool, slotTwoID, professionalTwoID, "2026-02-04", "12:30:00+00", "13:30:00+00", 2, false)
 	insertAppointment(ctx, t, pool, uuid.New(), slotOneID, patientID, professionalOneID, assistantID, statusConfirmedValue, nil)
 
-	h, err := appointment.NewHandler(newIntegrationLogger(), pool)
-	require.NoError(t, err)
-
-	mux := http.NewServeMux()
-	h.RegisterHandlers(mux)
+	mux := newIntegrationMux(t, pool)
 
 	rec := performCreateRequest(ctx, mux, createRequestBody(t, slotTwoID, patientID, professionalTwoID, assistantID, nil))
 	assert.Equal(t, http.StatusConflict, rec.Code)
@@ -320,11 +288,7 @@ func TestCreateEndpointReturnsUnprocessableEntityForInvalidReference(t *testing.
 	insertPatient(ctx, t, pool, patientID)
 	insertSlot(ctx, t, pool, slotID, professionalID, "2026-02-05", "15:00:00+00", "15:30:00+00", 2, false)
 
-	h, err := appointment.NewHandler(newIntegrationLogger(), pool)
-	require.NoError(t, err)
-
-	mux := http.NewServeMux()
-	h.RegisterHandlers(mux)
+	mux := newIntegrationMux(t, pool)
 
 	rec := performCreateRequest(ctx, mux, createRequestBody(t, slotID, patientID, uuid.New(), assistantID, nil))
 	assert.Equal(t, http.StatusUnprocessableEntity, rec.Code)
@@ -352,11 +316,7 @@ func TestCreateEndpointConcurrentRequestsRespectSlotCapacity(t *testing.T) {
 	insertPatient(ctx, t, pool, patientTwoID)
 	insertSlot(ctx, t, pool, slotID, professionalID, "2026-02-06", "10:00:00+00", "10:30:00+00", 1, false)
 
-	h, err := appointment.NewHandler(newIntegrationLogger(), pool)
-	require.NoError(t, err)
-
-	mux := http.NewServeMux()
-	h.RegisterHandlers(mux)
+	mux := newIntegrationMux(t, pool)
 
 	responses := performConcurrentCreateRequests(
 		ctx,
@@ -391,11 +351,7 @@ func TestCreateEndpointConcurrentRequestsPreventOverlappingAppointments(t *testi
 	insertSlot(ctx, t, pool, slotOneID, professionalOneID, "2026-02-07", "12:00:00+00", "13:00:00+00", 2, false)
 	insertSlot(ctx, t, pool, slotTwoID, professionalTwoID, "2026-02-07", "12:30:00+00", "13:30:00+00", 2, false)
 
-	h, err := appointment.NewHandler(newIntegrationLogger(), pool)
-	require.NoError(t, err)
-
-	mux := http.NewServeMux()
-	h.RegisterHandlers(mux)
+	mux := newIntegrationMux(t, pool)
 
 	responses := performConcurrentCreateRequests(
 		ctx,
@@ -408,6 +364,113 @@ func TestCreateEndpointConcurrentRequestsPreventOverlappingAppointments(t *testi
 	assert.Equal(t, []int{http.StatusCreated, http.StatusConflict}, statusCodes)
 	assert.Equal(t, appointment.ErrMultipleActiveAppointmentsDetected.Error(), conflictDetailFromCreateResponses(responses))
 	assert.Equal(t, int64(1), countConfirmedAppointmentsForPatient(ctx, t, pool, patientID))
+}
+
+func TestCancelEndpointBefore24HoursMarksCancelled(t *testing.T) {
+	testcontainers.SkipIfProviderIsNotHealthy(t)
+	ctx := context.Background()
+
+	pool := newIntegrationPool(ctx, t)
+	now := time.Now().UTC()
+	appointmentID := seedAppointmentForAction(
+		ctx,
+		t,
+		pool,
+		now.Add(30*time.Hour),
+		now.Add(31*time.Hour),
+		statusConfirmedValue,
+	)
+
+	mux := newIntegrationMux(t, pool)
+	req := httptest.NewRequestWithContext(ctx, http.MethodPost, appointmentsEndpoint+"/"+appointmentID.String()+"/cancel", nil)
+	rec := httptest.NewRecorder()
+
+	mux.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusNoContent, rec.Code)
+	status, _ := fetchAppointmentStatusAndNotes(ctx, t, pool, appointmentID)
+	assert.Equal(t, statusCancelledValue, status)
+}
+
+func TestCancelEndpointInside24HoursMarksAbsent(t *testing.T) {
+	testcontainers.SkipIfProviderIsNotHealthy(t)
+	ctx := context.Background()
+
+	pool := newIntegrationPool(ctx, t)
+	now := time.Now().UTC()
+	appointmentID := seedAppointmentForAction(
+		ctx,
+		t,
+		pool,
+		now.Add(2*time.Hour),
+		now.Add(3*time.Hour),
+		statusConfirmedValue,
+	)
+
+	mux := newIntegrationMux(t, pool)
+	req := httptest.NewRequestWithContext(ctx, http.MethodPost, appointmentsEndpoint+"/"+appointmentID.String()+"/cancel", nil)
+	rec := httptest.NewRecorder()
+
+	mux.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusNoContent, rec.Code)
+	status, _ := fetchAppointmentStatusAndNotes(ctx, t, pool, appointmentID)
+	assert.Equal(t, statusAbsentValue, status)
+}
+
+func TestAttendEndpointWithinRangeMarksAttended(t *testing.T) {
+	testcontainers.SkipIfProviderIsNotHealthy(t)
+	ctx := context.Background()
+
+	pool := newIntegrationPool(ctx, t)
+	now := time.Now().UTC()
+	appointmentID := seedAppointmentForAction(
+		ctx,
+		t,
+		pool,
+		now.Add(-5*time.Minute),
+		now.Add(25*time.Minute),
+		statusConfirmedValue,
+	)
+
+	mux := newIntegrationMux(t, pool)
+	req := httptest.NewRequestWithContext(ctx, http.MethodPost, appointmentsEndpoint+"/"+appointmentID.String()+"/attend", nil)
+	rec := httptest.NewRecorder()
+
+	mux.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusNoContent, rec.Code)
+	status, _ := fetchAppointmentStatusAndNotes(ctx, t, pool, appointmentID)
+	assert.Equal(t, statusAttendedValue, status)
+}
+
+func TestAttendEndpointOutsideRangeReturnsUnprocessableEntity(t *testing.T) {
+	testcontainers.SkipIfProviderIsNotHealthy(t)
+	ctx := context.Background()
+
+	pool := newIntegrationPool(ctx, t)
+	now := time.Now().UTC()
+	appointmentID := seedAppointmentForAction(
+		ctx,
+		t,
+		pool,
+		now.Add(2*time.Hour),
+		now.Add(3*time.Hour),
+		statusConfirmedValue,
+	)
+
+	mux := newIntegrationMux(t, pool)
+	req := httptest.NewRequestWithContext(ctx, http.MethodPost, appointmentsEndpoint+"/"+appointmentID.String()+"/attend", nil)
+	rec := httptest.NewRecorder()
+
+	mux.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusUnprocessableEntity, rec.Code)
+	assert.Equal(t, problemContentType, rec.Header().Get(contentTypeHeader))
+	assert.Equal(t, appointment.ErrAppointmentCannotAttendNow.Error(), decodeProblemDetail(t, rec).Detail)
+
+	status, _ := fetchAppointmentStatusAndNotes(ctx, t, pool, appointmentID)
+	assert.Equal(t, statusConfirmedValue, status)
 }
 
 type appointmentFixture struct {
@@ -526,6 +589,55 @@ func newIntegrationPool(ctx context.Context, t *testing.T) *pgxpool.Pool {
 	t.Cleanup(pool.Close)
 
 	return pool
+}
+
+func newIntegrationMux(t *testing.T, pool *pgxpool.Pool) *http.ServeMux {
+	t.Helper()
+
+	repo, err := appointment.NewPostgresRepository(pool)
+	require.NoError(t, err)
+
+	service, err := appointment.NewService(repo)
+	require.NoError(t, err)
+
+	h, err := appointment.NewHandler(newIntegrationLogger(), service)
+	require.NoError(t, err)
+
+	mux := http.NewServeMux()
+	h.RegisterHandlers(mux)
+
+	return mux
+}
+
+func seedAppointmentForAction(
+	ctx context.Context,
+	t *testing.T,
+	pool *pgxpool.Pool,
+	start time.Time,
+	end time.Time,
+	status int16,
+) uuid.UUID {
+	t.Helper()
+
+	professionalID := uuid.New()
+	assistantID := uuid.New()
+	patientID := uuid.New()
+	slotID := uuid.New()
+	appointmentID := uuid.New()
+
+	insertProfessional(ctx, t, pool, professionalID)
+	insertAssistant(ctx, t, pool, assistantID)
+	insertPatient(ctx, t, pool, patientID)
+
+	date, startTime, endTime := slotValues(start.UTC(), end.UTC())
+	insertSlot(ctx, t, pool, slotID, professionalID, date, startTime, endTime, 1, false)
+	insertAppointment(ctx, t, pool, appointmentID, slotID, patientID, professionalID, assistantID, status, nil)
+
+	return appointmentID
+}
+
+func slotValues(start, end time.Time) (string, string, string) {
+	return start.Format("2006-01-02"), start.Format("15:04:05-07:00"), end.Format("15:04:05-07:00")
 }
 
 func createRequestBody(

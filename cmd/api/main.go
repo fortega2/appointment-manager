@@ -74,7 +74,19 @@ func run() error {
 		return err
 	}
 
-	appointmentHandler, err := appointment.NewHandler(logger, pool)
+	appointmentRepo, err := appointment.NewPostgresRepository(pool)
+	if err != nil {
+		logger.Error("failed to create appointment postgres repository", slog.Any("error", err))
+		return err
+	}
+
+	appointmentService, err := appointment.NewService(appointmentRepo)
+	if err != nil {
+		logger.Error("failed to create appointment service", slog.Any("error", err))
+		return err
+	}
+
+	appointmentHandler, err := appointment.NewHandler(logger, appointmentService)
 	if err != nil {
 		logger.Error("failed to create appointment handler", slog.Any("error", err))
 		return err

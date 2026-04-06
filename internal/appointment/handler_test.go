@@ -1,22 +1,76 @@
-package appointment
+package appointment_test
 
 import (
+	"appointment-manager/internal/appointment"
+	"bytes"
+	"context"
 	"errors"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
-	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 )
 
 const (
-	appointmentsPath   = "/api/v1/appointments"
-	problemContentType = "application/problem+json"
-	headerContentType  = "Content-Type"
+	unitAppointmentsPath   = "/api/v1/appointments"
+	unitProblemContentType = "application/problem+json"
+	unitHeaderContentType  = "Content-Type"
+	unitContentTypeJSON    = "application/json"
+	boomErrMessage         = "boom"
 )
+
+type mockService struct {
+	mock.Mock
+}
+
+func (m *mockService) List(ctx context.Context, input appointment.ListInput) ([]appointment.Appointment, error) {
+	args := m.Called(ctx, input)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+
+	return args.Get(0).([]appointment.Appointment), args.Error(1)
+}
+
+func (m *mockService) Create(ctx context.Context, input appointment.CreateInput) (uuid.UUID, error) {
+	args := m.Called(ctx, input)
+	if args.Get(0) == nil {
+		return uuid.Nil, args.Error(1)
+	}
+
+	return args.Get(0).(uuid.UUID), args.Error(1)
+}
+
+func (m *mockService) Cancel(ctx context.Context, appointmentID uuid.UUID) error {
+	args := m.Called(ctx, appointmentID)
+	return args.Error(0)
+}
+
+func (m *mockService) Attend(ctx context.Context, appointmentID uuid.UUID) error {
+	args := m.Called(ctx, appointmentID)
+	return args.Error(0)
+}
+
+func newTestLogger() *slog.Logger {
+	return slog.New(slog.DiscardHandler)
+}
+
+func newMuxWithHandler(t *testing.T, service *mockService) *http.ServeMux {
+	t.Helper()
+
+	h, err := appointment.NewHandler(newTestLogger(), service)
+	require.NoError(t, err)
+
+	mux := http.NewServeMux()
+	h.RegisterHandlers(mux)
+
+	return mux
+}
 
 func TestNewHandlerValidation(t *testing.T) {
 	t.Parallel()
@@ -24,21 +78,22 @@ func TestNewHandlerValidation(t *testing.T) {
 	tests := []struct {
 		name     string
 		logger   *slog.Logger
+		service  *mockService
 		expected error
 	}{
-		{name: "nil logger", logger: nil, expected: ErrNilLogger},
-		{name: "nil db", logger: newTestLogger(), expected: ErrNilDB},
+		{name: "nil logger", logger: nil, service: new(mockService), expected: appointment.ErrNilLogger},
+		{name: "nil service", logger: newTestLogger(), service: nil, expected: appointment.ErrNilService},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			h, err := NewHandler(tt.logger, nil)
+			h, err := appointment.NewHandler(tt.logger, tt.service)
 
 			require.Error(t, err)
 			assert.Nil(t, h)
-			assert.True(t, errors.Is(err, tt.expected))
+			assert.ErrorIs(t, err, tt.expected)
 		})
 	}
 }
@@ -46,9 +101,10 @@ func TestNewHandlerValidation(t *testing.T) {
 func TestRegisterHandlersDoesNotPanic(t *testing.T) {
 	t.Parallel()
 
-	h := &Handler{logger: newTestLogger()}
-	mux := http.NewServeMux()
+	h, err := appointment.NewHandler(newTestLogger(), new(mockService))
+	require.NoError(t, err)
 
+	mux := http.NewServeMux()
 	assert.NotPanics(t, func() {
 		h.RegisterHandlers(mux)
 	})
@@ -60,119 +116,166 @@ func TestListEndpointInvalidQueryReturnsBadRequest(t *testing.T) {
 	tests := []struct {
 		name  string
 		query string
+		err   error
 	}{
-		{name: "invalid page", query: "?page=0"},
-		{name: "invalid limit", query: "?limit=0"},
-		{name: "invalid status", query: "?status=9"},
+		{name: "invalid page", query: "?page=0", err: appointment.ErrInvalidPage},
+		{name: "invalid limit", query: "?limit=0", err: appointment.ErrInvalidLimit},
+		{name: "invalid status", query: "?status=9", err: appointment.ErrInvalidStatus},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			h := &Handler{logger: newTestLogger()}
-			mux := http.NewServeMux()
-			h.RegisterHandlers(mux)
+			svc := new(mockService)
+			mux := newMuxWithHandler(t, svc)
 
-			req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, appointmentsPath+tt.query, nil)
+			svc.On("List", mock.Anything, mock.Anything).Return([]appointment.Appointment(nil), tt.err).Once()
+
+			req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, unitAppointmentsPath+tt.query, nil)
 			rec := httptest.NewRecorder()
 
 			mux.ServeHTTP(rec, req)
 
 			assert.Equal(t, http.StatusBadRequest, rec.Code)
-			assert.Equal(t, problemContentType, rec.Header().Get(headerContentType))
+			assert.Equal(t, unitProblemContentType, rec.Header().Get(unitHeaderContentType))
+			svc.AssertExpectations(t)
 		})
 	}
 }
 
-func TestNormalizeNotes(t *testing.T) {
+func TestListEndpointReturnsInternalServerErrorWhenServiceFails(t *testing.T) {
 	t.Parallel()
 
-	emptyNotes := ""
-	whitespaceNotes := "  \n\t "
-	trimmedNotes := "  follow-up  "
+	svc := new(mockService)
+	mux := newMuxWithHandler(t, svc)
+
+	svc.On("List", mock.Anything, mock.Anything).Return([]appointment.Appointment(nil), errors.New(boomErrMessage)).Once()
+
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, unitAppointmentsPath, nil)
+	rec := httptest.NewRecorder()
+
+	mux.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusInternalServerError, rec.Code)
+	assert.Equal(t, unitProblemContentType, rec.Header().Get(unitHeaderContentType))
+	svc.AssertExpectations(t)
+}
+
+func TestCreateEndpointValidationAndBusinessErrors(t *testing.T) {
+	t.Parallel()
+
+	body := `{"slot_id":"` + uuid.NewString() + `","patient_id":"` + uuid.NewString() + `","professional_id":"` + uuid.NewString() + `","assistant_id":"` + uuid.NewString() + `"}`
 
 	tests := []struct {
-		name        string
-		notes       *string
-		expectedNil bool
-		expected    string
+		name           string
+		err            error
+		expectedStatus int
 	}{
-		{name: "nil notes", notes: nil, expectedNil: true},
-		{name: "empty notes", notes: &emptyNotes, expectedNil: true},
-		{name: "whitespace notes", notes: &whitespaceNotes, expectedNil: true},
-		{name: "trimmed notes", notes: &trimmedNotes, expected: "follow-up"},
+		{name: "validation error", err: appointment.ErrInvalidSlotID, expectedStatus: http.StatusUnprocessableEntity},
+		{name: "conflict error", err: appointment.ErrSlotBlocked, expectedStatus: http.StatusConflict},
+		{name: "invalid reference", err: appointment.ErrInvalidAppointmentReference, expectedStatus: http.StatusUnprocessableEntity},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			got := normalizeNotes(tt.notes)
+			svc := new(mockService)
+			mux := newMuxWithHandler(t, svc)
 
-			if tt.expectedNil {
-				assert.Nil(t, got)
-				return
-			}
+			svc.On("Create", mock.Anything, mock.Anything).Return(uuid.Nil, tt.err).Once()
 
-			require.NotNil(t, got)
-			assert.Equal(t, tt.expected, *got)
+			req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, unitAppointmentsPath, bytes.NewBufferString(body))
+			req.Header.Set(unitHeaderContentType, unitContentTypeJSON)
+			rec := httptest.NewRecorder()
+
+			mux.ServeHTTP(rec, req)
+
+			assert.Equal(t, tt.expectedStatus, rec.Code)
+			assert.Equal(t, unitProblemContentType, rec.Header().Get(unitHeaderContentType))
+			svc.AssertExpectations(t)
 		})
 	}
 }
 
-func TestMapCreateAppointmentConstraintError(t *testing.T) {
+func TestCancelEndpointValidationAndBusinessErrors(t *testing.T) {
 	t.Parallel()
 
+	id := uuid.New()
+
 	tests := []struct {
-		name     string
-		err      error
-		expected error
+		name           string
+		path           string
+		err            error
+		expectedStatus int
+		setupMock      bool
 	}{
-		{
-			name: "active appointment unique violation",
-			err: &pgconn.PgError{
-				Code:           pgErrUniqueViolation,
-				ConstraintName: constraintAppointmentSlotPatientActive,
-			},
-			expected: ErrMultipleActiveAppointmentsDetected,
-		},
-		{
-			name: "appointment foreign key violation",
-			err: &pgconn.PgError{
-				Code:           pgErrForeignKeyViolation,
-				ConstraintName: constraintAppointmentAssistantFK,
-			},
-			expected: ErrInvalidAppointmentReference,
-		},
-		{
-			name: "unmapped postgres error",
-			err: &pgconn.PgError{
-				Code:           pgErrUniqueViolation,
-				ConstraintName: "some_other_constraint",
-			},
-			expected: nil,
-		},
-		{name: "non postgres error", err: errors.New("boom"), expected: nil},
+		{name: "invalid id", path: unitAppointmentsPath + "/invalid/cancel", expectedStatus: http.StatusBadRequest, setupMock: false},
+		{name: "invalid status transition", path: unitAppointmentsPath + "/" + id.String() + "/cancel", err: appointment.ErrAppointmentCannotCancelWithStatus, expectedStatus: http.StatusConflict, setupMock: true},
+		{name: "reference not found", path: unitAppointmentsPath + "/" + id.String() + "/cancel", err: appointment.ErrInvalidAppointmentReference, expectedStatus: http.StatusNotFound, setupMock: true},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			got := mapCreateAppointmentConstraintError(tt.err)
+			svc := new(mockService)
+			mux := newMuxWithHandler(t, svc)
 
-			if tt.expected == nil {
-				assert.Nil(t, got)
-				return
+			if tt.setupMock {
+				svc.On("Cancel", mock.Anything, id).Return(tt.err).Once()
 			}
 
-			require.Error(t, got)
-			assert.ErrorIs(t, got, tt.expected)
+			req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, tt.path, nil)
+			rec := httptest.NewRecorder()
+
+			mux.ServeHTTP(rec, req)
+
+			assert.Equal(t, tt.expectedStatus, rec.Code)
+			assert.Equal(t, unitProblemContentType, rec.Header().Get(unitHeaderContentType))
+			svc.AssertExpectations(t)
 		})
 	}
 }
 
-func newTestLogger() *slog.Logger {
-	return slog.New(slog.DiscardHandler)
+func TestAttendEndpointValidationAndBusinessErrors(t *testing.T) {
+	t.Parallel()
+
+	id := uuid.New()
+
+	tests := []struct {
+		name           string
+		path           string
+		err            error
+		expectedStatus int
+		setupMock      bool
+	}{
+		{name: "invalid id", path: unitAppointmentsPath + "/invalid/attend", expectedStatus: http.StatusBadRequest, setupMock: false},
+		{name: "outside time window", path: unitAppointmentsPath + "/" + id.String() + "/attend", err: appointment.ErrAppointmentCannotAttendNow, expectedStatus: http.StatusUnprocessableEntity, setupMock: true},
+		{name: "invalid status transition", path: unitAppointmentsPath + "/" + id.String() + "/attend", err: appointment.ErrAppointmentCannotAttendWithStatus, expectedStatus: http.StatusConflict, setupMock: true},
+		{name: "reference not found", path: unitAppointmentsPath + "/" + id.String() + "/attend", err: appointment.ErrInvalidAppointmentReference, expectedStatus: http.StatusNotFound, setupMock: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			svc := new(mockService)
+			mux := newMuxWithHandler(t, svc)
+
+			if tt.setupMock {
+				svc.On("Attend", mock.Anything, id).Return(tt.err).Once()
+			}
+
+			req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, tt.path, nil)
+			rec := httptest.NewRecorder()
+
+			mux.ServeHTTP(rec, req)
+
+			assert.Equal(t, tt.expectedStatus, rec.Code)
+			assert.Equal(t, unitProblemContentType, rec.Header().Get(unitHeaderContentType))
+			svc.AssertExpectations(t)
+		})
+	}
 }

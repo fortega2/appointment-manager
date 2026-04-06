@@ -14,6 +14,10 @@ Guidance for coding agents working in `appointment-manager`.
 - Assistant model: single assistant for now.
 - Initial assistant creation: manual by product owner; do not add bootstrap/seed/signup flows unless explicitly requested.
 - Always use the available SKILLS.md and MCP for the required task.
+- Appointment transition rules:
+  - cancel: if now is before start-24h -> `cancelled`; otherwise -> `absent`.
+  - attend: only allowed when now is within [start, end].
+- Appointment status updates must be concurrency-safe (atomic update with expected current status, or equivalent locking).
 
 ## 1) Repository Snapshot
 
@@ -21,6 +25,7 @@ Guidance for coding agents working in `appointment-manager`.
 - Module: `appointment-manager`.
 - Main entrypoint: `cmd/api/main.go`.
 - Core packages:
+  - `internal/appointment`
   - `internal/assistant`
   - `internal/password`
   - `internal/web`
@@ -29,7 +34,6 @@ Guidance for coding agents working in `appointment-manager`.
   - `internal/professional`
   - `internal/patient`
   - `internal/slot`
-  - `internal/appointment`
 - Planned DB package:
   - `internal/db/migrations`
 - Lint config: `.golangci.yml` (strict, many linters enabled).
@@ -73,6 +77,7 @@ Notes:
 - Run all tests with race detector:
   - `go test ./... -race`
 - Run tests for one package:
+  - `go test ./internal/appointment`
   - `go test ./internal/assistant`
   - `go test ./internal/password`
   - `go test ./internal/web`
@@ -149,6 +154,7 @@ Follow existing project conventions first.
   - single-object enforcement (second decode must return `io.EOF`).
 - Return error responses using RFC 9457 Problem Details via `internal/web.WriteProblem`
   and content type `application/problem+json`.
+- For appointment transition endpoints (`cancel`, `attend`), prefer action-style routes and no request body.
 
 ### Logging
 
@@ -165,6 +171,7 @@ Follow existing project conventions first.
 - Use `testify/assert` for non-fatal multi-assert validations.
 - Use `testify/mock` to isolate dependencies in handler tests.
 - Prefer endpoint-level handler testing via registered routes over directly calling private handler methods.
+- For time-dependent business rules, prefer injected clock functions in services to keep unit tests deterministic.
 
 ### Sonar / Duplication Guidance
 
