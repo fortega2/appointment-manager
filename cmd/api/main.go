@@ -98,7 +98,7 @@ func run() error {
 	handler := middleware.Chain(
 		mux,
 		middleware.RequestID(),
-		middleware.Gzip(),
+		middleware.Gzip(middleware.DefaultGzipConfig()),
 		middleware.RequestLogger(logger),
 	)
 
