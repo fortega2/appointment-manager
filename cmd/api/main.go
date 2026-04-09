@@ -6,6 +6,7 @@ import (
 	"appointment-manager/internal/db"
 	"appointment-manager/internal/middleware"
 	"appointment-manager/internal/password"
+	"appointment-manager/internal/professional"
 	"appointment-manager/internal/server"
 	"context"
 	"fmt"
@@ -16,6 +17,8 @@ import (
 	"strings"
 	"syscall"
 	"time"
+
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 const (
@@ -55,46 +58,26 @@ func run() error {
 	}
 	defer pool.Close()
 
-	assistantRepo, err := assistant.NewPostgresRepository(pool)
-	if err != nil {
-		logger.Error("failed to create assistant postgres repository", slog.Any("error", err))
-		return err
-	}
-
-	passwordHasher := password.NewArgon2()
-	assistantService, err := assistant.NewService(assistantRepo, passwordHasher)
-	if err != nil {
-		logger.Error("failed to create assistant service", slog.Any("error", err))
-		return err
-	}
-
-	assistantHandler, err := assistant.NewHandler(logger, assistantService)
+	assistantHandler, err := initializeAssistantHandler(logger, pool)
 	if err != nil {
 		logger.Error("failed to create assistant handler", slog.Any("error", err))
 		return err
 	}
-
-	appointmentRepo, err := appointment.NewPostgresRepository(pool)
-	if err != nil {
-		logger.Error("failed to create appointment postgres repository", slog.Any("error", err))
-		return err
-	}
-
-	appointmentService, err := appointment.NewService(appointmentRepo)
-	if err != nil {
-		logger.Error("failed to create appointment service", slog.Any("error", err))
-		return err
-	}
-
-	appointmentHandler, err := appointment.NewHandler(logger, appointmentService)
+	appointmentHandler, err := initializeAppointmentHandler(logger, pool)
 	if err != nil {
 		logger.Error("failed to create appointment handler", slog.Any("error", err))
+		return err
+	}
+	professionalHandler, err := initializeProfessionalHandler(logger, pool)
+	if err != nil {
+		logger.Error("failed to create professional handler", slog.Any("error", err))
 		return err
 	}
 
 	mux := http.NewServeMux()
 	assistantHandler.RegisterHandlers(mux)
 	appointmentHandler.RegisterHandlers(mux)
+	professionalHandler.RegisterHandlers(mux)
 	handler := middleware.Chain(
 		mux,
 		middleware.RequestID(),
@@ -118,4 +101,52 @@ func run() error {
 	}
 
 	return nil
+}
+
+func initializeAssistantHandler(logger *slog.Logger, pool *pgxpool.Pool) (*assistant.Handler, error) {
+	assistantRepo, err := assistant.NewPostgresRepository(pool)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create assistant postgres repository: %w", err)
+	}
+	passwordHasher := password.NewArgon2()
+	assistantService, err := assistant.NewService(assistantRepo, passwordHasher)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create assistant service: %w", err)
+	}
+	assistantHandler, err := assistant.NewHandler(logger, assistantService)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create assistant handler: %w", err)
+	}
+
+	return assistantHandler, nil
+}
+
+func initializeAppointmentHandler(logger *slog.Logger, pool *pgxpool.Pool) (*appointment.Handler, error) {
+	appointmentRepo, err := appointment.NewPostgresRepository(pool)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create appointment postgres repository: %w", err)
+	}
+	appointmentService, err := appointment.NewService(appointmentRepo)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create appointment service: %w", err)
+	}
+	appointmentHandler, err := appointment.NewHandler(logger, appointmentService)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create appointment handler: %w", err)
+	}
+
+	return appointmentHandler, nil
+}
+
+func initializeProfessionalHandler(logger *slog.Logger, pool *pgxpool.Pool) (*professional.Handler, error) {
+	professionalRepo, err := professional.NewRepository(pool)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create professional repository: %w", err)
+	}
+	professionalHandler, err := professional.NewHandler(logger, professionalRepo)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create professional handler: %w", err)
+	}
+
+	return professionalHandler, nil
 }

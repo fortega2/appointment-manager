@@ -35,6 +35,10 @@ func NewRepository(pool *pgxpool.Pool) (*Repository, error) {
 }
 
 func (r *Repository) Create(ctx context.Context, p *Professional) error {
+	if p == nil {
+		return ErrNilProfessional
+	}
+
 	if _, err := r.pool.Exec(
 		ctx,
 		insertProfessionalQuery,
@@ -51,7 +55,7 @@ func (r *Repository) Create(ctx context.Context, p *Professional) error {
 func (r *Repository) mapCreateError(err error) error {
 	pgErr, ok := errors.AsType[*pgconn.PgError](err)
 	if !ok {
-		return nil
+		return fmt.Errorf("create professional: %w", err)
 	}
 
 	switch pgErr.ConstraintName {
