@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"testing"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go"
@@ -68,4 +69,14 @@ func newProfessionalIntegrationMux(t *testing.T, repo *professional.Repository) 
 	h.RegisterHandlers(mux)
 
 	return mux
+}
+
+func setProfessionalActive(ctx context.Context, t *testing.T, pool *pgxpool.Pool, professionalID string, active bool) {
+	t.Helper()
+
+	id, err := uuid.Parse(professionalID)
+	require.NoError(t, err)
+
+	_, err = pool.Exec(ctx, `UPDATE professional SET active = $1 WHERE id = $2`, active, id)
+	require.NoError(t, err)
 }

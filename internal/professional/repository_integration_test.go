@@ -42,6 +42,60 @@ func TestRepositoryCreatePersistsProfessional(t *testing.T) {
 	assert.True(t, persisted.Active)
 }
 
+func TestRepositoryListReturnsOnlyActiveProfessionals(t *testing.T) {
+	testcontainers.SkipIfProviderIsNotHealthy(t)
+	ctx := context.Background()
+
+	pool := newProfessionalIntegrationPool(ctx, t)
+	repo := newProfessionalIntegrationRepository(t, pool)
+
+	activeID := uuid.New()
+	inactiveID := uuid.New()
+
+	insertProfessional(ctx, t, pool, activeID, "Laura", "Gomez", "1111111111", true)
+	insertProfessional(ctx, t, pool, inactiveID, "Ana", "Perez", "2222222222", false)
+
+	list, err := repo.List(ctx)
+	require.NoError(t, err)
+	require.Len(t, list, 1)
+
+	assert.Equal(t, activeID, list[0].ID)
+	assert.Equal(t, "Laura", list[0].FirstName)
+	assert.Equal(t, "Gomez", list[0].LastName)
+	assert.Equal(t, "1111111111", list[0].Phone)
+	assert.Equal(t, "kinesiology", list[0].Specialty)
+	assert.True(t, list[0].Active)
+}
+
+func TestRepositoryListReturnsEmptySliceWhenNoActiveProfessionals(t *testing.T) {
+	testcontainers.SkipIfProviderIsNotHealthy(t)
+	ctx := context.Background()
+
+	pool := newProfessionalIntegrationPool(ctx, t)
+	repo := newProfessionalIntegrationRepository(t, pool)
+
+	insertProfessional(ctx, t, pool, uuid.New(), "Laura", "Gomez", "1111111111", false)
+
+	list, err := repo.List(ctx)
+	require.NoError(t, err)
+	assert.Empty(t, list)
+}
+
+func TestRepositoryListReturnsErrorWhenDatabaseUnavailable(t *testing.T) {
+	testcontainers.SkipIfProviderIsNotHealthy(t)
+	ctx := context.Background()
+
+	pool := newProfessionalIntegrationPool(ctx, t)
+	repo := newProfessionalIntegrationRepository(t, pool)
+
+	pool.Close()
+
+	list, err := repo.List(ctx)
+	require.Error(t, err)
+	assert.Nil(t, list)
+	assert.Contains(t, err.Error(), "query professionals")
+}
+
 func fetchProfessionalRecord(ctx context.Context, t *testing.T, pool *pgxpool.Pool, id uuid.UUID) professional.Professional {
 	t.Helper()
 
@@ -69,4 +123,23 @@ func fetchProfessionalRecord(ctx context.Context, t *testing.T, pool *pgxpool.Po
 	require.NoError(t, err)
 
 	return persisted
+}
+
+func insertProfessional(
+	ctx context.Context,
+	t *testing.T,
+	pool *pgxpool.Pool,
+	id uuid.UUID,
+	firstName string,
+	lastName string,
+	phone string,
+	active bool,
+) {
+	t.Helper()
+
+	_, err := pool.Exec(ctx, `
+		INSERT INTO professional (id, first_name, last_name, phone, specialty, active)
+		VALUES ($1, $2, $3, $4, 'kinesiology', $5)
+	`, id, firstName, lastName, phone, active)
+	require.NoError(t, err)
 }

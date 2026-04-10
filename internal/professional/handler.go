@@ -2,12 +2,16 @@ package professional
 
 import (
 	"appointment-manager/internal/web"
+	"encoding/json"
 	"errors"
 	"log/slog"
 	"net/http"
 )
 
 const (
+	contentTypeHeader = "Content-Type"
+	contentTypeJSON   = "application/json"
+
 	requestBodyMaxBytes int64 = 1 << 20
 )
 
@@ -32,6 +36,7 @@ func NewHandler(logger *slog.Logger, repo *Repository) (*Handler, error) {
 
 func (h *Handler) RegisterHandlers(mux *http.ServeMux) {
 	mux.Handle("POST /api/v1/professionals", h.createHandler())
+	mux.Handle("GET /api/v1/professionals", h.listHandler())
 }
 
 type request struct {
@@ -78,5 +83,23 @@ func (h *Handler) createHandler() http.HandlerFunc {
 
 		w.Header().Set("Location", "/api/v1/professionals/"+p.ID.String())
 		w.WriteHeader(http.StatusCreated)
+	}
+}
+
+func (h *Handler) listHandler() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		professionals, err := h.repo.List(r.Context())
+		if err != nil {
+			h.logger.ErrorContext(r.Context(), "failed to list professionals", slog.Any("error", err))
+			web.WriteProblem(w, web.NewInternalServerProblem("failed to list professionals", r.URL.Path))
+			return
+		}
+
+		w.Header().Set(contentTypeHeader, contentTypeJSON)
+		if err := json.NewEncoder(w).Encode(professionals); err != nil {
+			h.logger.ErrorContext(r.Context(), "failed to encode professionals response", slog.Any("error", err))
+			web.WriteProblem(w, web.NewInternalServerProblem("failed to encode professionals response", r.URL.Path))
+			return
+		}
 	}
 }

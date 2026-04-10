@@ -20,6 +20,19 @@ const (
 			phone
 		) VALUES ($1, $2, $3, $4)
 	`
+	listProfessionalsQuery = `
+		SELECT
+			id,
+			first_name,
+			last_name,
+			phone,
+			specialty,
+			active
+		FROM
+			professional
+		WHERE
+			active = true
+	`
 )
 
 type Repository struct {
@@ -50,6 +63,35 @@ func (r *Repository) Create(ctx context.Context, p *Professional) error {
 		return r.mapCreateError(err)
 	}
 	return nil
+}
+
+func (r *Repository) List(ctx context.Context) ([]Professional, error) {
+	rows, err := r.pool.Query(ctx, listProfessionalsQuery)
+	if err != nil {
+		return nil, fmt.Errorf("query professionals: %w", err)
+	}
+	defer rows.Close()
+
+	professionals := make([]Professional, 0)
+	for rows.Next() {
+		var item Professional
+		if err := rows.Scan(
+			&item.ID,
+			&item.FirstName,
+			&item.LastName,
+			&item.Phone,
+			&item.Specialty,
+			&item.Active,
+		); err != nil {
+			return nil, fmt.Errorf("scan professional: %w", err)
+		}
+		professionals = append(professionals, item)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate professionals: %w", err)
+	}
+
+	return professionals, nil
 }
 
 func (r *Repository) mapCreateError(err error) error {
