@@ -6,6 +6,7 @@ import (
 	"appointment-manager/internal/db"
 	"appointment-manager/internal/middleware"
 	"appointment-manager/internal/password"
+	"appointment-manager/internal/patient"
 	"appointment-manager/internal/professional"
 	"appointment-manager/internal/server"
 	"context"
@@ -73,11 +74,17 @@ func run() error {
 		logger.Error("failed to create professional handler", slog.Any("error", err))
 		return err
 	}
+	patientHandler, err := initializePatientHandler(logger, pool)
+	if err != nil {
+		logger.Error("failed to create patient handler", slog.Any("error", err))
+		return err
+	}
 
 	mux := http.NewServeMux()
 	assistantHandler.RegisterHandlers(mux)
 	appointmentHandler.RegisterHandlers(mux)
 	professionalHandler.RegisterHandlers(mux)
+	patientHandler.RegisterHandlers(mux)
 	handler := middleware.Chain(
 		mux,
 		middleware.RequestID(),
@@ -149,4 +156,17 @@ func initializeProfessionalHandler(logger *slog.Logger, pool *pgxpool.Pool) (*pr
 	}
 
 	return professionalHandler, nil
+}
+
+func initializePatientHandler(logger *slog.Logger, pool *pgxpool.Pool) (*patient.Handler, error) {
+	patientRepo, err := patient.NewRepository(pool)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create patient repository: %w", err)
+	}
+	patientHandler, err := patient.NewHandler(logger, patientRepo)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create patient handler: %w", err)
+	}
+
+	return patientHandler, nil
 }
