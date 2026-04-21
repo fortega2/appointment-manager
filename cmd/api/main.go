@@ -26,6 +26,8 @@ import (
 
 const (
 	databaseURLEnv          = "DATABASE_URL"
+	environmentEnv          = "ENV"
+	environmentDevelopment  = "development"
 	serverAddr              = ":8080"
 	serverReadHeaderTimeout = 5 * time.Second
 	serverReadTimeout       = 10 * time.Second
@@ -62,7 +64,9 @@ func run() error {
 	defer pool.Close()
 
 	sessionStore := session.NewStore()
-	authHandler, err := initializeAuthHandler(logger, sessionStore, pool, password.NewArgon2(), true)
+	env := strings.TrimSpace(os.Getenv(environmentEnv))
+	isDev := env == "" || strings.EqualFold(env, environmentDevelopment)
+	authHandler, err := initializeAuthHandler(logger, sessionStore, pool, password.NewArgon2(), isDev)
 	if err != nil {
 		logger.Error("failed to create auth handler", slog.Any("error", err))
 		return err
@@ -88,12 +92,18 @@ func run() error {
 		return err
 	}
 
+	authMux := http.NewServeMux()
+	authHandler.RegisterHandlers(authMux)
+
+	protectedMux := http.NewServeMux()
+	assistantHandler.RegisterHandlers(protectedMux)
+	appointmentHandler.RegisterHandlers(protectedMux)
+	professionalHandler.RegisterHandlers(protectedMux)
+	patientHandler.RegisterHandlers(protectedMux)
+
 	mux := http.NewServeMux()
-	authHandler.RegisterHandlers(mux)
-	assistantHandler.RegisterHandlers(mux)
-	appointmentHandler.RegisterHandlers(mux)
-	professionalHandler.RegisterHandlers(mux)
-	patientHandler.RegisterHandlers(mux)
+	mux.Handle("/api/v1/auth/", authMux)
+	mux.Handle("/", middleware.Session(sessionStore)(protectedMux))
 	handler := middleware.Chain(
 		mux,
 		middleware.RequestID(),

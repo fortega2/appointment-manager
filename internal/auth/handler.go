@@ -8,6 +8,7 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"time"
 )
 
 const (
@@ -32,6 +33,9 @@ func NewHandler(logger *slog.Logger, store *session.Store, repo *assistant.Postg
 	if repo == nil {
 		return nil, ErrNilAssistantRepo
 	}
+	if pass == nil {
+		return nil, ErrNilPasswordHasher
+	}
 
 	return &Handler{
 		logger:        logger,
@@ -49,7 +53,7 @@ func (h *Handler) RegisterHandlers(mux *http.ServeMux) {
 
 type loginRequest struct {
 	Email    string `json:"email"`
-	Password string `json:"password"`
+	Password string `json:"password"` //nolint:gosec // Password is an input field required by the login API contract.
 }
 
 func (h *Handler) loginHandler() http.HandlerFunc {
@@ -118,7 +122,7 @@ func (h *Handler) loginHandler() http.HandlerFunc {
 			Name:     session.CookieName,
 			Value:    sessionID,
 			Path:     "/",
-			MaxAge:   int(session.SessionDuration),
+			MaxAge:   int(session.SessionDuration / time.Second),
 			Secure:   !h.isDevelopment,
 			HttpOnly: true,
 			SameSite: http.SameSiteStrictMode,
@@ -129,17 +133,18 @@ func (h *Handler) loginHandler() http.HandlerFunc {
 
 func (h *Handler) logoutHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		cookie, err := r.Cookie(session.CookieName)
-		if err != nil {
-			http.Error(w, "unauthorized", http.StatusUnauthorized)
-			return
+		if cookie, err := r.Cookie(session.CookieName); err == nil {
+			h.store.Delete(cookie.Value)
 		}
 
-		h.store.Delete(cookie.Value)
 		http.SetCookie(w, &http.Cookie{
-			Name:   session.CookieName,
-			Path:   "/",
-			MaxAge: -1,
+			Name:     session.CookieName,
+			Path:     "/",
+			MaxAge:   -1,
+			Secure:   !h.isDevelopment,
+			HttpOnly: true,
+			SameSite: http.SameSiteStrictMode,
 		})
+		w.WriteHeader(http.StatusNoContent)
 	}
 }

@@ -2,16 +2,27 @@ package middleware
 
 import (
 	"appointment-manager/internal/session"
+	"appointment-manager/internal/web"
 	"context"
 	"net/http"
 )
 
-func Middleware(store *session.Store) func(http.Handler) http.Handler {
+func Session(store *session.Store) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if store == nil {
+				web.WriteProblem(w, web.NewInternalServerProblem("session store is not configured", r.URL.Path))
+				return
+			}
+
 			cookie, err := r.Cookie(session.CookieName)
 			if err != nil {
-				http.Error(w, "unauthorized", http.StatusUnauthorized)
+				web.WriteProblem(w, web.NewProblem(
+					http.StatusUnauthorized,
+					web.ProblemTypeUnauthorized,
+					"authentication required",
+					r.URL.Path,
+				))
 				return
 			}
 
@@ -22,7 +33,12 @@ func Middleware(store *session.Store) func(http.Handler) http.Handler {
 					Path:   "/",
 					MaxAge: -1,
 				})
-				http.Error(w, "unauthorized", http.StatusUnauthorized)
+				web.WriteProblem(w, web.NewProblem(
+					http.StatusUnauthorized,
+					web.ProblemTypeUnauthorized,
+					"session is invalid or expired",
+					r.URL.Path,
+				))
 				return
 			}
 

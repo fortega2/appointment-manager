@@ -42,6 +42,7 @@ func (s *Store) Create(userID, email string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("create: %w", err)
 	}
+	now := time.Now()
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -49,8 +50,8 @@ func (s *Store) Create(userID, email string) (string, error) {
 	s.sessions[id] = &Session{
 		UserID:    userID,
 		Email:     email,
-		CreatedAt: time.Now(),
-		ExpiresAt: time.Now().Add(SessionDuration),
+		CreatedAt: now,
+		ExpiresAt: now.Add(SessionDuration),
 	}
 
 	return id, nil
@@ -67,7 +68,9 @@ func (s *Store) Get(id string) (*Session, error) {
 	if time.Now().After(session.ExpiresAt) {
 		return nil, fmt.Errorf("get: %w", ErrSessionExpired)
 	}
-	return session, nil
+
+	copied := *session
+	return &copied, nil
 }
 
 func (s *Store) Delete(id string) {
