@@ -9,9 +9,9 @@ import (
 )
 
 const (
-	CookieName = "session_id"
+	CookieName      = "session_id"
+	SessionDuration = 24 * time.Hour
 
-	sessionDuration = 24 * time.Hour
 	bytesPerSession = 32
 	tickerInterval  = 10 * time.Minute
 )
@@ -50,7 +50,7 @@ func (s *Store) Create(userID, email string) (string, error) {
 		UserID:    userID,
 		Email:     email,
 		CreatedAt: time.Now(),
-		ExpiresAt: time.Now().Add(sessionDuration),
+		ExpiresAt: time.Now().Add(SessionDuration),
 	}
 
 	return id, nil

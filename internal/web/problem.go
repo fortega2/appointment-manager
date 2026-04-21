@@ -15,6 +15,7 @@ const (
 	ProblemTypeResourceNotFound     = "/problems/resource-not-found"
 	ProblemTypeConflict             = "/problems/conflict"
 	ProblemTypeInternalServerError  = "/problems/internal-server-error"
+	ProblemTypeUnauthorized         = "/problems/unauthorized"
 )
 
 type ProblemDetail struct {

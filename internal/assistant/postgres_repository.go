@@ -38,6 +38,18 @@ const (
 		WHERE
 			id = $1
 	`
+	getByEmailQuery = `
+		SELECT
+			id,
+			first_name,
+			last_name,
+			email,
+			password_hash
+		FROM
+			assistant
+		WHERE
+			email = $1
+	`
 	createQuery = `
 		INSERT INTO assistant (
 			id,
@@ -106,6 +118,26 @@ func (r *PostgresRepository) Get(ctx context.Context, id uuid.UUID) (*Assistant,
 			return nil, fmt.Errorf("%w: %w", ErrAssistantNotFound, err)
 		}
 		return nil, fmt.Errorf("Get: %w", err)
+	}
+
+	return &assistant, nil
+}
+
+func (r *PostgresRepository) GetByEmail(ctx context.Context, email string) (*Assistant, error) {
+	row := r.pool.QueryRow(ctx, getByEmailQuery, email)
+
+	var assistant Assistant
+	if err := row.Scan(
+		&assistant.ID,
+		&assistant.FirstName,
+		&assistant.LastName,
+		&assistant.Email,
+		&assistant.PasswordHash,
+	); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, fmt.Errorf("%w: %w", ErrAssistantNotFound, err)
+		}
+		return nil, fmt.Errorf("GetByEmail: %w", err)
 	}
 
 	return &assistant, nil

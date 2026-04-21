@@ -3,12 +3,14 @@ package main
 import (
 	"appointment-manager/internal/appointment"
 	"appointment-manager/internal/assistant"
+	"appointment-manager/internal/auth"
 	"appointment-manager/internal/db"
 	"appointment-manager/internal/middleware"
 	"appointment-manager/internal/password"
 	"appointment-manager/internal/patient"
 	"appointment-manager/internal/professional"
 	"appointment-manager/internal/server"
+	"appointment-manager/internal/session"
 	"context"
 	"fmt"
 	"log/slog"
@@ -59,6 +61,12 @@ func run() error {
 	}
 	defer pool.Close()
 
+	sessionStore := session.NewStore()
+	authHandler, err := initializeAuthHandler(logger, sessionStore, pool, password.NewArgon2(), true)
+	if err != nil {
+		logger.Error("failed to create auth handler", slog.Any("error", err))
+		return err
+	}
 	assistantHandler, err := initializeAssistantHandler(logger, pool)
 	if err != nil {
 		logger.Error("failed to create assistant handler", slog.Any("error", err))
@@ -81,6 +89,7 @@ func run() error {
 	}
 
 	mux := http.NewServeMux()
+	authHandler.RegisterHandlers(mux)
 	assistantHandler.RegisterHandlers(mux)
 	appointmentHandler.RegisterHandlers(mux)
 	professionalHandler.RegisterHandlers(mux)
@@ -108,6 +117,19 @@ func run() error {
 	}
 
 	return nil
+}
+
+func initializeAuthHandler(logger *slog.Logger, store *session.Store, pool *pgxpool.Pool, pass *password.Argon2, isDev bool) (*auth.Handler, error) {
+	authRepo, err := assistant.NewPostgresRepository(pool)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create auth postgres repository: %w", err)
+	}
+	authHandler, err := auth.NewHandler(logger, store, authRepo, pass, isDev)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create auth handler: %w", err)
+	}
+
+	return authHandler, nil
 }
 
 func initializeAssistantHandler(logger *slog.Logger, pool *pgxpool.Pool) (*assistant.Handler, error) {
