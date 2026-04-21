@@ -42,3 +42,4 @@ go.work
 
 .env
 docker-compose.dev.yml
+Dockerfile.*

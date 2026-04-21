@@ -1,14 +1,31 @@
 services:
+  api:
+    container_name: appointment-manager-api
+    hostname: api
+    image: git.sonuserver.com/fortega21/appointment-manager-api:latest
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?sslmode=disable
+      ENV: production
+    networks:
+      - caddy_network
+    expose:
+      - ${API_PORT:-8080}
+    depends_on:
+      postgres:
+        condition: service_healthy
+
   postgres:
     container_name: appointment-manager-postgres
-    hostname: appointment-manager-postgres
+    hostname: postgres
     image: postgres:18.3-alpine3.23
     environment:
       POSTGRES_DB: ${POSTGRES_DB}
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-    ports:
-      - "127.0.0.1:5432:5432"
+    networks:
+      - caddy_network
+    expose:
+      - ${POSTGRES_PORT:-5432}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -22,6 +39,5 @@ volumes:
     name: appointment-manager-postgres-data
 
 networks:
-  default:
-    name: appointment-manager-postgres-network
-    driver: bridge
+  caddy_network:
+    external: true
