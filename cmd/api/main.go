@@ -45,8 +45,7 @@ func main() {
 
 func run() error {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
-		Level:     slog.LevelDebug,
-		AddSource: true,
+		Level: slog.LevelDebug,
 	}))
 	logger.Info("starting API server")
 
