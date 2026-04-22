@@ -2,12 +2,14 @@ FROM golang:1.26.2-alpine3.23 AS builder
 
 WORKDIR /app
 
-COPY go.mod go.sum ./
+ARG TARGETOS
+ARG TARGETARCH
 
+COPY go.mod go.sum ./
 RUN go mod download
 
 COPY . .
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
+RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
     go build -ldflags="-s -w" -o /app/appointment-manager-api ./cmd/api/main.go
 
 FROM scratch
