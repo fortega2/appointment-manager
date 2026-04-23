@@ -91,20 +91,16 @@ func run() error {
 		return err
 	}
 
-	authMux := http.NewServeMux()
-	authHandler.RegisterHandlers(authMux)
-
-	protectedMux := http.NewServeMux()
-	assistantHandler.RegisterHandlers(protectedMux)
-	appointmentHandler.RegisterHandlers(protectedMux)
-	professionalHandler.RegisterHandlers(protectedMux)
-	patientHandler.RegisterHandlers(protectedMux)
-
 	mux := http.NewServeMux()
-	mux.Handle("/api/v1/auth/", authMux)
-	mux.Handle("/", middleware.Session(sessionStore)(protectedMux))
+	authHandler.RegisterHandlers(mux)
+	assistantHandler.RegisterHandlers(mux)
+	appointmentHandler.RegisterHandlers(mux)
+	professionalHandler.RegisterHandlers(mux)
+	patientHandler.RegisterHandlers(mux)
+
 	handler := middleware.Chain(
 		mux,
+		middleware.Session(sessionStore, "/api/v1/auth"),
 		middleware.RequestID(),
 		middleware.Gzip(middleware.DefaultGzipConfig()),
 		middleware.RequestLogger(logger),

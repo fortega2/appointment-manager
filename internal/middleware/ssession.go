@@ -5,11 +5,17 @@ import (
 	"appointment-manager/internal/web"
 	"context"
 	"net/http"
+	"strings"
 )
 
-func Session(store *session.Store) func(http.Handler) http.Handler {
+func Session(store *session.Store, skip ...string) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if shouldSkipSession(r.URL.Path, skip) {
+				next.ServeHTTP(w, r)
+				return
+			}
+
 			if store == nil {
 				web.WriteProblem(w, web.NewInternalServerProblem("session store is not configured", r.URL.Path))
 				return
@@ -46,4 +52,14 @@ func Session(store *session.Store) func(http.Handler) http.Handler {
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}
+}
+
+func shouldSkipSession(path string, skip []string) bool {
+	for _, prefix := range skip {
+		if strings.HasPrefix(path, prefix) {
+			return true
+		}
+	}
+
+	return false
 }
