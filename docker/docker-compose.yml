@@ -8,10 +8,13 @@ services:
       ENV: production
     networks:
       - caddy_network
+      - backend_network
     expose:
       - ${API_PORT:-8080}
     restart: unless-stopped
     read_only: true
+    tmpfs:
+      - /tmp
     cap_drop:
       - ALL
     security_opt:
@@ -39,7 +42,7 @@ services:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     networks:
-      - caddy_network
+      - backend_network
     expose:
       - ${POSTGRES_PORT:-5432}
     volumes:
@@ -70,3 +73,5 @@ volumes:
 networks:
   caddy_network:
     external: true
+  backend_network:
+    internal: true
