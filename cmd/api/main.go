@@ -5,6 +5,7 @@ import (
 	"appointment-manager/internal/assistant"
 	"appointment-manager/internal/auth"
 	"appointment-manager/internal/db"
+	"appointment-manager/internal/health"
 	"appointment-manager/internal/middleware"
 	"appointment-manager/internal/password"
 	"appointment-manager/internal/patient"
@@ -35,6 +36,7 @@ const (
 	serverIdleTimeout       = 60 * time.Second
 	serverMaxHeaderBytes    = 1 << 20
 	serverShutdownTimeout   = 3 * time.Second
+	readinessTimeout        = 300 * time.Millisecond
 )
 
 func main() {
@@ -90,8 +92,14 @@ func run() error {
 		logger.Error("failed to create patient handler", slog.Any("error", err))
 		return err
 	}
+	healthHandler, err := initializeHealthHandler(logger, pool)
+	if err != nil {
+		logger.Error("failed to create health handler", slog.Any("error", err))
+		return err
+	}
 
 	mux := http.NewServeMux()
+	healthHandler.RegisterHandlers(mux)
 	authHandler.RegisterHandlers(mux)
 	assistantHandler.RegisterHandlers(mux)
 	appointmentHandler.RegisterHandlers(mux)
@@ -100,7 +108,7 @@ func run() error {
 
 	handler := middleware.Chain(
 		mux,
-		middleware.Session(sessionStore, "/api/v1/auth"),
+		middleware.Session(sessionStore, "/api/v1/auth", "/healthz", "/readyz"),
 		middleware.RequestID(),
 		middleware.Gzip(middleware.DefaultGzipConfig()),
 		middleware.RequestLogger(logger),
@@ -196,4 +204,17 @@ func initializePatientHandler(logger *slog.Logger, pool *pgxpool.Pool) (*patient
 	}
 
 	return patientHandler, nil
+}
+
+func initializeHealthHandler(logger *slog.Logger, pool *pgxpool.Pool) (*health.Handler, error) {
+	checkReady, err := health.NewPgxReadinessCheck(pool)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create health readiness checker: %w", err)
+	}
+	handler, err := health.NewHandler(logger, checkReady, readinessTimeout)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create health handler: %w", err)
+	}
+
+	return handler, nil
 }
