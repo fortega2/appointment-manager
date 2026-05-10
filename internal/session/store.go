@@ -9,7 +9,7 @@ import (
 )
 
 const (
-	CookieName      = "session_id"
+	CookieName      = "appointment_manager_session"
 	SessionDuration = 24 * time.Hour
 
 	bytesPerSession = 32

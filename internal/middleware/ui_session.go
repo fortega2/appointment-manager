@@ -6,9 +6,7 @@ import (
 	"net/http"
 )
 
-const (
-	looginURL = "/login"
-)
+const looginURL string = "/login"
 
 func UISession(store *session.Store) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {

@@ -8,7 +8,7 @@ package layout
 import "github.com/a-h/templ"
 import templruntime "github.com/a-h/templ/runtime"
 
-func Base(title string) templ.Component {
+func Base(title string, isAuthenticated bool) templ.Component {
 	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 		if templ_7745c5c3_CtxErr := ctx.Err(); templ_7745c5c3_CtxErr != nil {
@@ -42,7 +42,17 @@ func Base(title string) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, " - Appointment Manager</title><script src=\"https://unpkg.com/htmx.org@1.9.11\"></script><script defer src=\"https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js\"></script><script src=\"https://cdn.tailwindcss.com\"></script><style>\n\t\t\t\t[x-cloak] { display: none !important; }\n\t\t\t</style></head><body class=\"bg-gray-50 text-gray-900 font-sans antialiased h-screen flex flex-col\"><header class=\"bg-white shadow-sm border-b border-gray-200\"><div class=\"max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between\"><div class=\"flex items-center\"><span class=\"text-xl font-bold text-indigo-600\">Appointment Manager</span></div><nav class=\"flex items-center space-x-4\"></nav></div></header><main class=\"flex-grow flex flex-col justify-center items-center\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, " - Appointment Manager</title><script src=\"https://unpkg.com/htmx.org@1.9.11\"></script><script defer src=\"https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js\"></script><script src=\"https://cdn.tailwindcss.com\"></script><style>\n\t\t\t\t[x-cloak] { display: none !important; }\n\t\t\t</style></head><body class=\"bg-gray-50 text-gray-900 font-sans antialiased h-screen flex flex-col\"><header class=\"bg-white shadow-sm border-b border-gray-200\"><div class=\"max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between\"><div class=\"flex items-center\"><span class=\"text-xl font-bold text-indigo-600\">Appointment Manager</span></div>")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		if isAuthenticated {
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, "<nav class=\"flex items-center space-x-6\"><button hx-post=\"/logout\" hx-target=\"body\" class=\"text-sm font-medium text-white bg-red-500 hover:bg-red-600 px-3 py-1.5 rounded-md transition-colors\">Cerrar Sesión</button></nav>")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, "</div></header><main class=\"flex-grow flex flex-col justify-center items-center\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -50,7 +60,7 @@ func Base(title string) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, "</main><footer class=\"bg-white border-t border-gray-200 mt-auto\"><div class=\"max-w-7xl mx-auto py-4 px-4 sm:px-6 lg:px-8 flex justify-center text-sm text-gray-500\">&copy; 2026 Appointment Manager</div></footer></body></html>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, "</main><footer class=\"bg-white border-t border-gray-200 mt-auto\"><div class=\"max-w-7xl mx-auto py-4 px-4 sm:px-6 lg:px-8 flex justify-center text-sm text-gray-500\">&copy; 2026 Appointment Manager</div></footer></body></html>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

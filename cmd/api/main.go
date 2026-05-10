@@ -13,6 +13,7 @@ import (
 	"appointment-manager/internal/server"
 	"appointment-manager/internal/session"
 	uiauth "appointment-manager/internal/ui/auth"
+	"appointment-manager/internal/ui/home"
 	"context"
 	"fmt"
 	"log/slog"
@@ -103,6 +104,11 @@ func run() error {
 		logger.Error("failed to create health handler", slog.Any("error", err))
 		return err
 	}
+	uiHomeHandler, err := initializeUIHomeHandler(logger)
+	if err != nil {
+		logger.Error("failed to create UI home handler", slog.Any("error", err))
+		return err
+	}
 
 	mux := http.NewServeMux()
 	healthHandler.RegisterHandlers(mux)
@@ -115,7 +121,11 @@ func run() error {
 	professionalHandler.RegisterHandlers(apiProtectedMux)
 	patientHandler.RegisterHandlers(apiProtectedMux)
 
+	uiProtectedMux := http.NewServeMux()
+	uiHomeHandler.RegisterHandlers(uiProtectedMux)
+
 	mux.Handle("/api/v1/", middleware.Session(sessionStore)(apiProtectedMux))
+	mux.Handle("/", middleware.UISession(sessionStore)(uiProtectedMux))
 
 	//! TODO: add CORS middleware and CRSF protection
 	handler := middleware.Chain(
@@ -241,4 +251,13 @@ func initializeHealthHandler(logger *slog.Logger, pool *pgxpool.Pool) (*health.H
 	}
 
 	return handler, nil
+}
+
+func initializeUIHomeHandler(logger *slog.Logger) (*home.Handler, error) {
+	homeHandler, err := home.NewHandler(logger)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create home handler: %w", err)
+	}
+
+	return homeHandler, nil
 }

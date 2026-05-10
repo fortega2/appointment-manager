@@ -43,13 +43,13 @@ func Login() templ.Component {
 				}()
 			}
 			ctx = templ.InitializeContext(ctx)
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<div class=\"w-full max-w-md mx-auto mt-20\"><div class=\"bg-white p-8 rounded-lg shadow-md border border-gray-100\"><h2 class=\"text-2xl font-bold text-center text-gray-800 mb-6\">Iniciar Sesión</h2><form hx-post=\"/login\" hx-target=\"#error-message\" hx-swap=\"innerHTML\" class=\"space-y-5\"><div><label for=\"email\" class=\"block text-sm font-medium text-gray-700\">Email</label> <input type=\"email\" name=\"email\" id=\"email\" required class=\"mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm\" placeholder=\"admin@ejemplo.com\"></div><div><label for=\"password\" class=\"block text-sm font-medium text-gray-700\">Contraseña</label> <input type=\"password\" name=\"password\" id=\"password\" required class=\"mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm\" placeholder=\"••••••••\"></div><div id=\"error-message\" class=\"text-red-500 text-sm text-center font-medium h-5\"></div><button type=\"submit\" class=\"w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500\">Ingresar</button></form></div></div>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<div class=\"w-full max-w-md mx-auto mt-20\"><div class=\"bg-white p-8 rounded-lg shadow-md border border-gray-100\"><h2 class=\"text-2xl font-bold text-center text-gray-800 mb-6\">Iniciar Sesión</h2><form hx-post=\"/login\" hx-target=\"#error-message\" hx-swap=\"innerHTML\" class=\"space-y-5\"><div><label for=\"email\" class=\"block text-sm font-medium text-gray-700\">Email</label> <input type=\"email\" name=\"email\" id=\"email\" required class=\"mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm\"></div><div><label for=\"password\" class=\"block text-sm font-medium text-gray-700\">Contraseña</label> <input type=\"password\" name=\"password\" id=\"password\" required class=\"mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm\"></div><div id=\"error-message\" class=\"text-red-500 text-sm text-center font-medium h-5\"></div><button type=\"submit\" class=\"w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500\">Ingresar</button></form></div></div>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			return nil
 		})
-		templ_7745c5c3_Err = layout.Base("Iniciar Sesión").Render(templ.WithChildren(ctx, templ_7745c5c3_Var2), templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = layout.Base("Iniciar Sesión", false).Render(templ.WithChildren(ctx, templ_7745c5c3_Var2), templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -85,7 +85,7 @@ func LoginError(message string) templ.Component {
 		var templ_7745c5c3_Var4 string
 		templ_7745c5c3_Var4, templ_7745c5c3_Err = templ.JoinStringErrs(message)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/ui/auth/login.templ`, Line: 56, Col: 16}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/ui/auth/login.templ`, Line: 54, Col: 16}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var4))
 		if templ_7745c5c3_Err != nil {

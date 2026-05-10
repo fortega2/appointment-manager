@@ -1,6 +1,6 @@
 package layout
 
-templ Base(title string) {
+templ Base(title string, isAuthenticated bool) {
 	<!DOCTYPE html>
 	<html lang="es">
 		<head>
@@ -20,8 +20,17 @@ templ Base(title string) {
 					<div class="flex items-center">
 						<span class="text-xl font-bold text-indigo-600">Appointment Manager</span>
 					</div>
-					<nav class="flex items-center space-x-4">
-					</nav>
+					if isAuthenticated {
+						<nav class="flex items-center space-x-6">
+							<button 
+								hx-post="/logout" 
+								hx-target="body" 
+								class="text-sm font-medium text-white bg-red-500 hover:bg-red-600 px-3 py-1.5 rounded-md transition-colors"
+							>
+								Cerrar Sesión
+							</button>
+						</nav>
+					}
 				</div>
 			</header>
 

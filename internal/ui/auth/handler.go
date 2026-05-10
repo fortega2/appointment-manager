@@ -50,6 +50,7 @@ func NewHandler(logger *slog.Logger, store *session.Store, repo *assistant.Postg
 func (h *Handler) RegisterHandlers(mux *http.ServeMux) {
 	mux.Handle("GET /login", h.showLoginHandler())
 	mux.Handle("POST /login", h.processLoginHandler())
+	mux.Handle("POST /logout", h.logoutHandler())
 }
 
 func (h *Handler) showLoginHandler() http.HandlerFunc {
@@ -120,6 +121,26 @@ func (h *Handler) processLoginHandler() http.HandlerFunc {
 		})
 
 		w.Header().Set("HX-Redirect", "/")
+		w.WriteHeader(http.StatusOK)
+	}
+}
+
+func (h *Handler) logoutHandler() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if cookie, err := r.Cookie(session.CookieName); err == nil {
+			h.store.Delete(cookie.Value)
+		}
+
+		http.SetCookie(w, &http.Cookie{
+			Name:     session.CookieName,
+			Path:     "/",
+			MaxAge:   -1,
+			Secure:   !h.isDevelopment,
+			HttpOnly: true,
+			SameSite: http.SameSiteStrictMode,
+		})
+
+		w.Header().Set("HX-Redirect", "/login")
 		w.WriteHeader(http.StatusOK)
 	}
 }
