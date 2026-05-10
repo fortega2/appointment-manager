@@ -10,14 +10,9 @@ const (
 	looginURL = "/login"
 )
 
-func UISession(store *session.Store, skip ...string) func(http.Handler) http.Handler {
+func UISession(store *session.Store) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if shouldSkipSession(r.URL.Path, skip) {
-				next.ServeHTTP(w, r)
-				return
-			}
-
 			if store == nil {
 				http.Redirect(w, r, looginURL, http.StatusSeeOther)
 				return
