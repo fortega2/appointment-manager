@@ -14,14 +14,14 @@ COPY cmd ./cmd
 COPY internal ./internal
 
 RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
-    go build -ldflags="-s -w" -o /app/appointment-manager-api ./cmd/api/main.go
+    go build -ldflags="-s -w" -o /app/appointment-manager-server ./cmd/server/main.go
 RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
     go build -ldflags="-s -w" -o /app/healthcheck ./cmd/healthcheck/main.go
 
 FROM scratch
 
 COPY --from=builder /etc/passwd /etc/passwd
-COPY --from=builder /app/appointment-manager-api /appointment-manager-api
+COPY --from=builder /app/appointment-manager-server /appointment-manager-server
 COPY --from=builder /app/healthcheck /healthcheck
 
 USER appuser
@@ -29,4 +29,4 @@ USER appuser
 HEALTHCHECK --interval=10s --timeout=2s --start-period=20s --retries=3 \
     CMD ["/healthcheck", "-url", "http://127.0.0.1:8080/readyz", "-timeout", "2s"]
 
-ENTRYPOINT ["/appointment-manager-api"]
+ENTRYPOINT ["/appointment-manager-server"]

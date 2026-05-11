@@ -71,7 +71,7 @@ func Start(ctx context.Context, logger *slog.Logger, handler http.Handler, addr 
 
 	go func() {
 		defer close(errCh)
-		logger.InfoContext(ctx, "server listening", slog.String("addr", addr))
+		logger.InfoContext(ctx, "api server listening", slog.String("addr", addr))
 
 		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			errCh <- fmt.Errorf("listen and serve: %w", err)
