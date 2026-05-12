@@ -12,7 +12,6 @@ import (
 	"appointment-manager/internal/professional"
 	"appointment-manager/internal/server"
 	"appointment-manager/internal/session"
-	uiauth "appointment-manager/internal/ui/auth"
 	"appointment-manager/internal/ui/home"
 	"context"
 	"fmt"
@@ -69,71 +68,10 @@ func run() error {
 	sessionStore := session.NewStore()
 	env := strings.TrimSpace(os.Getenv(environmentEnv))
 	isDev := env == "" || strings.EqualFold(env, environmentDevelopment)
-	authHandler, err := initializeAuthHandler(logger, sessionStore, pool, password.NewArgon2(), isDev)
+	handler, err := initializeServerHandlers(logger, sessionStore, pool, isDev)
 	if err != nil {
-		logger.Error("failed to create auth handler", slog.Any("error", err))
 		return err
 	}
-	uiAuthHandler, err := initializeUIAuthHandler(logger, sessionStore, pool, password.NewArgon2(), isDev)
-	if err != nil {
-		logger.Error("failed to create UI auth handler", slog.Any("error", err))
-		return err
-	}
-	assistantHandler, err := initializeAssistantHandler(logger, pool)
-	if err != nil {
-		logger.Error("failed to create assistant handler", slog.Any("error", err))
-		return err
-	}
-	appointmentHandler, err := initializeAppointmentHandler(logger, pool)
-	if err != nil {
-		logger.Error("failed to create appointment handler", slog.Any("error", err))
-		return err
-	}
-	professionalHandler, err := initializeProfessionalHandler(logger, pool)
-	if err != nil {
-		logger.Error("failed to create professional handler", slog.Any("error", err))
-		return err
-	}
-	patientHandler, err := initializePatientHandler(logger, pool)
-	if err != nil {
-		logger.Error("failed to create patient handler", slog.Any("error", err))
-		return err
-	}
-	healthHandler, err := initializeHealthHandler(logger, pool)
-	if err != nil {
-		logger.Error("failed to create health handler", slog.Any("error", err))
-		return err
-	}
-	uiHomeHandler, err := initializeUIHomeHandler(logger)
-	if err != nil {
-		logger.Error("failed to create UI home handler", slog.Any("error", err))
-		return err
-	}
-
-	mux := http.NewServeMux()
-	healthHandler.RegisterHandlers(mux)
-	authHandler.RegisterHandlers(mux)
-	uiAuthHandler.RegisterHandlers(mux)
-
-	apiProtectedMux := http.NewServeMux()
-	assistantHandler.RegisterHandlers(apiProtectedMux)
-	appointmentHandler.RegisterHandlers(apiProtectedMux)
-	professionalHandler.RegisterHandlers(apiProtectedMux)
-	patientHandler.RegisterHandlers(apiProtectedMux)
-
-	uiProtectedMux := http.NewServeMux()
-	uiHomeHandler.RegisterHandlers(uiProtectedMux)
-
-	mux.Handle("/api/v1/", middleware.Session(sessionStore)(apiProtectedMux))
-	mux.Handle("/", middleware.UISession(sessionStore)(uiProtectedMux))
-
-	//! TODO: add CORS middleware and CRSF protection
-	handler := middleware.Chain(
-		mux,
-		middleware.RequestID(),
-		middleware.Gzip(middleware.DefaultGzipConfig()),
-		middleware.RequestLogger(logger),
-	)
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
@@ -153,6 +91,69 @@ func run() error {
 	return nil
 }
 
+func initializeServerHandlers(logger *slog.Logger, sessionStore *session.Store, pool *pgxpool.Pool, isDev bool) (http.Handler, error) {
+	authHandler, err := initializeAuthHandler(logger, sessionStore, pool, password.NewArgon2(), isDev)
+	if err != nil {
+		logger.Error("failed to create auth handler", slog.Any("error", err))
+		return nil, err
+	}
+	assistantHandler, err := initializeAssistantHandler(logger, pool)
+	if err != nil {
+		logger.Error("failed to create assistant handler", slog.Any("error", err))
+		return nil, err
+	}
+	appointmentHandler, err := initializeAppointmentHandler(logger, pool)
+	if err != nil {
+		logger.Error("failed to create appointment handler", slog.Any("error", err))
+		return nil, err
+	}
+	professionalHandler, err := initializeProfessionalHandler(logger, pool)
+	if err != nil {
+		logger.Error("failed to create professional handler", slog.Any("error", err))
+		return nil, err
+	}
+	patientHandler, err := initializePatientHandler(logger, pool)
+	if err != nil {
+		logger.Error("failed to create patient handler", slog.Any("error", err))
+		return nil, err
+	}
+	healthHandler, err := initializeHealthHandler(logger, pool)
+	if err != nil {
+		logger.Error("failed to create health handler", slog.Any("error", err))
+		return nil, err
+	}
+	uiHomeHandler, err := initializeUIHomeHandler(logger)
+	if err != nil {
+		logger.Error("failed to create UI home handler", slog.Any("error", err))
+		return nil, err
+	}
+
+	mux := http.NewServeMux()
+	healthHandler.RegisterHandlers(mux)
+	authHandler.RegisterHandlers(mux)
+
+	apiProtectedMux := http.NewServeMux()
+	assistantHandler.RegisterHandlers(apiProtectedMux)
+	appointmentHandler.RegisterHandlers(apiProtectedMux)
+	professionalHandler.RegisterHandlers(apiProtectedMux)
+	patientHandler.RegisterHandlers(apiProtectedMux)
+
+	uiProtectedMux := http.NewServeMux()
+	uiHomeHandler.RegisterHandlers(uiProtectedMux)
+
+	mux.Handle("/api/v1/", middleware.Session(sessionStore)(apiProtectedMux))
+	mux.Handle("/", middleware.UISession(sessionStore)(uiProtectedMux))
+
+	//! TODO: Implement gorilla/csrf middleware for UI routes
+	handler := middleware.Chain(
+		mux,
+		middleware.RequestID(),
+		middleware.Gzip(middleware.DefaultGzipConfig()),
+		middleware.RequestLogger(logger),
+	)
+	return handler, nil
+}
+
 func initializeAuthHandler(logger *slog.Logger, store *session.Store, pool *pgxpool.Pool, pass *password.Argon2, isDev bool) (*auth.Handler, error) {
 	authRepo, err := assistant.NewPostgresRepository(pool)
 	if err != nil {
@@ -161,19 +162,6 @@ func initializeAuthHandler(logger *slog.Logger, store *session.Store, pool *pgxp
 	authHandler, err := auth.NewHandler(logger, store, authRepo, pass, isDev)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create auth handler: %w", err)
-	}
-
-	return authHandler, nil
-}
-
-func initializeUIAuthHandler(logger *slog.Logger, store *session.Store, pool *pgxpool.Pool, pass *password.Argon2, isDev bool) (*uiauth.Handler, error) {
-	authRepo, err := assistant.NewPostgresRepository(pool)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create auth postgres repository: %w", err)
-	}
-	authHandler, err := uiauth.NewHandler(logger, store, authRepo, pass, isDev)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create UI auth handler: %w", err)
 	}
 
 	return authHandler, nil
