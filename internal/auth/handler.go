@@ -90,6 +90,8 @@ func (h *Handler) loginAPIHandler() http.HandlerFunc {
 					slog.Any("error", err))
 				web.WriteProblem(w, web.NewInternalServerProblem(failedGetAssistByEmailMsg, r.URL.Path))
 			}
+			const dummyHash = "$argon2id$v=19$m=65536,t=3,p=2$P+GDBz2vGj467VpP0f5zWg$N/J6HjG8M1nJ8Jt3Vb4N/D1T1V7G7Q6H2C8P9W1L9Q"
+			_, _ = h.pass.Compare(dummyHash, req.Password) // Compare with a dummy hash to mitigate timing attacks.
 			return
 		}
 
@@ -184,6 +186,8 @@ func (h *Handler) processLoginUIHandler() http.HandlerFunc {
 					slog.String("email", email),
 					slog.Any("error", err))
 			}
+			const dummyHash = "$argon2id$v=19$m=65536,t=3,p=2$P+GDBz2vGj467VpP0f5zWg$N/J6HjG8M1nJ8Jt3Vb4N/D1T1V7G7Q6H2C8P9W1L9Q"
+			_, _ = h.pass.Compare(dummyHash, pass) // Compare with a dummy hash to mitigate timing attacks.
 			h.renderError(w, r, "Email o contraseña incorrectos")
 			return
 		}

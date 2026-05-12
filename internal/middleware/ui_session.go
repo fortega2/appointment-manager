@@ -8,7 +8,7 @@ import (
 
 const looginURL string = "/login"
 
-func UISession(store *session.Store) func(http.Handler) http.Handler {
+func UISession(store *session.Store, isDevelopment bool) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if store == nil {
@@ -25,9 +25,12 @@ func UISession(store *session.Store) func(http.Handler) http.Handler {
 			s, err := store.Get(cookie.Value)
 			if err != nil {
 				http.SetCookie(w, &http.Cookie{
-					Name:   session.CookieName,
-					Path:   "/",
-					MaxAge: -1,
+					Name:     session.CookieName,
+					Path:     "/",
+					MaxAge:   -1,
+					Secure:   !isDevelopment,
+					HttpOnly: true,
+					SameSite: http.SameSiteStrictMode,
 				})
 				http.Redirect(w, r, looginURL, http.StatusSeeOther)
 				return

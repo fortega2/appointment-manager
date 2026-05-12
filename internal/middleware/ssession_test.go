@@ -22,7 +22,7 @@ func TestSessionMiddlewareRejectsMissingCookie(t *testing.T) {
 	t.Parallel()
 
 	store := session.NewStore()
-	handler := middleware.Session(store)(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+	handler := middleware.Session(store, false)(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
 		t.Fatal("next handler must not be called")
 	}))
 
@@ -40,7 +40,7 @@ func TestSessionMiddlewareRejectsInvalidCookieAndClearsIt(t *testing.T) {
 	t.Parallel()
 
 	store := session.NewStore()
-	handler := middleware.Session(store)(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+	handler := middleware.Session(store, false)(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
 		t.Fatal("next handler must not be called")
 	}))
 
@@ -69,7 +69,7 @@ func TestSessionMiddlewareInjectsSessionInContext(t *testing.T) {
 	require.NoError(t, err)
 
 	var capturedUserID string
-	handler := middleware.Session(store)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := middleware.Session(store, false)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		s, getErr := session.FromContext(r.Context())
 		require.NoError(t, getErr)
 		capturedUserID = s.UserID
@@ -89,7 +89,7 @@ func TestSessionMiddlewareInjectsSessionInContext(t *testing.T) {
 func TestSessionMiddlewareHandlesNilStore(t *testing.T) {
 	t.Parallel()
 
-	handler := middleware.Session(nil)(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+	handler := middleware.Session(nil, false)(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
 		t.Fatal("next handler must not be called")
 	}))
 

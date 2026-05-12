@@ -141,8 +141,8 @@ func initializeServerHandlers(logger *slog.Logger, sessionStore *session.Store, 
 	uiProtectedMux := http.NewServeMux()
 	uiHomeHandler.RegisterHandlers(uiProtectedMux)
 
-	mux.Handle("/api/v1/", middleware.Session(sessionStore)(apiProtectedMux))
-	mux.Handle("/", middleware.UISession(sessionStore)(uiProtectedMux))
+	mux.Handle("/api/v1/", middleware.Session(sessionStore, isDev)(apiProtectedMux))
+	mux.Handle("/", middleware.UISession(sessionStore, isDev)(uiProtectedMux))
 
 	//! TODO: Implement gorilla/csrf middleware for UI routes
 	handler := middleware.Chain(
