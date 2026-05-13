@@ -10,6 +10,8 @@ import (
 	"log/slog"
 	"net/http"
 	"time"
+
+	"github.com/gorilla/csrf"
 )
 
 const (
@@ -162,7 +164,7 @@ func (h *Handler) logoutAPIHandler() http.HandlerFunc {
 func (h *Handler) showLoginUIHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
-		if err := auth.Login().Render(ctx, w); err != nil {
+		if err := auth.Login(csrf.Token(r)).Render(ctx, w); err != nil {
 			h.logger.ErrorContext(ctx, "error rendering login page", slog.Any("error", err))
 		}
 	}

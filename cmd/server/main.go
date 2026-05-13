@@ -14,6 +14,7 @@ import (
 	"appointment-manager/internal/session"
 	"appointment-manager/internal/ui/home"
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -23,6 +24,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/gorilla/csrf"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -31,6 +33,7 @@ const (
 	environmentEnv          = "ENV"
 	environmentDevelopment  = "development"
 	serverAddr              = ":8080"
+	csrfAuthKeyLenght       = 32
 	serverReadHeaderTimeout = 5 * time.Second
 	serverReadTimeout       = 10 * time.Second
 	serverWriteTimeout      = 15 * time.Second
@@ -50,11 +53,11 @@ func run() error {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
 		Level: slog.LevelDebug,
 	}))
-	logger.Info("starting API server")
+	logger.Info("starting server")
 
 	databaseURL := strings.TrimSpace(os.Getenv(databaseURLEnv))
 	if databaseURL == "" {
-		logger.Error("database URL is not set", slog.String("env", databaseURLEnv))
+		logger.Error("database URL is not set")
 		return fmt.Errorf("%s is required", databaseURLEnv)
 	}
 
@@ -65,9 +68,10 @@ func run() error {
 	}
 	defer pool.Close()
 
-	sessionStore := session.NewStore()
 	env := strings.TrimSpace(os.Getenv(environmentEnv))
 	isDev := env == "" || strings.EqualFold(env, environmentDevelopment)
+
+	sessionStore := session.NewStore()
 	handler, err := initializeServerHandlers(logger, sessionStore, pool, isDev)
 	if err != nil {
 		return err
@@ -144,11 +148,15 @@ func initializeServerHandlers(logger *slog.Logger, sessionStore *session.Store, 
 	mux.Handle("/api/v1/", middleware.Session(sessionStore, isDev)(apiProtectedMux))
 	mux.Handle("/", middleware.UISession(sessionStore, isDev)(uiProtectedMux))
 
-	//! TODO: Implement gorilla/csrf middleware for UI routes
+	csrfMiddleware, err := initializeCRSFMiidleware(logger, isDev)
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize CSRF middleware: %w", err)
+	}
 	handler := middleware.Chain(
 		mux,
-		middleware.RequestID(),
+		csrfMiddleware,
 		middleware.Gzip(middleware.DefaultGzipConfig()),
+		middleware.RequestID(),
 		middleware.RequestLogger(logger),
 	)
 	return handler, nil
@@ -248,4 +256,44 @@ func initializeUIHomeHandler(logger *slog.Logger) (*home.Handler, error) {
 	}
 
 	return homeHandler, nil
+}
+
+func initializeCRSFMiidleware(logger *slog.Logger, isDev bool) (func(http.Handler) http.Handler, error) {
+	var csrfAuthKey []byte
+	csrfAuthKeyEnv := os.Getenv("CSRF_AUTH_KEY")
+
+	if csrfAuthKeyEnv == "" && !isDev {
+		return nil, errors.New("CSRF_AUTH_KEY is required in production environment")
+	}
+
+	if csrfAuthKeyEnv == "" && isDev {
+		logger.Warn("CSRF_AUTH_KEY is not set, using default 32-byte secret for development")
+		csrfAuthKey = []byte("default-dev-secret-key-32-bytes!")
+	} else {
+		if len(csrfAuthKeyEnv) != csrfAuthKeyLenght {
+			return nil, fmt.Errorf("invalid CSRF_AUTH_KEY length: expected %d characters", csrfAuthKeyLenght)
+		}
+		csrfAuthKey = []byte(csrfAuthKeyEnv)
+	}
+
+	opts := []csrf.Option{
+		csrf.Secure(!isDev),
+		csrf.Path("/"),
+		csrf.HttpOnly(true),
+		csrf.SameSite(csrf.SameSiteStrictMode),
+		csrf.FieldName("gorilla.csrf.Token"),
+		csrf.ErrorHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			logger.Error("CSRF validation failed",
+				slog.String("reason", csrf.FailureReason(r).Error()),
+				slog.String("path", r.URL.Path),
+			)
+			http.Error(w, "Forbidden", http.StatusForbidden)
+		})),
+	}
+
+	if isDev {
+		opts = append(opts, csrf.TrustedOrigins([]string{"localhost" + serverAddr}))
+	}
+
+	return csrf.Protect(csrfAuthKey, opts...), nil
 }
