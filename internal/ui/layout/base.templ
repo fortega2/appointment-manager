@@ -1,21 +1,16 @@
 package layout
 
-templ Base(title string, isAuthenticated bool, csrfToken string) {
+templ Base(title string, isAuthenticated bool) {
 	<!DOCTYPE html>
 	<html lang="es">
 		<head>
 			<meta charset="UTF-8"/>
 			<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-			<meta name="csrf-token" content={ csrfToken }/>
 			<title>{ title } - Appointment Manager</title>
 			<script src="https://unpkg.com/htmx.org@1.9.11"></script>
 			<script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
 			<script src="https://cdn.tailwindcss.com"></script>
 			<script>
-				document.addEventListener('htmx:configRequest', (e) => {
-					const token = document.querySelector('meta[name="csrf-token"]')?.content;
-					if (token) e.detail.headers['X-CSRF-Token'] = token;
-				});
 			</script>
 			<style>
 				[x-cloak] { display: none !important; }

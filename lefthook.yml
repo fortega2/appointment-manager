@@ -2,7 +2,7 @@ pre-commit:
   parallel: true
   commands:
     linter:
-      run: golangci-lint run
+      run: golangci-lint-v2 run
     security:
       run: govulncheck ./...
     tests:

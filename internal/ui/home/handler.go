@@ -4,8 +4,6 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
-
-	"github.com/gorilla/csrf"
 )
 
 var ErrNilLogger = errors.New("logger cannot be nil")
@@ -31,7 +29,7 @@ func (h *Handler) RegisterHandlers(mux *http.ServeMux) {
 func (h *Handler) showHomeHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
-		if err := Home(csrf.Token(r)).Render(ctx, w); err != nil {
+		if err := Home().Render(ctx, w); err != nil {
 			h.logger.ErrorContext(ctx, "error rendering home page", slog.Any("error", err))
 		}
 	}

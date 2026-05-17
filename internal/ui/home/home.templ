@@ -2,8 +2,8 @@ package home
 
 import "appointment-manager/internal/ui/layout"
 
-templ Home(csrfToken string) {
-    @layout.Base("Dashboard", true, csrfToken) {
+templ Home() {
+    @layout.Base("Dashboard", true) {
         <div class="text-center">
             <h1 class="text-4xl font-bold mb-4">Welcome to Appointment Manager</h1>
             <p class="text-lg text-gray-600">Manage your appointments efficiently and effortlessly.</p>

@@ -1,6 +1,7 @@
 package professional
 
 import (
+	"appointment-manager/internal/ui/professional"
 	"appointment-manager/internal/web"
 	"encoding/json"
 	"errors"
@@ -37,6 +38,10 @@ func NewHandler(logger *slog.Logger, repo *Repository) (*Handler, error) {
 func (h *Handler) RegisterHandlers(mux *http.ServeMux) {
 	mux.Handle("POST /api/v1/professionals", h.createHandler())
 	mux.Handle("GET /api/v1/professionals", h.listHandler())
+}
+
+func (h *Handler) RegisterUIHandlers(mux *http.ServeMux) {
+	mux.Handle("GET /professionals", h.showDashboardUIHandler())
 }
 
 type request struct {
@@ -100,6 +105,15 @@ func (h *Handler) listHandler() http.HandlerFunc {
 			h.logger.ErrorContext(r.Context(), "failed to encode professionals response", slog.Any("error", err))
 			web.WriteProblem(w, web.NewInternalServerProblem("failed to encode professionals response", r.URL.Path))
 			return
+		}
+	}
+}
+
+func (h *Handler) showDashboardUIHandler() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		ctx := r.Context()
+		if err := professional.Dashboard().Render(ctx, w); err != nil {
+			h.logger.ErrorContext(ctx, "error rendering professional dashboard", slog.Any("error", err))
 		}
 	}
 }

@@ -1,13 +1,12 @@
 module appointment-manager
 
-go 1.26.1
+go 1.26.3
 
 require github.com/google/uuid v1.6.0
 
 require (
 	github.com/a-h/templ v0.3.1001
 	github.com/golang-migrate/migrate/v4 v4.19.1
-	github.com/gorilla/csrf v1.7.3
 	github.com/jackc/pgx/v5 v5.9.1
 	github.com/stretchr/testify v1.11.1
 	github.com/testcontainers/testcontainers-go v0.41.0
@@ -41,7 +40,6 @@ require (
 	github.com/go-logr/logr v1.4.3 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/go-ole/go-ole v1.2.6 // indirect
-	github.com/gorilla/securecookie v1.1.2 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.28.0 // indirect
 	github.com/jackc/pgerrcode v0.0.0-20220416144525-469b46aa5efa // indirect
 	github.com/jackc/pgpassfile v1.0.0 // indirect
