@@ -10,9 +10,9 @@ import (
 )
 
 const (
-	constraintCheckProfessionalSpecialty = "chk_professional_specialty"
+	constraintCheckProfessionalSpecialty string = "chk_professional_specialty"
 
-	insertProfessionalQuery = `
+	insertProfessionalQuery string = `
 		INSERT INTO professional (
 			id,
 			first_name,
@@ -20,18 +20,18 @@ const (
 			phone
 		) VALUES ($1, $2, $3, $4)
 	`
-	listProfessionalsQuery = `
+	listProfessionalsQuery string = `
 		SELECT
 			id,
 			first_name,
 			last_name,
 			phone,
-			specialty,
+			INITCAP(specialty) AS specialty,
 			active
 		FROM
 			professional
-		WHERE
-			active = true
+		ORDER BY
+			created_at DESC
 	`
 )
 

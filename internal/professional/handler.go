@@ -1,7 +1,6 @@
 package professional
 
 import (
-	"appointment-manager/internal/ui/professional"
 	"appointment-manager/internal/web"
 	"encoding/json"
 	"errors"
@@ -112,7 +111,14 @@ func (h *Handler) listHandler() http.HandlerFunc {
 func (h *Handler) showDashboardUIHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
-		if err := professional.Dashboard().Render(ctx, w); err != nil {
+
+		professionals, err := h.repo.List(ctx)
+		if err != nil {
+			h.logger.ErrorContext(ctx, "failed to list professionals for dashboard", slog.Any("error", err))
+			return
+		}
+
+		if err := Dashboard(professionalsToViews(professionals)).Render(ctx, w); err != nil {
 			h.logger.ErrorContext(ctx, "error rendering professional dashboard", slog.Any("error", err))
 		}
 	}

@@ -1,0 +1,50 @@
+package professional
+
+import "appointment-manager/internal/ui/layout"
+
+templ Dashboard(professionals []View) {
+    @layout.Base("Professional Dashboard", true) {
+        <div class="text-center">
+            if len(professionals) == 0 {
+                <div class="mt-6 p-4 bg-yellow-100 text-yellow-700 rounded">
+                    No professionals found. Please add a professional to get started.
+                </div>
+            } else {
+                @Table(professionals)
+            }
+        </div>
+    }
+}
+
+templ Table(professionals []View) {
+    <div class="overflow-x-auto p-6">
+        <table class="w-full text-sm text-left border-collapse">
+            <thead class="bg-gray-100 text-gray-600 uppercase text-xs">
+                <tr>
+                    <th class="px-4 py-3">First Name</th>
+                    <th class="px-4 py-3">Last Name</th>
+                    <th class="px-4 py-3">Phone</th>
+                    <th class="px-4 py-3">Specialty</th>
+                    <th class="px-4 py-3">Status</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-200">
+                for _, p := range professionals {
+                    <tr class="bg-white hover:bg-gray-50 transition-colors">
+                        <td class="px-4 py-3 text-gray-800">{ p.FirstName }</td>
+                        <td class="px-4 py-3 text-gray-800">{ p.LastName }</td>
+                        <td class="px-4 py-3 text-gray-500">{ p.Phone }</td>
+                        <td class="px-4 py-3 text-gray-500">{ p.Specialty }</td>
+                        <td class="px-4 py-3">
+                            if p.Active {
+                                <span class="bg-green-100 text-green-700 text-xs font-medium px-2 py-1 rounded-full">Active</span>
+                            } else {
+                                <span class="bg-red-100 text-red-600 text-xs font-medium px-2 py-1 rounded-full">Inactive</span>
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
