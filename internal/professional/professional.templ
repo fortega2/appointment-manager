@@ -1,19 +1,54 @@
 package professional
 
-import "appointment-manager/internal/ui/layout"
+import (
+	"appointment-manager/internal/ui/layout"
+)
 
 templ Dashboard(professionals []View) {
     @layout.Base("Professional Dashboard", true) {
-        <div class="text-center">
+        <div class="text-center" x-data="{ statusFilter: 'all', searchQuery: '' }">
             if len(professionals) == 0 {
                 <div class="mt-6 p-4 bg-yellow-100 text-yellow-700 rounded">
                     No professionals found. Please add a professional to get started.
                 </div>
             } else {
+                @Filters()
                 @Table(professionals)
             }
         </div>
     }
+}
+
+templ Filters() {
+    <div class="mb-4 flex items-center justify-between px-6">
+        <div class="flex-1 max-w-sm">
+            <input 
+                type="text" 
+                x-model="searchQuery" 
+                placeholder="Search by name or lastname..." 
+                class="bg-white border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5"
+            />
+        </div>
+
+        <div class="flex items-center">
+            <select 
+                x-model="statusFilter" 
+                class="bg-white border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2.5"
+            >
+                <option value="all">All Professionals</option>
+                <option value="true">Actives</option>
+                <option value="false">Inactives</option>
+            </select>
+            
+            <button 
+                type="button" 
+                @click="statusFilter = 'all'; searchQuery = ''" 
+                class="ml-2 text-sm text-blue-600 hover:underline"
+            >
+                Reset Filters
+            </button>
+        </div>
+    </div>
 }
 
 templ Table(professionals []View) {
@@ -30,7 +65,11 @@ templ Table(professionals []View) {
             </thead>
             <tbody class="divide-y divide-gray-200">
                 for _, p := range professionals {
-                    <tr class="bg-white hover:bg-gray-50 transition-colors">
+                    <tr 
+                        class="bg-white hover:bg-gray-50 transition-colors"
+                        data-search={ p.FirstName + " " + p.LastName }
+                        x-show={ p.AlpineVisibility() }
+                    >
                         <td class="px-4 py-3 text-gray-800">{ p.FirstName }</td>
                         <td class="px-4 py-3 text-gray-800">{ p.LastName }</td>
                         <td class="px-4 py-3 text-gray-500">{ p.Phone }</td>

@@ -1,5 +1,7 @@
 package professional
 
+import "fmt"
+
 type View struct {
 	ID        string
 	FirstName string
@@ -7,6 +9,10 @@ type View struct {
 	Phone     string
 	Specialty string
 	Active    bool
+}
+
+func (v View) AlpineVisibility() string {
+	return fmt.Sprintf(`(statusFilter === 'all' || statusFilter === '%t') && (searchQuery === '' || $el.dataset.search.toLowerCase().includes(searchQuery.toLowerCase()))`, v.Active)
 }
 
 func professionalsToViews(professionals []Professional) []View {
