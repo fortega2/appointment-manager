@@ -1,14 +1,16 @@
 package professional
 
 import (
+    "fmt"
+
 	"appointment-manager/internal/ui/layout"
 )
 
 templ Dashboard(professionals []View) {
     @layout.Base("Professional Dashboard", true) {
-        <div class="text-center" x-data="{ statusFilter: 'all', searchQuery: '', modalOpen: false }" @close-modal.window="modalOpen = false">
+        <div class="w-full max-w-5xl mx-auto" x-data="{ statusFilter: 'all', searchQuery: '', modalOpen: false }" @close-modal.window="modalOpen = false">
             if len(professionals) == 0 {
-                <div class="mt-6 p-4 bg-yellow-100 text-yellow-700 rounded">
+                <div class="mt-6 p-4 bg-yellow-100 text-yellow-700 rounded text-center">
                     No professionals found. Please add a professional to get started.
                 </div>
             } else {
@@ -37,7 +39,7 @@ templ Dashboard(professionals []View) {
 }
 
 templ Filters() {
-    <div class="mb-4 flex items-center justify-between px-6">
+    <div class="mb-4 flex items-center justify-between">
         <div class="flex-1 max-w-sm">
             <input 
                 type="text" 
@@ -79,7 +81,7 @@ templ Filters() {
 }
 
 templ Table(professionals []View) {
-    <div id="professionals-table" class="overflow-x-auto p-6">
+    <div id="professionals-table" class="overflow-x-auto shadow-sm border border-gray-200 rounded-lg">
         <table class="w-full text-sm text-left border-collapse">
             <thead class="bg-gray-100 text-gray-600 uppercase text-xs">
                 <tr>
@@ -88,6 +90,7 @@ templ Table(professionals []View) {
                     <th class="px-4 py-3">Phone</th>
                     <th class="px-4 py-3">Specialty</th>
                     <th class="px-4 py-3">Status</th>
+                    <th class="px-4 py-3">Action</th>
                 </tr>
             </thead>
             <tbody class="divide-y divide-gray-200">
@@ -107,6 +110,19 @@ templ Table(professionals []View) {
                             } else {
                                 <span class="bg-red-100 text-red-600 text-xs font-medium px-2 py-1 rounded-full">Inactive</span>
                             }
+                        </td>
+                        <td class="px-4 py-3 text-center align-middle">
+                            <button 
+                                type="button"
+                                title="Edit"
+                                aria-label="Edit Professional"
+                                hx-get={ string(templ.URL(fmt.Sprintf("/professionals/%s/edit", p.ID))) } 
+                                hx-target="#modal-content" 
+                                @click="modalOpen = true"
+                                class="text-indigo-600 hover:text-indigo-900"
+                            >
+                                ✏️
+                            </button>
                         </td>
                     </tr>
                 }
@@ -129,7 +145,7 @@ templ Form(p View, method FormMethod, actionURL string) {
             if method == FormMethodPost {
                 hx-post={ actionURL }
             } else {
-                hx-put={ actionURL }
+                hx-patch={ actionURL }
             }
             hx-target="#professionals-table"
             hx-swap="outerHTML"
@@ -170,6 +186,20 @@ templ Form(p View, method FormMethod, actionURL string) {
                     class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm" 
                 />
             </div>
+
+            if method == FormMethodPatch {
+                <div class="flex items-center space-x-3">
+                    <input 
+                        type="checkbox" 
+                        id="active" 
+                        name="active" 
+                        value="true" 
+                        checked?={ p.Active }
+                        class="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                    />
+                    <label for="active" class="text-sm text-gray-700">Active</label>
+                </div>
+            }
 
             <div class="mt-6 flex justify-end space-x-3">
                 <button 

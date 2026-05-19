@@ -8,8 +8,9 @@ var (
 	ErrPhoneRequired     = errors.New("phone number is required")
 	ErrNilProfessional   = errors.New("professional cannot be nil")
 
-	ErrNilLogger     = errors.New("logger cannot be nil")
-	ErrNilRepository = errors.New("repository cannot be nil")
+	ErrNilLogger            = errors.New("logger cannot be nil")
+	ErrNilRepository        = errors.New("repository cannot be nil")
+	ErrProfessionalNotFound = errors.New("professional not found")
 
 	ErrNilPgxPool                   = errors.New("pgx pool cannot be nil")
 	ErrInvalidProfessionalSpecialty = errors.New("invalid professional specialty")

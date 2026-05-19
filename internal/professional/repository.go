@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -32,6 +34,33 @@ const (
 			professional
 		ORDER BY
 			created_at DESC
+	`
+
+	getProfessionalByIDQuery string = `
+		SELECT
+			id,
+			first_name,
+			last_name,
+			phone,
+			specialty,
+			active
+		FROM
+			professional
+		WHERE
+			id = $1
+	`
+
+	updateProfessionalQuery string = `
+		UPDATE
+			professional
+		SET
+			first_name = $1,
+			last_name = $2,
+			phone = $3,
+			active = $4,
+			updated_at = CURRENT_TIMESTAMP
+		WHERE
+			id = $5
 	`
 )
 
@@ -92,6 +121,49 @@ func (r *Repository) List(ctx context.Context) ([]Professional, error) {
 	}
 
 	return professionals, nil
+}
+
+func (r *Repository) GetByID(ctx context.Context, id uuid.UUID) (*Professional, error) {
+	var p Professional
+	if err := r.pool.QueryRow(ctx, getProfessionalByIDQuery, id).Scan(
+		&p.ID,
+		&p.FirstName,
+		&p.LastName,
+		&p.Phone,
+		&p.Specialty,
+		&p.Active,
+	); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, fmt.Errorf("get professional by id %s: %w", id, ErrProfessionalNotFound)
+		}
+		return nil, fmt.Errorf("get professional by id: %w", err)
+	}
+
+	return &p, nil
+}
+
+func (r *Repository) Update(ctx context.Context, p *Professional) error {
+	if p == nil {
+		return ErrNilProfessional
+	}
+
+	cmdTag, err := r.pool.Exec(
+		ctx,
+		updateProfessionalQuery,
+		p.FirstName,
+		p.LastName,
+		p.Phone,
+		p.Active,
+		p.ID,
+	)
+	if err != nil {
+		return fmt.Errorf("update professional: %w", err)
+	}
+	if cmdTag.RowsAffected() == 0 {
+		return fmt.Errorf("update professional: %w", ErrProfessionalNotFound)
+	}
+
+	return nil
 }
 
 func (r *Repository) mapCreateError(err error) error {

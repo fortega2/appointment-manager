@@ -3,6 +3,6 @@ package professional
 type FormMethod string
 
 const (
-	FormMethodPost FormMethod = "POST"
-	FormMethodPut  FormMethod = "PUT"
+	FormMethodPost  FormMethod = "POST"
+	FormMethodPatch FormMethod = "PATCH"
 )
