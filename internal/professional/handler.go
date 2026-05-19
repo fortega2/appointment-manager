@@ -4,6 +4,7 @@ import (
 	"appointment-manager/internal/web"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 )
@@ -41,6 +42,8 @@ func (h *Handler) RegisterHandlers(mux *http.ServeMux) {
 
 func (h *Handler) RegisterUIHandlers(mux *http.ServeMux) {
 	mux.Handle("GET /professionals", h.showDashboardUIHandler())
+	mux.Handle("GET /professionals/new", h.showCreateFormUIHandler())
+	mux.Handle("POST /professionals", h.createUIHandler())
 }
 
 type request struct {
@@ -122,4 +125,75 @@ func (h *Handler) showDashboardUIHandler() http.HandlerFunc {
 			h.logger.ErrorContext(ctx, "error rendering professional dashboard", slog.Any("error", err))
 		}
 	}
+}
+
+func (h *Handler) showCreateFormUIHandler() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		ctx := r.Context()
+		if err := Form(View{}, FormMethodPost, "/professionals").Render(ctx, w); err != nil {
+			h.logger.ErrorContext(ctx, "error rendering professional create form", slog.Any("error", err))
+		}
+	}
+}
+
+type createFormRequest struct {
+	firstName string
+	lastName  string
+	phone     string
+}
+
+func (h *Handler) createUIHandler() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		ctx := r.Context()
+		formRequest, err := h.parseCreateForm(r, w)
+		if err != nil {
+			h.logger.ErrorContext(ctx, "error parsing professional create form", slog.Any("error", err))
+			// TODO: Show a error message in the UI instead of just logging the error
+			return
+		}
+
+		p, err := NewProfessional(formRequest.firstName, formRequest.lastName, formRequest.phone)
+		if err != nil {
+			h.logger.ErrorContext(ctx, "error creating professional from form data", slog.Any("error", err))
+			// TODO: Show a error message in the UI instead of just logging the error
+			return
+		}
+
+		if err := h.repo.Create(ctx, p); err != nil {
+			if !errors.Is(err, ErrInvalidProfessionalSpecialty) {
+				h.logger.ErrorContext(ctx, "failed to create professional", slog.Any("error", err))
+				// TODO: Show a error message in the UI instead of just logging the error
+				return
+			}
+		}
+
+		professionals, err := h.repo.List(ctx)
+		if err != nil {
+			h.logger.ErrorContext(ctx, "failed to list professionals after creating new one", slog.Any("error", err))
+			// TODO: Show a error message in the UI instead of just logging the error
+			return
+		}
+
+		w.Header().Set("HX-Trigger", "close-modal")
+		if err := Table(professionalsToViews(professionals)).Render(ctx, w); err != nil {
+			h.logger.ErrorContext(ctx, "error rendering professionals table after creating new professional", slog.Any("error", err))
+		}
+	}
+}
+
+func (h *Handler) parseCreateForm(r *http.Request, w http.ResponseWriter) (*createFormRequest, error) {
+	r.Body = http.MaxBytesReader(w, r.Body, requestBodyMaxBytes)
+	if err := r.ParseForm(); err != nil {
+		return nil, fmt.Errorf("parse form: %w", err)
+	}
+
+	firstName := r.FormValue("first_name")
+	lastName := r.FormValue("last_name")
+	phone := r.FormValue("phone")
+
+	return &createFormRequest{
+		firstName: firstName,
+		lastName:  lastName,
+		phone:     phone,
+	}, nil
 }
