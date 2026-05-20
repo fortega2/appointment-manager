@@ -1,7 +1,9 @@
 package professional
 
 import (
+	"appointment-manager/internal/ui/components"
 	"appointment-manager/internal/web"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -14,6 +16,8 @@ const (
 	contentTypeJSON   = "application/json"
 
 	requestBodyMaxBytes int64 = 1 << 20
+
+	failedToCreateProfessionalMessage = "Error: Failed to create professional"
 )
 
 type Handler struct {
@@ -181,21 +185,21 @@ func (h *Handler) createUIHandler() http.HandlerFunc {
 		formRequest, err := h.parseCreateForm(r, w)
 		if err != nil {
 			h.logger.ErrorContext(ctx, "error parsing professional create form", slog.Any("error", err))
-			// TODO: Show a error message in the UI instead of just logging the error
+			h.createSnackbarError(ctx, w, failedToCreateProfessionalMessage, "parseCreateForm")
 			return
 		}
 
 		p, err := NewProfessional(formRequest.firstName, formRequest.lastName, formRequest.phone)
 		if err != nil {
 			h.logger.ErrorContext(ctx, "error creating professional from form data", slog.Any("error", err))
-			// TODO: Show a error message in the UI instead of just logging the error
+			h.createSnackbarError(ctx, w, failedToCreateProfessionalMessage, "NewProfessional")
 			return
 		}
 
 		if err := h.repo.Create(ctx, p); err != nil {
 			if !errors.Is(err, ErrInvalidProfessionalSpecialty) {
 				h.logger.ErrorContext(ctx, "failed to create professional", slog.Any("error", err))
-				// TODO: Show a error message in the UI instead of just logging the error
+				h.createSnackbarError(ctx, w, failedToCreateProfessionalMessage, "repo.Create")
 				return
 			}
 		}
@@ -203,11 +207,14 @@ func (h *Handler) createUIHandler() http.HandlerFunc {
 		professionals, err := h.repo.List(ctx)
 		if err != nil {
 			h.logger.ErrorContext(ctx, "failed to list professionals after creating new one", slog.Any("error", err))
-			// TODO: Show a error message in the UI instead of just logging the error
+			h.createSnackbarError(ctx, w, "Error: Failed to load professionals", "repo.List")
 			return
 		}
 
 		w.Header().Set("HX-Trigger", "close-modal")
+		if err := components.Snackbar("Professional created successfully", components.SnackbarSuccess).Render(ctx, w); err != nil {
+			h.logger.ErrorContext(ctx, "error rendering success snackbar after creating professional", slog.Any("error", err))
+		}
 		if err := Table(professionalsToViews(professionals)).Render(ctx, w); err != nil {
 			h.logger.ErrorContext(ctx, "error rendering professionals table after creating new professional", slog.Any("error", err))
 		}
@@ -227,21 +234,21 @@ func (h *Handler) updateUIHandler() http.HandlerFunc {
 		pathValueID := r.PathValue("id")
 		if pathValueID == "" {
 			h.logger.WarnContext(ctx, "missing professional id in path")
-			// TODO: Show a error message in the UI instead of just logging the error
+			h.createSnackbarError(ctx, w, "Error: Missing professional ID in path", "missingIDInPath")
 			return
 		}
 
 		createFormRequest, err := h.parseUpdateForm(r, w)
 		if err != nil {
 			h.logger.ErrorContext(ctx, "error parsing professional update form", slog.Any("error", err))
-			// TODO: Show a error message in the UI instead of just logging the error
+			h.createSnackbarError(ctx, w, "Error: Failed to parse form data", "parseUpdateForm")
 			return
 		}
 
 		professionalID, err := ParseID(pathValueID)
 		if err != nil {
 			h.logger.WarnContext(ctx, "invalid professional id in path", slog.Any("error", err), slog.String("id", pathValueID))
-			// TODO: Show a error message in the UI instead of just logging the error
+			h.createSnackbarError(ctx, w, "Error: Invalid professional ID in path", "invalidIDInPath")
 			return
 		}
 
@@ -249,37 +256,40 @@ func (h *Handler) updateUIHandler() http.HandlerFunc {
 		if err != nil {
 			if errors.Is(err, ErrProfessionalNotFound) {
 				h.logger.WarnContext(ctx, "professional not found for update", slog.String("id", professionalID.String()))
-				// TODO: Show a error message in the UI instead of just logging the error
+				h.createSnackbarError(ctx, w, "Error: Professional not found", "professionalNotFound")
 				return
 			}
 			h.logger.ErrorContext(ctx, "failed to get professional by id for update form", slog.Any("error", err), slog.String("id", professionalID.String()))
-			// TODO: Show a error message in the UI instead of just logging the error
+			h.createSnackbarError(ctx, w, "Error: Failed to load professional data", "repo.GetByID")
 			return
 		}
 
 		if err := p.Update(createFormRequest.firstName, createFormRequest.lastName, createFormRequest.phone, createFormRequest.active); err != nil {
-			// TODO: Show a error message in the UI instead of just logging the error
+			h.createSnackbarError(ctx, w, "Error: Failed to update professional", "Professional.Update")
 			return
 		}
 
 		if err := h.repo.Update(ctx, p); err != nil {
 			if errors.Is(err, ErrProfessionalNotFound) {
-				// TODO: Show a error message in the UI instead of just logging the error
+				h.createSnackbarError(ctx, w, "Error: Professional not found", "professionalNotFoundOnUpdate")
 				return
 			}
 			h.logger.ErrorContext(ctx, "failed to update professional", slog.Any("error", err), slog.String("id", professionalID.String()))
-			// TODO: Show a error message in the UI instead of just logging the error
+			h.createSnackbarError(ctx, w, "Error: Failed to update professional", "repo.Update")
 			return
 		}
 
 		professionals, err := h.repo.List(ctx)
 		if err != nil {
 			h.logger.ErrorContext(ctx, "failed to list professionals after updating one", slog.Any("error", err))
-			// TODO: Show a error message in the UI instead of just logging the error
+			h.createSnackbarError(ctx, w, "Error: Failed to load professionals", "repo.List")
 			return
 		}
 
 		w.Header().Set("HX-Trigger", "close-modal")
+		if err := components.Snackbar("Professional updated successfully", components.SnackbarSuccess).Render(ctx, w); err != nil {
+			h.logger.ErrorContext(ctx, "error rendering success snackbar after updating professional", slog.Any("error", err))
+		}
 		if err := Table(professionalsToViews(professionals)).Render(ctx, w); err != nil {
 			h.logger.ErrorContext(ctx, "error rendering professionals table after updating professional", slog.Any("error", err))
 		}
@@ -321,4 +331,11 @@ func (h *Handler) parseUpdateForm(r *http.Request, w http.ResponseWriter) (*upda
 		phone:     phone,
 		active:    active,
 	}, nil
+}
+
+func (h *Handler) createSnackbarError(ctx context.Context, w http.ResponseWriter, message, operation string) {
+	w.WriteHeader(http.StatusBadRequest)
+	if err := components.Snackbar(message, components.SnackbarError).Render(ctx, w); err != nil {
+		h.logger.ErrorContext(ctx, "error rendering snackbar", slog.Any("error", err), slog.String("package", "professional"), slog.String("operation", operation))
+	}
 }

@@ -11,6 +11,16 @@ templ Base(title string, isAuthenticated bool) {
 			<script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
 			<script src="https://cdn.tailwindcss.com"></script>
 			<script>
+				document.addEventListener('htmx:afterSettle', function () {
+					const container = document.getElementById('snackbar-container');
+					if (!container || !window.Alpine) return;
+
+					container.querySelectorAll('[x-data]').forEach(function (el) {
+						if (!el._x_dataStack) {
+							Alpine.initTree(el);
+						}
+					});
+				});
 			</script>
 			<style>
 				[x-cloak] { display: none !important; }
@@ -86,6 +96,44 @@ templ Base(title string, isAuthenticated bool) {
 					&copy; 2026 Appointment Manager
 				</div>
 			</footer>
+
+			<div id="snackbar-container" class="fixed inset-x-0 bottom-4 z-[60] flex flex-col items-center gap-2 px-4 pointer-events-none">
+				<style>
+					#snackbar-container > div {
+						pointer-events: auto;
+						width: 100%;
+						max-width: 28rem;
+					}
+
+					.snackbar-card {
+						display: flex;
+						align-items: center;
+						justify-content: space-between;
+						gap: 1rem;
+						padding: 0.875rem 1rem;
+						border-radius: 0.5rem;
+						box-shadow: 0 4px 12px rgb(0 0 0 / 0.1);
+					}
+
+					.snackbar-success {
+						background-color: #dcfce7;
+						border: 1px solid #bbf7d0;
+						color: #166534;
+					}
+
+					.snackbar-error {
+						background-color: #fee2e2;
+						border: 1px solid #fecaca;
+						color: #991b1b;
+					}
+
+					.snackbar-info {
+						background-color: #dbeafe;
+						border: 1px solid #bfdbfe;
+						color: #1e40af;
+					}
+				</style>
+			</div>
 		</body>
 	</html>
 }
