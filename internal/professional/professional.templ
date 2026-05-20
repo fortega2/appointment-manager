@@ -9,12 +9,16 @@ import (
 templ Dashboard(professionals []View) {
     @layout.Base("Professional Dashboard", true) {
         <div class="w-full max-w-5xl mx-auto" x-data="{ statusFilter: 'all', searchQuery: '', modalOpen: false }" @close-modal.window="modalOpen = false">
+            @Filters()
             if len(professionals) == 0 {
-                <div class="mt-6 p-4 bg-yellow-100 text-yellow-700 rounded text-center">
-                    No professionals found. Please add a professional to get started.
+                <div id="professionals-table" class="mt-6 p-12 bg-white border border-gray-200 rounded-lg text-center shadow-sm">
+                    <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                        <path vector-effect="non-scaling-stroke" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                    </svg>
+                    <h3 class="mt-2 text-sm font-semibold text-gray-900">No hay profesionales</h3>
+                    <p class="mt-1 text-sm text-gray-500">Agrega un profesional para comenzar a gestionar sus turnos.</p>
                 </div>
             } else {
-                @Filters()
                 @Table(professionals)
             }
 

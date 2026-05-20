@@ -11,6 +11,12 @@ templ Base(title string, isAuthenticated bool) {
 			<script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
 			<script src="https://cdn.tailwindcss.com"></script>
 			<script>
+				document.addEventListener('htmx:beforeSwap', function(evt) {
+					if(evt.detail.xhr.status >= 400){
+						evt.detail.shouldSwap = true;
+						evt.detail.isError = false;
+					}
+				});
 				document.addEventListener('htmx:afterSettle', function () {
 					const container = document.getElementById('snackbar-container');
 					if (!container || !window.Alpine) return;
