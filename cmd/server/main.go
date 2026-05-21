@@ -133,6 +133,8 @@ func initializeServerHandlers(logger *slog.Logger, sessionStore *session.Store, 
 	healthHandler.RegisterHandlers(mux)
 	authHandler.RegisterHandlers(mux)
 
+	mux.Handle("GET /static/", http.StripPrefix("/static/", http.FileServer(http.Dir("internal/ui/static"))))
+
 	apiProtectedMux := http.NewServeMux()
 	assistantHandler.RegisterHandlers(apiProtectedMux)
 	appointmentHandler.RegisterHandlers(apiProtectedMux)
