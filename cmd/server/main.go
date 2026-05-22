@@ -6,6 +6,7 @@ import (
 	"appointment-manager/internal/auth"
 	"appointment-manager/internal/db"
 	"appointment-manager/internal/health"
+	"appointment-manager/internal/healthinsurance"
 	"appointment-manager/internal/middleware"
 	"appointment-manager/internal/password"
 	"appointment-manager/internal/patient"
@@ -144,6 +145,7 @@ func initializeServerHandlers(logger *slog.Logger, sessionStore *session.Store, 
 	uiProtectedMux := http.NewServeMux()
 	uiHomeHandler.RegisterHandlers(uiProtectedMux)
 	professionalHandler.RegisterUIHandlers(uiProtectedMux)
+	patientHandler.RegisterUIHandlers(uiProtectedMux)
 
 	mux.Handle("/api/v1/", middleware.Session(sessionStore, isDev)(apiProtectedMux))
 	mux.Handle("/", middleware.UISession(sessionStore, isDev)(uiProtectedMux))
@@ -229,7 +231,11 @@ func initializePatientHandler(logger *slog.Logger, pool *pgxpool.Pool) (*patient
 	if err != nil {
 		return nil, fmt.Errorf("failed to create patient repository: %w", err)
 	}
-	patientHandler, err := patient.NewHandler(logger, patientRepo)
+	healthInsuranceRepo, err := healthinsurance.NewRepository(pool)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create health insurance repository: %w", err)
+	}
+	patientHandler, err := patient.NewHandler(logger, patientRepo, healthInsuranceRepo)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create patient handler: %w", err)
 	}

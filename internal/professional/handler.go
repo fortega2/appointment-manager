@@ -2,6 +2,7 @@ package professional
 
 import (
 	"appointment-manager/internal/ui/components"
+	"appointment-manager/internal/ui/form"
 	"appointment-manager/internal/web"
 	"context"
 	"encoding/json"
@@ -50,7 +51,7 @@ func (h *Handler) RegisterHandlers(mux *http.ServeMux) {
 func (h *Handler) RegisterUIHandlers(mux *http.ServeMux) {
 	mux.Handle("GET /professionals", h.showDashboardUIHandler())
 	mux.Handle("GET /professionals/new", h.showCreateFormUIHandler())
-	mux.Handle("PATCH /professionals/{id}", h.updateUIHandler())
+	mux.Handle("PUT /professionals/{id}", h.updateUIHandler())
 	mux.Handle("GET /professionals/{id}/edit", h.showEditFormUIHandler())
 	mux.Handle("POST /professionals", h.createUIHandler())
 }
@@ -139,7 +140,7 @@ func (h *Handler) showDashboardUIHandler() http.HandlerFunc {
 func (h *Handler) showCreateFormUIHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
-		if err := Form(View{}, FormMethodPost, "/professionals").Render(ctx, w); err != nil {
+		if err := Form(View{}, form.MethodPost, "/professionals").Render(ctx, w); err != nil {
 			h.logger.ErrorContext(ctx, "error rendering professional create form", slog.Any("error", err))
 		}
 	}
@@ -170,7 +171,7 @@ func (h *Handler) showEditFormUIHandler() http.HandlerFunc {
 			return
 		}
 
-		if err := Form(professionalToView(p), FormMethodPatch, "/professionals/"+p.ID.String()).Render(ctx, w); err != nil {
+		if err := Form(professionalToView(p), form.MethodPut, "/professionals/"+p.ID.String()).Render(ctx, w); err != nil {
 			h.logger.ErrorContext(ctx, "error rendering professional edit form", slog.Any("error", err), slog.String("id", professionalID.String()))
 		}
 	}

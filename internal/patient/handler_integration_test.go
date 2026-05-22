@@ -29,7 +29,7 @@ func TestCreateEndpointCreatesPatient(t *testing.T) {
 
 	pool := newPatientIntegrationPool(ctx, t)
 	repo := newPatientIntegrationRepository(t, pool)
-	mux := newPatientIntegrationMux(t, repo)
+	mux := newPatientIntegrationMux(t, repo, pool)
 
 	req := newIntegrationCreateRequest(ctx, handlerIntegrationValidBody)
 	rec := httptest.NewRecorder()
@@ -46,7 +46,7 @@ func TestCreateEndpointReturnsValidationForInvalidHealthInsurance(t *testing.T) 
 
 	pool := newPatientIntegrationPool(ctx, t)
 	repo := newPatientIntegrationRepository(t, pool)
-	mux := newPatientIntegrationMux(t, repo)
+	mux := newPatientIntegrationMux(t, repo, pool)
 
 	req := newIntegrationCreateRequest(ctx, handlerIntegrationInvalidInsBody)
 	rec := httptest.NewRecorder()
@@ -64,7 +64,7 @@ func TestCreateEndpointReturnsValidationForInvalidBody(t *testing.T) {
 
 	pool := newPatientIntegrationPool(ctx, t)
 	repo := newPatientIntegrationRepository(t, pool)
-	mux := newPatientIntegrationMux(t, repo)
+	mux := newPatientIntegrationMux(t, repo, pool)
 
 	req := newIntegrationCreateRequest(ctx, handlerIntegrationInvalidFieldBody)
 	rec := httptest.NewRecorder()
@@ -82,7 +82,7 @@ func TestCreateEndpointReturnsInternalServerErrorWhenDatabaseUnavailable(t *test
 
 	pool := newPatientIntegrationPool(ctx, t)
 	repo := newPatientIntegrationRepository(t, pool)
-	mux := newPatientIntegrationMux(t, repo)
+	mux := newPatientIntegrationMux(t, repo, pool)
 
 	pool.Close()
 

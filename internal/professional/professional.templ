@@ -4,6 +4,7 @@ import (
     "fmt"
 
 	"appointment-manager/internal/ui/layout"
+	"appointment-manager/internal/ui/form"
 )
 
 templ Dashboard(professionals []View) {
@@ -15,8 +16,8 @@ templ Dashboard(professionals []View) {
                     <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
                         <path vector-effect="non-scaling-stroke" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
                     </svg>
-                    <h3 class="mt-2 text-sm font-semibold text-gray-900">No hay profesionales</h3>
-                    <p class="mt-1 text-sm text-gray-500">Agrega un profesional para comenzar a gestionar sus turnos.</p>
+                    <h3 class="mt-2 text-sm font-semibold text-gray-900">There are no professionals</h3>
+                    <p class="mt-1 text-sm text-gray-500">Add a professional to start managing their appointments.</p>
                 </div>
             } else {
                 @Table(professionals)
@@ -78,7 +79,7 @@ templ Filters() {
                 @click="modalOpen = true"
                 class="bg-indigo-600 text-white text-sm font-medium px-4 py-2 rounded-md hover:bg-indigo-700 transition-colors"
             >
-                Crear Profesional
+                Create Professional
             </button>
         </div>
     </div>
@@ -135,10 +136,10 @@ templ Table(professionals []View) {
     </div>
 }
 
-templ Form(p View, method FormMethod, actionURL string) {
+templ Form(p View, method form.Method, actionURL string) {
     <div>
         <h2 class="text-xl font-bold text-gray-900 mb-4">
-            if method == FormMethodPost {
+            if method == form.MethodPost {
                 Create Professional
             } else {
                 Edit Professional
@@ -146,10 +147,10 @@ templ Form(p View, method FormMethod, actionURL string) {
         </h2>
         
         <form 
-            if method == FormMethodPost {
+            if method == form.MethodPost {
                 hx-post={ actionURL }
             } else {
-                hx-patch={ actionURL }
+                hx-put={ actionURL }
             }
             hx-target="#professionals-table"
             hx-swap="outerHTML"
@@ -191,7 +192,7 @@ templ Form(p View, method FormMethod, actionURL string) {
                 />
             </div>
 
-            if method == FormMethodPatch {
+            if method == form.MethodPut {
                 <div class="flex items-center space-x-3">
                     <input 
                         type="checkbox" 

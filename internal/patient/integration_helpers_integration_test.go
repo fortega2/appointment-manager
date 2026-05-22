@@ -4,6 +4,7 @@ package patient_test
 
 import (
 	"appointment-manager/internal/db"
+	"appointment-manager/internal/healthinsurance"
 	"appointment-manager/internal/patient"
 	"context"
 	"log/slog"
@@ -58,10 +59,13 @@ func newPatientIntegrationRepository(t *testing.T, pool *pgxpool.Pool) *patient.
 	return repo
 }
 
-func newPatientIntegrationMux(t *testing.T, repo *patient.Repository) *http.ServeMux {
+func newPatientIntegrationMux(t *testing.T, repo *patient.Repository, pool *pgxpool.Pool) *http.ServeMux {
 	t.Helper()
 
-	h, err := patient.NewHandler(slog.New(slog.DiscardHandler), repo)
+	hiRepo, err := healthinsurance.NewRepository(pool)
+	require.NoError(t, err)
+
+	h, err := patient.NewHandler(slog.New(slog.DiscardHandler), repo, hiRepo)
 	require.NoError(t, err)
 
 	mux := http.NewServeMux()

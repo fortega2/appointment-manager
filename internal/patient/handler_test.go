@@ -1,6 +1,7 @@
 package patient
 
 import (
+	"appointment-manager/internal/healthinsurance"
 	"bytes"
 	"fmt"
 	"log/slog"
@@ -60,7 +61,7 @@ func newPatientHandlerTestLogger() *slog.Logger {
 func newMuxWithPatientHandler(t *testing.T) *http.ServeMux {
 	t.Helper()
 
-	h, err := NewHandler(newPatientHandlerTestLogger(), &Repository{})
+	h, err := NewHandler(newPatientHandlerTestLogger(), &Repository{}, &healthinsurance.Repository{})
 	require.NoError(t, err)
 
 	mux := http.NewServeMux()
@@ -86,7 +87,7 @@ func TestNewHandlerValidation(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			h, err := NewHandler(tt.logger, tt.repo)
+			h, err := NewHandler(tt.logger, tt.repo, &healthinsurance.Repository{})
 
 			require.Error(t, err)
 			assert.Nil(t, h)
@@ -98,7 +99,7 @@ func TestNewHandlerValidation(t *testing.T) {
 func TestRegisterHandlersDoesNotPanic(t *testing.T) {
 	t.Parallel()
 
-	h, err := NewHandler(newPatientHandlerTestLogger(), &Repository{})
+	h, err := NewHandler(newPatientHandlerTestLogger(), &Repository{}, &healthinsurance.Repository{})
 	require.NoError(t, err)
 
 	mux := http.NewServeMux()
