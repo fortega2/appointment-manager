@@ -94,15 +94,14 @@ const (
 				WHERE
 					occupied_appointment.patient_id = $1
 					AND occupied_appointment.status = $3
-					AND occupied_slot.date = target_slot.date
 					AND occupied_slot.start_time < target_slot.end_time
 					AND occupied_slot.end_time > target_slot.start_time
 			)
 	`
 	selectAppointmentWindowQuery = `
 		SELECT
-			(slot.date + slot.start_time)::timestamptz,
-			(slot.date + slot.end_time)::timestamptz,
+			slot.start_time,
+			slot.end_time,
 			appointment.status
 		FROM
 			appointment

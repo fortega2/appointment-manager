@@ -535,9 +535,9 @@ func seedAppointments(ctx context.Context, t *testing.T, pool *pgxpool.Pool) app
 	_, err = pool.Exec(ctx, `
 		INSERT INTO slot (id, professional_id, date, start_time, end_time, max_capacity, blocked)
 		VALUES
-			($1, $4, '2026-01-01', '09:00:00+00', '09:30:00+00', 2, false),
-			($2, $4, '2026-01-01', '10:00:00+00', '10:30:00+00', 2, false),
-			($3, $4, '2026-01-01', '11:00:00+00', '11:30:00+00', 2, false)
+			($1, $4, '2026-01-01', '2026-01-01T09:00:00Z', '2026-01-01T09:30:00Z', 2, false),
+			($2, $4, '2026-01-01', '2026-01-01T10:00:00Z', '2026-01-01T10:30:00Z', 2, false),
+			($3, $4, '2026-01-01', '2026-01-01T11:00:00Z', '2026-01-01T11:30:00Z', 2, false)
 	`, slotOneID, slotTwoID, slotThreeID, professionalID)
 	require.NoError(t, err)
 
@@ -637,7 +637,7 @@ func seedAppointmentForAction(
 }
 
 func slotValues(start, end time.Time) (string, string, string) {
-	return start.Format("2006-01-02"), start.Format("15:04:05-07:00"), end.Format("15:04:05-07:00")
+	return start.Format("2006-01-02"), start.Format(time.RFC3339), end.Format(time.RFC3339)
 }
 
 func createRequestBody(
