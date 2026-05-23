@@ -8,4 +8,7 @@ var (
 	ErrInvalidMaxCapacity    = errors.New("max capacity must be greater than zero")
 	ErrInvalidDate           = errors.New("date cannot be zero")
 	ErrDateTimeInconsistency = errors.New("date must match the date part of start time")
+	ErrNilSlot               = errors.New("slot cannot be nil")
+
+	ErrNilPgxPool = errors.New("pgx pool cannot be nil")
 )
