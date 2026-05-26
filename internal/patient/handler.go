@@ -1,6 +1,7 @@
 package patient
 
 import (
+	"appointment-manager/internal/domain"
 	"appointment-manager/internal/healthinsurance"
 	"appointment-manager/internal/ui/components"
 	"appointment-manager/internal/ui/form"
@@ -248,7 +249,7 @@ func (h *Handler) parsePatientIDFromPath(r *http.Request, w http.ResponseWriter)
 		return uuid.Nil, errors.New(missingIDInPathMsg)
 	}
 
-	patientID, err := ParseID(pathValueID)
+	patientID, err := domain.ParseID(pathValueID)
 	if err != nil {
 		h.logger.WarnContext(ctx, "invalid patient id in path", slog.Any("error", err), slog.String("id", pathValueID))
 		h.createSnackbarError(ctx, w, http.StatusBadRequest, "Invalid patient ID in path", "invalidIDInPath")

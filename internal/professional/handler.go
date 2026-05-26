@@ -1,6 +1,7 @@
 package professional
 
 import (
+	"appointment-manager/internal/domain"
 	"appointment-manager/internal/ui/components"
 	"appointment-manager/internal/ui/form"
 	"appointment-manager/internal/web"
@@ -155,7 +156,7 @@ func (h *Handler) showEditFormUIHandler() http.HandlerFunc {
 			return
 		}
 
-		professionalID, err := ParseID(pathValueID)
+		professionalID, err := domain.ParseID(pathValueID)
 		if err != nil {
 			h.logger.WarnContext(ctx, "invalid professional id in path", slog.Any("error", err), slog.String("id", pathValueID))
 			return
@@ -265,7 +266,7 @@ func (h *Handler) parseProfessionalIDFromPath(r *http.Request, w http.ResponseWr
 		return uuid.Nil, errors.New(missingIDInPathMessage)
 	}
 
-	professionalID, err := ParseID(pathValueID)
+	professionalID, err := domain.ParseID(pathValueID)
 	if err != nil {
 		h.logger.WarnContext(ctx, "invalid professional id in path", slog.Any("error", err), slog.String("id", pathValueID))
 		h.createSnackbarError(ctx, w, http.StatusBadRequest, "Invalid professional ID in path", "invalidIDInPath")

@@ -1,6 +1,7 @@
 package slot
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/google/uuid"
@@ -17,21 +18,8 @@ type Slot struct {
 }
 
 func NewSlot(professionalID uuid.UUID, date time.Time, startTime time.Time, endTime time.Time, maxCapacity int16) (*Slot, error) {
-	if professionalID == uuid.Nil {
-		return nil, ErrInvalidProfessionalID
-	}
-	if endTime.Before(startTime) || endTime.Equal(startTime) {
-		return nil, ErrInvalidTimeRange
-	}
-	if maxCapacity <= 0 {
-		return nil, ErrInvalidMaxCapacity
-	}
-	if date.IsZero() {
-		return nil, ErrInvalidDate
-	}
-	const fullDayDuration time.Duration = 24 * time.Hour
-	if !date.Equal(startTime.Truncate(fullDayDuration)) {
-		return nil, ErrDateTimeInconsistency
+	if err := validateSlot(professionalID, date, startTime, endTime, maxCapacity); err != nil {
+		return nil, fmt.Errorf("validate slot: %w", err)
 	}
 
 	return &Slot{
@@ -42,4 +30,29 @@ func NewSlot(professionalID uuid.UUID, date time.Time, startTime time.Time, endT
 		EndTime:        endTime,
 		MaxCapacity:    maxCapacity,
 	}, nil
+}
+
+func validateSlot(professionalID uuid.UUID, date time.Time, startTime time.Time, endTime time.Time, maxCapacity int16) error {
+	if professionalID == uuid.Nil {
+		return ErrInvalidProfessionalID
+	}
+
+	if endTime.Before(startTime) || endTime.Equal(startTime) {
+		return ErrInvalidTimeRange
+	}
+
+	if maxCapacity <= 0 {
+		return ErrInvalidMaxCapacity
+	}
+
+	if date.IsZero() {
+		return ErrInvalidDate
+	}
+
+	const fullDayDuration time.Duration = 24 * time.Hour
+	if !date.Equal(startTime.Truncate(fullDayDuration)) {
+		return ErrDateTimeInconsistency
+	}
+
+	return nil
 }

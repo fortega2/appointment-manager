@@ -133,7 +133,3 @@ func (p *Patient) Update(
 
 	return nil
 }
-
-func ParseID(id string) (uuid.UUID, error) {
-	return uuid.Parse(id)
-}

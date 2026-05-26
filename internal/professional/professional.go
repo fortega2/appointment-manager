@@ -54,7 +54,3 @@ func (p *Professional) Update(firstName, lastName, phone string, active bool) er
 
 	return nil
 }
-
-func ParseID(id string) (uuid.UUID, error) {
-	return uuid.Parse(id)
-}

@@ -11,4 +11,7 @@ var (
 	ErrNilSlot               = errors.New("slot cannot be nil")
 
 	ErrNilPgxPool = errors.New("pgx pool cannot be nil")
+
+	ErrNilLogger     = errors.New("logger cannot be nil")
+	ErrNilRepository = errors.New("repository cannot be nil")
 )

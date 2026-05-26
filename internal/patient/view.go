@@ -1,6 +1,9 @@
 package patient
 
-import "fmt"
+import (
+	"appointment-manager/internal/domain"
+	"fmt"
+)
 
 type View struct {
 	ID                  string
@@ -19,7 +22,7 @@ func (v View) AlpineVisibility() string {
 }
 
 func (v View) ToPatient() (Patient, error) {
-	ID, err := ParseID(v.ID)
+	ID, err := domain.ParseID(v.ID)
 	if err != nil {
 		return Patient{}, fmt.Errorf("parse patient id: %w", err)
 	}
