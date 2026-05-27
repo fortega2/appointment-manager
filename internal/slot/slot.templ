@@ -1,0 +1,224 @@
+package slot
+
+import (
+	"appointment-manager/internal/ui/layout"
+	"appointment-manager/internal/ui/form"
+)
+
+templ Dashboard(dto []ListDTO) {
+    @layout.Base("Professional Dashboard", true) {
+        <div class="w-full max-w-5xl mx-auto" x-data="{ statusFilter: 'all', searchQuery: '', modalOpen: false }" @close-modal.window="modalOpen = false">
+            @Filters()
+            if len(dto) == 0 {
+                <div id="dto-table" class="mt-6 p-12 bg-white border border-gray-200 rounded-lg text-center shadow-sm">
+                    <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                        <path vector-effect="non-scaling-stroke" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                    </svg>
+                    <h3 class="mt-2 text-sm font-semibold text-gray-900">There are no slots</h3>
+                    <p class="mt-1 text-sm text-gray-500">Add a slot to start managing their appointments.</p>
+                </div>
+            } else {
+                @Table(dto)
+            }
+
+            <div 
+                x-show="modalOpen" 
+                class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 transition-opacity"
+                x-cloak
+            >
+                <div 
+                    class="bg-white rounded-lg shadow-xl w-full max-w-md p-6 relative text-left"
+                    @click.away="modalOpen = false"
+                >
+                    <button @click="modalOpen = false" class="absolute top-4 right-4 text-gray-400 hover:text-gray-600">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                    </button>
+
+                    <div id="modal-content"></div>
+                </div>
+            </div>
+        </div>
+    }
+}
+
+templ Filters() {
+    // <div class="mb-4 flex items-center justify-between">
+    //     <div class="flex-1 max-w-sm">
+    //         <input 
+    //             type="text" 
+    //             x-model="searchQuery" 
+    //             placeholder="Search by name or lastname..." 
+    //             class="bg-white border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5"
+    //         />
+    //     </div>
+
+    //     <div class="flex items-center space-x-4">
+    //         <select 
+    //             x-model="statusFilter" 
+    //             class="bg-white border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2.5"
+    //         >
+    //             <option value="all">All Professionals</option>
+    //             <option value="true">Actives</option>
+    //             <option value="false">Inactives</option>
+    //         </select>
+            
+    //         <button 
+    //             type="button" 
+    //             @click="statusFilter = 'all'; searchQuery = ''" 
+    //             class="text-sm text-blue-600 hover:underline"
+    //         >
+    //             Reset Filters
+    //         </button>
+
+    //         <button 
+    //             type="button"
+    //             hx-get="/professionals/new" 
+    //             hx-target="#modal-content" 
+    //             @click="modalOpen = true"
+    //             class="bg-indigo-600 text-white text-sm font-medium px-4 py-2 rounded-md hover:bg-indigo-700 transition-colors"
+    //         >
+    //             Create Professional
+    //         </button>
+    //     </div>
+    // </div>
+}
+
+templ Table(dto []ListDTO) {
+    // <div id="dto-table" class="overflow-x-auto shadow-sm border border-gray-200 rounded-lg">
+    //     <table class="w-full text-sm text-left border-collapse">
+    //         <thead class="bg-gray-100 text-gray-600 uppercase text-xs">
+    //             <tr>
+    //                 <th class="px-4 py-3">First Name</th>
+    //                 <th class="px-4 py-3">Last Name</th>
+    //                 <th class="px-4 py-3">Phone</th>
+    //                 <th class="px-4 py-3">Specialty</th>
+    //                 <th class="px-4 py-3">Status</th>
+    //                 <th class="px-4 py-3">Action</th>
+    //             </tr>
+    //         </thead>
+    //         <tbody class="divide-y divide-gray-200">
+    //             for _, p := range dto {
+    //                 <tr 
+    //                     class="bg-white hover:bg-gray-50 transition-colors"
+    //                     data-search={ p.FirstName + " " + p.LastName }
+    //                     x-show={ p.AlpineVisibility() }
+    //                 >
+    //                     <td class="px-4 py-3 text-gray-800">{ p.FirstName }</td>
+    //                     <td class="px-4 py-3 text-gray-800">{ p.LastName }</td>
+    //                     <td class="px-4 py-3 text-gray-500">{ p.Phone }</td>
+    //                     <td class="px-4 py-3 text-gray-500">{ p.Specialty }</td>
+    //                     <td class="px-4 py-3">
+    //                         if p.Active {
+    //                             <span class="bg-green-100 text-green-700 text-xs font-medium px-2 py-1 rounded-full">Active</span>
+    //                         } else {
+    //                             <span class="bg-red-100 text-red-600 text-xs font-medium px-2 py-1 rounded-full">Inactive</span>
+    //                         }
+    //                     </td>
+    //                     <td class="px-4 py-3 text-center align-middle">
+    //                         <button 
+    //                             type="button"
+    //                             title="Edit"
+    //                             aria-label="Edit Professional"
+    //                             hx-get={ string(templ.URL(fmt.Sprintf("/professionals/%s/edit", p.ID))) } 
+    //                             hx-target="#modal-content" 
+    //                             @click="modalOpen = true"
+    //                             class="text-indigo-600 hover:text-indigo-900"
+    //                         >
+    //                             ✏️
+    //                         </button>
+    //                     </td>
+    //                 </tr>
+    //             }
+    //         </tbody>
+    //     </table>
+    // </div>
+}
+
+templ Form(p ListDTO, method form.Method, actionURL string) {
+    // <div>
+    //     <h2 class="text-xl font-bold text-gray-900 mb-4">
+    //         if method == form.MethodPost {
+    //             Create Professional
+    //         } else {
+    //             Edit Professional
+    //         }
+    //     </h2>
+        
+    //     <form 
+    //         if method == form.MethodPost {
+    //             hx-post={ actionURL }
+    //         } else {
+    //             hx-put={ actionURL }
+    //         }
+    //         hx-target="#professionals-table"
+    //         hx-swap="outerHTML"
+    //         class="space-y-4"
+    //     >
+    //         <div>
+    //             <label for="first_name" class="block text-sm font-medium text-gray-700">First Name</label>
+    //             <input 
+    //                 type="text" 
+    //                 id="first_name" 
+    //                 name="first_name" 
+    //                 value={ p.FirstName }
+    //                 required 
+    //                 class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm" 
+    //             />
+    //         </div>
+            
+    //         <div>
+    //             <label for="last_name" class="block text-sm font-medium text-gray-700">Last Name</label>
+    //             <input 
+    //                 type="text" 
+    //                 id="last_name" 
+    //                 name="last_name" 
+    //                 value={ p.LastName }
+    //                 required 
+    //                 class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm" 
+    //             />
+    //         </div>
+
+    //         <div>
+    //             <label for="phone" class="block text-sm font-medium text-gray-700">Phone</label>
+    //             <input 
+    //                 type="text" 
+    //                 id="phone" 
+    //                 name="phone" 
+    //                 value={ p.Phone }
+    //                 required 
+    //                 class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm" 
+    //             />
+    //         </div>
+
+    //         if method == form.MethodPut {
+    //             <div class="flex items-center space-x-3">
+    //                 <input 
+    //                     type="checkbox" 
+    //                     id="active" 
+    //                     name="active" 
+    //                     value="true" 
+    //                     checked?={ p.Active }
+    //                     class="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+    //                 />
+    //                 <label for="active" class="text-sm text-gray-700">Active</label>
+    //             </div>
+    //         }
+
+    //         <div class="mt-6 flex justify-end space-x-3">
+    //             <button 
+    //                 type="button" 
+    //                 @click="modalOpen = false" 
+    //                 class="bg-white py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+    //             >
+    //                 Cancel
+    //             </button>
+    //             <button 
+    //                 type="submit" 
+    //                 class="inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+    //             >
+    //                 Save
+    //             </button>
+    //         </div>
+    //     </form>
+    // </div>
+}

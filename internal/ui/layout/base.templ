@@ -42,7 +42,7 @@ templ Base(title string, isAuthenticated bool) {
 					if isAuthenticated {
 						<nav class="flex items-center space-x-6">
 							<a href="/" class="text-sm font-medium text-gray-700 hover:text-indigo-600 transition-colors">
-								Inicio
+								Home
 							</a>
 
 							<div 
@@ -55,7 +55,7 @@ templ Base(title string, isAuthenticated bool) {
 									@click="open = !open" 
 									class="flex items-center space-x-1 text-sm font-medium text-gray-700 hover:text-indigo-600 transition-colors focus:outline-none"
 								>
-									<span>Gestión</span>
+									<span>Management</span>
 									<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
 										<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
 									</svg>
@@ -73,9 +73,10 @@ templ Base(title string, isAuthenticated bool) {
 									x-cloak
 								>
 									<div class="py-1">
-										<a href="/appointments" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 hover:text-indigo-600">Turnos</a>
-										<a href="/patients" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 hover:text-indigo-600">Pacientes</a>
-										<a href="/professionals" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 hover:text-indigo-600">Profesionales</a>
+										<a href="/appointments" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 hover:text-indigo-600">Appointments</a>
+										<a href="/patients" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 hover:text-indigo-600">Patients</a>
+										<a href="/slots" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 hover:text-indigo-600">Slots</a>
+										<a href="/professionals" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 hover:text-indigo-600">Professionals</a>
 									</div>
 								</div>
 							</div>

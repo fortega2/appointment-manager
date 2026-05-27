@@ -6,19 +6,19 @@ import (
 	"net/http"
 )
 
-const looginURL string = "/login"
+const loginURL string = "/login"
 
 func UISession(store *session.Store, isDevelopment bool) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if store == nil {
-				http.Redirect(w, r, looginURL, http.StatusSeeOther)
+				http.Redirect(w, r, loginURL, http.StatusSeeOther)
 				return
 			}
 
 			cookie, err := r.Cookie(session.CookieName)
 			if err != nil {
-				http.Redirect(w, r, looginURL, http.StatusSeeOther)
+				http.Redirect(w, r, loginURL, http.StatusSeeOther)
 				return
 			}
 
@@ -32,7 +32,7 @@ func UISession(store *session.Store, isDevelopment bool) func(http.Handler) http
 					HttpOnly: true,
 					SameSite: http.SameSiteStrictMode,
 				})
-				http.Redirect(w, r, looginURL, http.StatusSeeOther)
+				http.Redirect(w, r, loginURL, http.StatusSeeOther)
 				return
 			}
 

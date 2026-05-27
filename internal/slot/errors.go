@@ -14,4 +14,5 @@ var (
 
 	ErrNilLogger     = errors.New("logger cannot be nil")
 	ErrNilRepository = errors.New("repository cannot be nil")
+	ErrNilQuery      = errors.New("query cannot be nil")
 )

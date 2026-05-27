@@ -21,21 +21,23 @@ Guidance for coding agents working in `appointment-manager`.
 
 ## 1) Repository Snapshot
 
-- Language: Go (`go 1.26.1` in `go.mod`).
+- Language: Go (`go 1.26.3` in `go.mod`).
 - Module: `appointment-manager`.
-- Main entrypoint: `cmd/api/main.go`.
+- Main entrypoint: `cmd/server/main.go`.
 - Core packages:
   - `internal/appointment`
   - `internal/assistant`
   - `internal/password`
   - `internal/web`
-- Planned next domain packages:
-  - `internal/shared`
+- Domain packages:
   - `internal/professional`
   - `internal/patient`
   - `internal/slot`
-- Planned DB package:
+  - `internal/domain`
+- DB package:
   - `internal/db/migrations`
+- Planned:
+  - `internal/shared`
 - Lint config: `.golangci.yml` (strict, many linters enabled).
 - Testing libs: `stretchr/testify`.
 
@@ -44,7 +46,7 @@ Guidance for coding agents working in `appointment-manager`.
 - Build all packages:
   - `go build ./...`
 - Run API locally:
-  - `go run ./cmd/api`
+  - `go run ./cmd/server`
 
 ### Database migration commands (`migrate`)
 
@@ -97,7 +99,7 @@ Notes:
 - Read the `total:` line from `go tool cover -func` as source of truth.
 
 Important:
-- `cmd/api/main.go` is intentionally excluded from strict unit-coverage goals unless explicitly requested.
+- `cmd/server/main.go` is intentionally excluded from strict unit-coverage goals unless explicitly requested.
 
 ## 5) Code Style Guidelines
 
