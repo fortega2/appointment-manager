@@ -3,12 +3,22 @@ package slot
 import (
 	"appointment-manager/internal/ui/layout"
 	"appointment-manager/internal/ui/form"
+	"fmt"
 )
 
-templ Dashboard(dto []ListDTO) {
-    @layout.Base("Professional Dashboard", true) {
-        <div class="w-full max-w-5xl mx-auto" x-data="{ statusFilter: 'all', searchQuery: '', modalOpen: false }" @close-modal.window="modalOpen = false">
-            @Filters()
+templ Dashboard(dto []ListDTO, pDTO []ProfessionalDTO) {
+    @layout.Base("Slot Dashboard", true) {
+        <div 
+            class="w-full max-w-5xl mx-auto" 
+            x-data="{ 
+                weekStart: '', weekEnd: '', 
+                startTime: '', endTime: '', 
+                professionalID: '', 
+                modalOpen: false 
+            }" 
+            @close-modal.window="modalOpen = false"
+        >
+            @Filters(pDTO)
             if len(dto) == 0 {
                 <div id="dto-table" class="mt-6 p-12 bg-white border border-gray-200 rounded-lg text-center shadow-sm">
                     <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
@@ -41,184 +51,235 @@ templ Dashboard(dto []ListDTO) {
     }
 }
 
-templ Filters() {
-    // <div class="mb-4 flex items-center justify-between">
-    //     <div class="flex-1 max-w-sm">
-    //         <input 
-    //             type="text" 
-    //             x-model="searchQuery" 
-    //             placeholder="Search by name or lastname..." 
-    //             class="bg-white border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5"
-    //         />
-    //     </div>
-
-    //     <div class="flex items-center space-x-4">
-    //         <select 
-    //             x-model="statusFilter" 
-    //             class="bg-white border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2.5"
-    //         >
-    //             <option value="all">All Professionals</option>
-    //             <option value="true">Actives</option>
-    //             <option value="false">Inactives</option>
-    //         </select>
+templ Filters(pDTO []ProfessionalDTO) {
+    <div class="mb-4 flex flex-col space-y-4">
+        <div class="flex items-center justify-between">
+            <div class="flex items-center space-x-4">
+                <div class="flex items-center space-x-2">
+                    <label class="text-sm font-medium text-gray-700">Week:</label>
+                    <input type="date" x-model="weekStart" class="bg-white border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 p-2" />
+                    <span class="text-gray-500">to</span>
+                    <input type="date" x-model="weekEnd" class="bg-white border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 p-2" />
+                </div>
+                
+                <div class="flex items-center space-x-2">
+                    <label class="text-sm font-medium text-gray-700">Time:</label>
+                    <input type="time" x-model="startTime" class="bg-white border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 p-2" />
+                    <span class="text-gray-500">to</span>
+                    <input type="time" x-model="endTime" class="bg-white border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 p-2" />
+                </div>
+            </div>
             
-    //         <button 
-    //             type="button" 
-    //             @click="statusFilter = 'all'; searchQuery = ''" 
-    //             class="text-sm text-blue-600 hover:underline"
-    //         >
-    //             Reset Filters
-    //         </button>
+            <div class="flex items-center space-x-4">
+                <button 
+                    type="button" 
+                    @click="weekStart = ''; weekEnd = ''; startTime = ''; endTime = ''; professionalID = ''" 
+                    class="text-sm text-blue-600 hover:underline"
+                >
+                    Reset Filters
+                </button>
 
-    //         <button 
-    //             type="button"
-    //             hx-get="/professionals/new" 
-    //             hx-target="#modal-content" 
-    //             @click="modalOpen = true"
-    //             class="bg-indigo-600 text-white text-sm font-medium px-4 py-2 rounded-md hover:bg-indigo-700 transition-colors"
-    //         >
-    //             Create Professional
-    //         </button>
-    //     </div>
-    // </div>
+                <button 
+                    type="button"
+                    hx-get="/slots/new" 
+                    hx-target="#modal-content" 
+                    @click="modalOpen = true"
+                    class="bg-indigo-600 text-white text-sm font-medium px-4 py-2 rounded-md hover:bg-indigo-700 transition-colors"
+                >
+                    Create Slot
+                </button>
+            </div>
+        </div>
+        
+        <div class="flex items-center space-x-2 w-full max-w-xs">
+            <label class="text-sm font-medium text-gray-700">Professional:</label>
+            <select x-model="professionalID" class="bg-white border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5">
+                <option value="">All Professionals</option>
+                for _, p := range pDTO {
+                    <option value={ p.ID }>{ p.FirstName } { p.LastName }</option>
+                }
+            </select>
+        </div>
+    </div>
 }
 
 templ Table(dto []ListDTO) {
-    // <div id="dto-table" class="overflow-x-auto shadow-sm border border-gray-200 rounded-lg">
-    //     <table class="w-full text-sm text-left border-collapse">
-    //         <thead class="bg-gray-100 text-gray-600 uppercase text-xs">
-    //             <tr>
-    //                 <th class="px-4 py-3">First Name</th>
-    //                 <th class="px-4 py-3">Last Name</th>
-    //                 <th class="px-4 py-3">Phone</th>
-    //                 <th class="px-4 py-3">Specialty</th>
-    //                 <th class="px-4 py-3">Status</th>
-    //                 <th class="px-4 py-3">Action</th>
-    //             </tr>
-    //         </thead>
-    //         <tbody class="divide-y divide-gray-200">
-    //             for _, p := range dto {
-    //                 <tr 
-    //                     class="bg-white hover:bg-gray-50 transition-colors"
-    //                     data-search={ p.FirstName + " " + p.LastName }
-    //                     x-show={ p.AlpineVisibility() }
-    //                 >
-    //                     <td class="px-4 py-3 text-gray-800">{ p.FirstName }</td>
-    //                     <td class="px-4 py-3 text-gray-800">{ p.LastName }</td>
-    //                     <td class="px-4 py-3 text-gray-500">{ p.Phone }</td>
-    //                     <td class="px-4 py-3 text-gray-500">{ p.Specialty }</td>
-    //                     <td class="px-4 py-3">
-    //                         if p.Active {
-    //                             <span class="bg-green-100 text-green-700 text-xs font-medium px-2 py-1 rounded-full">Active</span>
-    //                         } else {
-    //                             <span class="bg-red-100 text-red-600 text-xs font-medium px-2 py-1 rounded-full">Inactive</span>
-    //                         }
-    //                     </td>
-    //                     <td class="px-4 py-3 text-center align-middle">
-    //                         <button 
-    //                             type="button"
-    //                             title="Edit"
-    //                             aria-label="Edit Professional"
-    //                             hx-get={ string(templ.URL(fmt.Sprintf("/professionals/%s/edit", p.ID))) } 
-    //                             hx-target="#modal-content" 
-    //                             @click="modalOpen = true"
-    //                             class="text-indigo-600 hover:text-indigo-900"
-    //                         >
-    //                             ✏️
-    //                         </button>
-    //                     </td>
-    //                 </tr>
-    //             }
-    //         </tbody>
-    //     </table>
-    // </div>
+    <div id="dto-table" class="overflow-x-auto shadow-sm border border-gray-200 rounded-lg">
+        <table class="w-full text-sm text-left border-collapse">
+            <thead class="bg-gray-100 text-gray-600 uppercase text-xs">
+                <tr>
+                    <th class="px-4 py-3">Date</th>
+                    <th class="px-4 py-3">Time</th>
+                    <th class="px-4 py-3">Professional</th>
+                    <th class="px-4 py-3">Max Cap</th>
+                    <th class="px-4 py-3">Status</th>
+                    <th class="px-4 py-3">Action</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-200">
+                for _, s := range dto {
+                    <tr 
+                        class="bg-white hover:bg-gray-50 transition-colors"
+                        data-date={ s.Date }
+                        data-start={ s.StartTime }
+                        data-end={ s.EndTime }
+                        data-prof={ s.ProfessionalID }
+                        x-show="
+                            (!weekStart || $el.dataset.date >= weekStart) && 
+                            (!weekEnd || $el.dataset.date <= weekEnd) &&
+                            (!startTime || $el.dataset.start >= startTime) &&
+                            (!endTime || $el.dataset.end <= endTime) &&
+                            (!professionalID || $el.dataset.prof === professionalID)
+                        "
+                    >
+                        <td class="px-4 py-3 text-gray-800 font-medium">{ s.Date }</td>
+                        <td class="px-4 py-3 text-gray-800">{ s.StartTime } - { s.EndTime }</td>
+                        <td class="px-4 py-3 text-gray-500">{ s.ProfessionalName }</td>
+                        <td class="px-4 py-3 text-gray-500">{ fmt.Sprint(s.MaxCapacity) }</td>
+                        <td class="px-4 py-3">
+                            if !s.Blocked {
+                                <span class="bg-green-100 text-green-700 text-xs font-medium px-2 py-1 rounded-full">Available</span>
+                            } else {
+                                <span class="bg-red-100 text-red-600 text-xs font-medium px-2 py-1 rounded-full">Blocked</span>
+                            }
+                        </td>
+                        <td class="px-4 py-3 text-center align-middle">
+                            <button 
+                                type="button"
+                                title="Edit"
+                                aria-label="Edit Slot"
+                                hx-get={ string(templ.URL(fmt.Sprintf("/slots/%s/edit", s.ID))) } 
+                                hx-target="#modal-content" 
+                                @click="modalOpen = true"
+                                class="text-indigo-600 hover:text-indigo-900"
+                            >
+                                ✏️
+                            </button>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
 }
 
-templ Form(p ListDTO, method form.Method, actionURL string) {
-    // <div>
-    //     <h2 class="text-xl font-bold text-gray-900 mb-4">
-    //         if method == form.MethodPost {
-    //             Create Professional
-    //         } else {
-    //             Edit Professional
-    //         }
-    //     </h2>
+templ Form(s ListDTO, method form.Method, actionURL string, pDTO []ProfessionalDTO) {
+    <div>
+        <h2 class="text-xl font-bold text-gray-900 mb-4">
+            if method == form.MethodPost {
+                Create Slot
+            } else {
+                Edit Slot
+            }
+        </h2>
         
-    //     <form 
-    //         if method == form.MethodPost {
-    //             hx-post={ actionURL }
-    //         } else {
-    //             hx-put={ actionURL }
-    //         }
-    //         hx-target="#professionals-table"
-    //         hx-swap="outerHTML"
-    //         class="space-y-4"
-    //     >
-    //         <div>
-    //             <label for="first_name" class="block text-sm font-medium text-gray-700">First Name</label>
-    //             <input 
-    //                 type="text" 
-    //                 id="first_name" 
-    //                 name="first_name" 
-    //                 value={ p.FirstName }
-    //                 required 
-    //                 class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm" 
-    //             />
-    //         </div>
+        <form 
+            if method == form.MethodPost {
+                hx-post={ actionURL }
+            } else {
+                hx-put={ actionURL }
+            }
+            hx-target="#dto-table"
+            hx-swap="outerHTML"
+            class="space-y-4"
+        >
+            <div>
+                <label for="professional_id" class="block text-sm font-medium text-gray-700">Professional</label>
+                <select 
+                    id="professional_id" 
+                    name="professional_id" 
+                    required 
+                    class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm bg-white"
+                >
+                    <option value="" disabled selected?={ s.ProfessionalID == "" }>Select professional</option>
+                    for _, p := range pDTO {
+                        <option value={ p.ID } selected?={ s.ProfessionalID == p.ID }>{ p.FirstName } { p.LastName }</option>
+                    }
+                </select>
+            </div>
             
-    //         <div>
-    //             <label for="last_name" class="block text-sm font-medium text-gray-700">Last Name</label>
-    //             <input 
-    //                 type="text" 
-    //                 id="last_name" 
-    //                 name="last_name" 
-    //                 value={ p.LastName }
-    //                 required 
-    //                 class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm" 
-    //             />
-    //         </div>
+            <div>
+                <label for="date" class="block text-sm font-medium text-gray-700">Date</label>
+                <input 
+                    type="date" 
+                    id="date" 
+                    name="date" 
+                    value={ s.Date }
+                    required 
+                    class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm" 
+                />
+            </div>
 
-    //         <div>
-    //             <label for="phone" class="block text-sm font-medium text-gray-700">Phone</label>
-    //             <input 
-    //                 type="text" 
-    //                 id="phone" 
-    //                 name="phone" 
-    //                 value={ p.Phone }
-    //                 required 
-    //                 class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm" 
-    //             />
-    //         </div>
+            <div class="grid grid-cols-2 gap-4">
+                <div>
+                    <label for="start_time" class="block text-sm font-medium text-gray-700">Start Time</label>
+                    <input 
+                        type="time" 
+                        id="start_time" 
+                        name="start_time" 
+                        value={ s.StartTime }
+                        required 
+                        class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm" 
+                    />
+                </div>
+                <div>
+                    <label for="end_time" class="block text-sm font-medium text-gray-700">End Time</label>
+                    <input 
+                        type="time" 
+                        id="end_time" 
+                        name="end_time" 
+                        value={ s.EndTime }
+                        required 
+                        class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm" 
+                    />
+                </div>
+            </div>
 
-    //         if method == form.MethodPut {
-    //             <div class="flex items-center space-x-3">
-    //                 <input 
-    //                     type="checkbox" 
-    //                     id="active" 
-    //                     name="active" 
-    //                     value="true" 
-    //                     checked?={ p.Active }
-    //                     class="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
-    //                 />
-    //                 <label for="active" class="text-sm text-gray-700">Active</label>
-    //             </div>
-    //         }
+            <div>
+                <label for="max_capacity" class="block text-sm font-medium text-gray-700">Max Capacity</label>
+                <input 
+                    type="number" 
+                    id="max_capacity" 
+                    name="max_capacity" 
+                    value={ fmt.Sprint(s.MaxCapacity) }
+                    if s.MaxCapacity == 0 {
+                        value="1"
+                    }
+                    min="1"
+                    required 
+                    class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm" 
+                />
+            </div>
 
-    //         <div class="mt-6 flex justify-end space-x-3">
-    //             <button 
-    //                 type="button" 
-    //                 @click="modalOpen = false" 
-    //                 class="bg-white py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-    //             >
-    //                 Cancel
-    //             </button>
-    //             <button 
-    //                 type="submit" 
-    //                 class="inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-    //             >
-    //                 Save
-    //             </button>
-    //         </div>
-    //     </form>
-    // </div>
+            if method == form.MethodPut {
+                <div class="flex items-center space-x-3">
+                    <input 
+                        type="checkbox" 
+                        id="blocked" 
+                        name="blocked" 
+                        value="true" 
+                        checked?={ s.Blocked }
+                        class="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                    />
+                    <label for="blocked" class="text-sm text-gray-700">Blocked</label>
+                </div>
+            }
+
+            <div class="mt-6 flex justify-end space-x-3">
+                <button 
+                    type="button" 
+                    @click="modalOpen = false" 
+                    class="bg-white py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                >
+                    Cancel
+                </button>
+                <button 
+                    type="submit" 
+                    class="inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                >
+                    Save
+                </button>
+            </div>
+        </form>
+    </div>
 }

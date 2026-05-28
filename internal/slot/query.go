@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -19,24 +20,13 @@ func NewQuery(pool *pgxpool.Pool) (*Query, error) {
 	return &Query{pool: pool}, nil
 }
 
-type ListDTO struct {
-	ID               string
-	ProfessionalID   string
-	ProfessionalName string
-	Date             string
-	StartTime        string
-	EndTime          string
-	MaxCapacity      int16
-	Blocked          bool
-}
-
-func (r *Query) List(ctx context.Context) ([]ListDTO, error) {
+func (q *Query) List(ctx context.Context) ([]ListDTO, error) {
 	const query string = `
 		SELECT
 			s.id,
 			s.professional_id,
 			p.first_name || ' ' || p.last_name AS professional_name,
-			TO_CHAR(s.date, 'DD/MM/YYYY') AS date,
+			TO_CHAR(s.date, 'YYYY-MM-DD') AS date,
     		TO_CHAR(s.start_time AT TIME ZONE 'America/Argentina/Buenos_Aires', 'HH24:MI') AS start_time,
     		TO_CHAR(s.end_time   AT TIME ZONE 'America/Argentina/Buenos_Aires', 'HH24:MI') AS end_time,
 			s.max_capacity,
@@ -48,7 +38,7 @@ func (r *Query) List(ctx context.Context) ([]ListDTO, error) {
 		ORDER BY
 			s.date, s.start_time
 	`
-	rows, err := r.pool.Query(ctx, query)
+	rows, err := q.pool.Query(ctx, query)
 	if err != nil {
 		return nil, fmt.Errorf("list slots: %w", err)
 	}
@@ -77,4 +67,39 @@ func (r *Query) List(ctx context.Context) ([]ListDTO, error) {
 	}
 
 	return list, nil
+}
+
+func (q *Query) GetByID(ctx context.Context, id uuid.UUID) (ListDTO, error) {
+	const query string = `
+		SELECT
+			s.id,
+			s.professional_id,
+			p.first_name || ' ' || p.last_name AS professional_name,
+			TO_CHAR(s.date, 'YYYY-MM-DD') AS date,
+    		TO_CHAR(s.start_time AT TIME ZONE 'America/Argentina/Buenos_Aires', 'HH24:MI') AS start_time,
+    		TO_CHAR(s.end_time   AT TIME ZONE 'America/Argentina/Buenos_Aires', 'HH24:MI') AS end_time,
+			s.max_capacity,
+			s.blocked
+		FROM
+			slot s
+		JOIN
+			professional p ON p.id = s.professional_id
+		WHERE
+			s.id = $1
+	`
+	var dto ListDTO
+	if err := q.pool.QueryRow(ctx, query, id).Scan(
+		&dto.ID,
+		&dto.ProfessionalID,
+		&dto.ProfessionalName,
+		&dto.Date,
+		&dto.StartTime,
+		&dto.EndTime,
+		&dto.MaxCapacity,
+		&dto.Blocked,
+	); err != nil {
+		return ListDTO{}, fmt.Errorf("get slot by id: %w", err)
+	}
+
+	return dto, nil
 }

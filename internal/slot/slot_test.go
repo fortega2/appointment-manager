@@ -147,3 +147,24 @@ func mustParseTime(value string) time.Time {
 
 	return t
 }
+
+func TestSlot_Update(t *testing.T) {
+	t.Parallel()
+
+	parsedProfessionalID := uuid.MustParse(professionalID)
+	s, _ := slot.NewSlot(parsedProfessionalID, mustParseTime(slotDate), mustParseTime(slotStartTime), mustParseTime(slotEndTime), slotMaxCapacity)
+
+	newProfID := uuid.New()
+	newDate := mustParseTime("2026-05-26")
+	newStart := mustParseTime("2026-05-26T12:00:00Z")
+	newEnd := mustParseTime("2026-05-26T13:00:00Z")
+
+	err := s.Update(newProfID, newDate, newStart, newEnd, 10, true)
+	require.NoError(t, err)
+	assert.Equal(t, newProfID, s.ProfessionalID)
+	assert.Equal(t, newDate, s.Date)
+	assert.Equal(t, newStart, s.StartTime)
+	assert.Equal(t, newEnd, s.EndTime)
+	assert.Equal(t, int16(10), s.MaxCapacity)
+	assert.True(t, s.Blocked)
+}

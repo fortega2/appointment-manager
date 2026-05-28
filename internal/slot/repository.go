@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -54,6 +55,72 @@ func (r *Repository) Create(ctx context.Context, s *Slot) error {
 		s.StartTime,
 		s.EndTime,
 		s.MaxCapacity,
+	); err != nil {
+		return r.mapCreateError(err)
+	}
+
+	return nil
+}
+
+func (r *Repository) GetByID(ctx context.Context, id uuid.UUID) (*Slot, error) {
+	const query string = `
+		SELECT
+			id,
+			professional_id,
+			date,
+			start_time,
+			end_time,
+			max_capacity,
+			blocked
+		FROM
+			public.slot
+		WHERE
+			id = $1
+	`
+	var s Slot
+	if err := r.pool.QueryRow(ctx, query, id).Scan(
+		&s.ID,
+		&s.ProfessionalID,
+		&s.Date,
+		&s.StartTime,
+		&s.EndTime,
+		&s.MaxCapacity,
+		&s.Blocked,
+	); err != nil {
+		return nil, fmt.Errorf("get slot by id: %w", err)
+	}
+
+	return &s, nil
+}
+
+func (r *Repository) Update(ctx context.Context, s *Slot) error {
+	if s == nil {
+		return ErrNilSlot
+	}
+	const query string = `
+		UPDATE public.slot
+		SET
+			professional_id = $2,
+			date = $3,
+			start_time = $4,
+			end_time = $5,
+			max_capacity = $6,
+			blocked = $7,
+			updated_at = CURRENT_TIMESTAMP
+		WHERE
+			id = $1
+	`
+
+	if _, err := r.pool.Exec(
+		ctx,
+		query,
+		s.ID,
+		s.ProfessionalID,
+		s.Date,
+		s.StartTime,
+		s.EndTime,
+		s.MaxCapacity,
+		s.Blocked,
 	); err != nil {
 		return r.mapCreateError(err)
 	}

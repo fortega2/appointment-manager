@@ -32,6 +32,19 @@ func NewSlot(professionalID uuid.UUID, date time.Time, startTime time.Time, endT
 	}, nil
 }
 
+func (s *Slot) Update(professionalID uuid.UUID, date time.Time, startTime time.Time, endTime time.Time, maxCapacity int16, blocked bool) error {
+	if err := validateSlot(professionalID, date, startTime, endTime, maxCapacity); err != nil {
+		return fmt.Errorf("validate slot: %w", err)
+	}
+	s.ProfessionalID = professionalID
+	s.Date = date
+	s.StartTime = startTime
+	s.EndTime = endTime
+	s.MaxCapacity = maxCapacity
+	s.Blocked = blocked
+	return nil
+}
+
 func validateSlot(professionalID uuid.UUID, date time.Time, startTime time.Time, endTime time.Time, maxCapacity int16) error {
 	if professionalID == uuid.Nil {
 		return ErrInvalidProfessionalID
@@ -49,8 +62,9 @@ func validateSlot(professionalID uuid.UUID, date time.Time, startTime time.Time,
 		return ErrInvalidDate
 	}
 
-	const fullDayDuration time.Duration = 24 * time.Hour
-	if !date.Equal(startTime.Truncate(fullDayDuration)) {
+	y, m, d := startTime.Date()
+	expectedDate := time.Date(y, m, d, 0, 0, 0, 0, startTime.Location())
+	if !date.Equal(expectedDate) {
 		return ErrDateTimeInconsistency
 	}
 
