@@ -5,6 +5,7 @@ import (
 	"appointment-manager/internal/ui/components"
 	"appointment-manager/internal/ui/form"
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -237,6 +238,10 @@ func (h *Handler) createUIHandler() http.HandlerFunc {
 
 		if err := h.repo.Create(ctx, s); err != nil {
 			h.logger.ErrorContext(ctx, "failed to create slot", slog.Any("error", err))
+			if errors.Is(err, ErrSlotOverlaps) {
+				h.createSnackbarError(ctx, w, http.StatusConflict, "The professional already has an appointment within this time range.", "repo.Create")
+				return
+			}
 			h.createSnackbarError(ctx, w, http.StatusInternalServerError, "Failed to create slot", "repo.Create")
 			return
 		}

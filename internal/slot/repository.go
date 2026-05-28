@@ -16,6 +16,7 @@ const (
 	constraintChkSlotTimes           = "chk_slot_times"
 	constraintChkSlotCapacity        = "chk_slot_capacity"
 	constraintChkSlotDateConsistency = "chk_slot_date_consistency"
+	constraintChkNoOverlappingSlots  = "chk_no_overlapping_slots"
 )
 
 type Repository struct {
@@ -143,6 +144,8 @@ func (r *Repository) mapCreateError(err error) error {
 		return fmt.Errorf(createSlotErrorMsg, ErrInvalidMaxCapacity)
 	case constraintChkSlotDateConsistency:
 		return fmt.Errorf(createSlotErrorMsg, ErrDateTimeInconsistency)
+	case constraintChkNoOverlappingSlots:
+		return fmt.Errorf(createSlotErrorMsg, ErrSlotOverlaps)
 	default:
 		return fmt.Errorf(createSlotErrorMsg, err)
 	}

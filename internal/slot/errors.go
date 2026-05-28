@@ -9,6 +9,7 @@ var (
 	ErrInvalidDate           = errors.New("date cannot be zero")
 	ErrDateTimeInconsistency = errors.New("date must match the date part of start time")
 	ErrNilSlot               = errors.New("slot cannot be nil")
+	ErrSlotOverlaps          = errors.New("the slot overlaps with an existing one")
 
 	ErrNilPgxPool = errors.New("pgx pool cannot be nil")
 

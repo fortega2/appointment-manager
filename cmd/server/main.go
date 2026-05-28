@@ -13,6 +13,7 @@ import (
 	"appointment-manager/internal/professional"
 	"appointment-manager/internal/server"
 	"appointment-manager/internal/session"
+	"appointment-manager/internal/slot"
 	"appointment-manager/internal/ui/home"
 	"context"
 	"fmt"
@@ -119,6 +120,11 @@ func initializeServerHandlers(logger *slog.Logger, sessionStore *session.Store, 
 		logger.Error("failed to create patient handler", slog.Any("error", err))
 		return nil, err
 	}
+	slotHandler, err := initializeSlotHandler(logger, pool)
+	if err != nil {
+		logger.Error("failed to create slot handler", slog.Any("error", err))
+		return nil, err
+	}
 	healthHandler, err := initializeHealthHandler(logger, pool)
 	if err != nil {
 		logger.Error("failed to create health handler", slog.Any("error", err))
@@ -146,6 +152,7 @@ func initializeServerHandlers(logger *slog.Logger, sessionStore *session.Store, 
 	uiHomeHandler.RegisterHandlers(uiProtectedMux)
 	professionalHandler.RegisterUIHandlers(uiProtectedMux)
 	patientHandler.RegisterUIHandlers(uiProtectedMux)
+	slotHandler.RegisterUIHandlers(uiProtectedMux)
 
 	mux.Handle("/api/v1/", middleware.Session(sessionStore, isDev)(apiProtectedMux))
 	mux.Handle("/", middleware.UISession(sessionStore, isDev)(uiProtectedMux))
@@ -241,6 +248,28 @@ func initializePatientHandler(logger *slog.Logger, pool *pgxpool.Pool) (*patient
 	}
 
 	return patientHandler, nil
+}
+
+func initializeSlotHandler(logger *slog.Logger, pool *pgxpool.Pool) (*slot.Handler, error) {
+	repo, err := slot.NewRepository(pool)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create slot repository: %w", err)
+	}
+	query, err := slot.NewQuery(pool)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create slot query: %w", err)
+	}
+	pRepo, err := professional.NewRepository(pool)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create professional repository for slot handler: %w", err)
+	}
+
+	h, err := slot.NewHandler(logger, repo, query, pRepo)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create slot handler: %w", err)
+	}
+
+	return h, nil
 }
 
 func initializeHealthHandler(logger *slog.Logger, pool *pgxpool.Pool) (*health.Handler, error) {
