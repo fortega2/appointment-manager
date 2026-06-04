@@ -37,7 +37,7 @@ const (
 			p.health_insurance,
 			INITCAP(h.name) AS health_insurance_name,
 			p.insurance_number,
-			p.clinical_notes
+			COALESCE(p.clinical_notes, '') AS clinical_notes
 		FROM
 			patient p
 		INNER JOIN
@@ -56,7 +56,7 @@ const (
 			p.health_insurance,
 			INITCAP(h.name) AS health_insurance_name,
 			p.insurance_number,
-			p.clinical_notes
+			COALESCE(p.clinical_notes, '') AS clinical_notes
 		FROM
 			patient p
 		INNER JOIN
