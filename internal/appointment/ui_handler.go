@@ -1,7 +1,12 @@
 package appointment
 
 import (
+	"appointment-manager/internal/assistant"
+	"appointment-manager/internal/patient"
+	"appointment-manager/internal/professional"
+	"appointment-manager/internal/slot"
 	"appointment-manager/internal/ui/components"
+	"appointment-manager/internal/ui/form"
 	"context"
 	"errors"
 	"fmt"
@@ -17,10 +22,22 @@ const (
 type UIHandler struct {
 	Handler
 
-	query *Query
+	query       *Query
+	patientRepo *patient.Repository
+	profRepo    *professional.Repository
+	asstRepo    *assistant.PostgresRepository
+	slotQuery   *slot.Query
 }
 
-func NewUIHandler(logger *slog.Logger, service service, query *Query) (*UIHandler, error) {
+func NewUIHandler(
+	logger *slog.Logger,
+	service service,
+	query *Query,
+	patientRepo *patient.Repository,
+	profRepo *professional.Repository,
+	asstRepo *assistant.PostgresRepository,
+	slotQuery *slot.Query,
+) (*UIHandler, error) {
 	if logger == nil {
 		return nil, ErrNilLogger
 	}
@@ -33,17 +50,38 @@ func NewUIHandler(logger *slog.Logger, service service, query *Query) (*UIHandle
 		return nil, ErrNilQuery
 	}
 
+	if patientRepo == nil {
+		return nil, ErrNilPatientRepository
+	}
+
+	if profRepo == nil {
+		return nil, ErrNilProfessionalRepo
+	}
+
+	if asstRepo == nil {
+		return nil, ErrNilAssistantRepository
+	}
+
+	if slotQuery == nil {
+		return nil, ErrNilSlotQuery
+	}
+
 	return &UIHandler{
 		Handler{
 			service: service,
 			logger:  logger,
 		},
 		query,
+		patientRepo,
+		profRepo,
+		asstRepo,
+		slotQuery,
 	}, nil
 }
 
 func (h *UIHandler) RegisterUIHandlers(mux *http.ServeMux) {
 	mux.Handle("GET /appointments", h.showDashboard())
+	mux.Handle("GET /appointments/new", h.showCreateFormUIHandler())
 	mux.Handle("POST /appointments", h.createUIHandler())
 	mux.Handle("POST /appointments/{id}/attend", h.attendUIAppointment())
 	mux.Handle("POST /appointments/{id}/cancel", h.cancelUIAppointment())
@@ -74,6 +112,121 @@ func (h *UIHandler) showDashboard() http.Handler {
 	})
 }
 
+func (h *UIHandler) showCreateFormUIHandler() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		ctx := r.Context()
+		lg := h.logger.With(
+			slog.String("package", "appointments"),
+			slog.String("struct", "UIHandler"),
+			slog.String("method", "showCreateFormUIHandler"),
+		)
+
+		slotOpts, err := h.loadAvailableSlotOptions(ctx, lg)
+		if err != nil {
+			h.showSnackbar(ctx, lg, components.SnackbarError, w, http.StatusInternalServerError, "Failed to load available slots")
+			return
+		}
+
+		patientOpts, err := h.loadPatientOptions(ctx, lg)
+		if err != nil {
+			h.showSnackbar(ctx, lg, components.SnackbarError, w, http.StatusInternalServerError, "Failed to load patients")
+			return
+		}
+
+		profOpts, err := h.loadProfessionalOptions(ctx, lg)
+		if err != nil {
+			h.showSnackbar(ctx, lg, components.SnackbarError, w, http.StatusInternalServerError, "Failed to load professionals")
+			return
+		}
+
+		asstOpts, err := h.loadAssistantOptions(ctx, lg)
+		if err != nil {
+			h.showSnackbar(ctx, lg, components.SnackbarError, w, http.StatusInternalServerError, "Failed to load assistants")
+			return
+		}
+
+		if err := Form(
+			FormRequest{},
+			form.MethodPost,
+			"/appointments",
+			slotOpts,
+			patientOpts,
+			profOpts,
+			asstOpts,
+		).Render(ctx, w); err != nil {
+			lg.ErrorContext(ctx, "error rendering appointment create form", slog.Any("error", err))
+		}
+	}
+}
+
+func (h *UIHandler) loadAvailableSlotOptions(ctx context.Context, lg *slog.Logger) ([]SlotOptionDTO, error) {
+	slots, err := h.slotQuery.ListAvailable(ctx)
+	if err != nil {
+		lg.ErrorContext(ctx, "failed to list available slots for form", slog.Any("error", err))
+		return nil, err
+	}
+
+	options := make([]SlotOptionDTO, len(slots))
+	for i, s := range slots {
+		options[i] = SlotOptionDTO{
+			ID:    s.ID,
+			Label: fmt.Sprintf("%s %s-%s · Dr. %s", s.Date, s.StartTime, s.EndTime, s.ProfessionalName),
+		}
+	}
+	return options, nil
+}
+
+func (h *UIHandler) loadPatientOptions(ctx context.Context, lg *slog.Logger) ([]PatientOptionDTO, error) {
+	patients, err := h.patientRepo.List(ctx)
+	if err != nil {
+		lg.ErrorContext(ctx, "failed to list patients for form", slog.Any("error", err))
+		return nil, err
+	}
+
+	options := make([]PatientOptionDTO, len(patients))
+	for i, p := range patients {
+		options[i] = PatientOptionDTO{
+			ID:    p.ID,
+			Label: fmt.Sprintf("%s %s", p.FirstName, p.LastName),
+		}
+	}
+	return options, nil
+}
+
+func (h *UIHandler) loadProfessionalOptions(ctx context.Context, lg *slog.Logger) ([]ProfessionalOptionDTO, error) {
+	professionals, err := h.profRepo.List(ctx)
+	if err != nil {
+		lg.ErrorContext(ctx, "failed to list professionals for form", slog.Any("error", err))
+		return nil, err
+	}
+
+	options := make([]ProfessionalOptionDTO, len(professionals))
+	for i, p := range professionals {
+		options[i] = ProfessionalOptionDTO{
+			ID:    p.ID.String(),
+			Label: fmt.Sprintf("%s %s", p.FirstName, p.LastName),
+		}
+	}
+	return options, nil
+}
+
+func (h *UIHandler) loadAssistantOptions(ctx context.Context, lg *slog.Logger) ([]AssistantOptionDTO, error) {
+	assistants, err := h.asstRepo.List(ctx)
+	if err != nil {
+		lg.ErrorContext(ctx, "failed to list assistants for form", slog.Any("error", err))
+		return nil, err
+	}
+
+	options := make([]AssistantOptionDTO, len(assistants))
+	for i, a := range assistants {
+		options[i] = AssistantOptionDTO{
+			ID:    a.ID.String(),
+			Label: fmt.Sprintf("%s %s", a.FirstName, a.LastName),
+		}
+	}
+	return options, nil
+}
+
 type uiRequest struct {
 	SlotID         string
 	PatientID      string
@@ -93,21 +246,35 @@ func (h *UIHandler) createUIHandler() http.HandlerFunc {
 
 		req, err := h.parseForm(r, w)
 		if err != nil {
+			if renderErr := h.renderUpdatedAppointmentsTable(ctx, w); renderErr != nil {
+				lg.ErrorContext(ctx, "error rendering appointments table after parse error", slog.Any("error", renderErr))
+			}
 			h.showSnackbar(ctx, lg, components.SnackbarError, w, http.StatusBadRequest, "Invalid form data")
 			return
 		}
 
 		id, err := h.service.Create(ctx, CreateInput(*req))
 		if err != nil {
-			if !isCreateBusinessError(err) && !isCreateValidationError(err) {
+			status, msg := resolveUICreateProblem(err)
+			if status == http.StatusInternalServerError {
 				lg.ErrorContext(ctx, "failed to create appointment", slog.Any("error", err))
 			}
-			h.showSnackbar(ctx, lg, components.SnackbarError, w, http.StatusInternalServerError, "Failed to create appointment")
+			if renderErr := h.renderUpdatedAppointmentsTable(ctx, w); renderErr != nil {
+				lg.ErrorContext(ctx, "error rendering appointments table after failed create", slog.Any("error", renderErr))
+			}
+			h.showSnackbar(ctx, lg, components.SnackbarError, w, status, msg)
 			return
 		}
 
-		h.showSnackbar(ctx, lg, components.SnackbarSuccess, w, http.StatusOK, fmt.Sprintf("Appointment created with ID: %s", id))
-		h.renderUpdatedAppointmentsTable(ctx, w, components.SnackbarSuccess, "Appointment created successfully")
+		lg.InfoContext(ctx, "appointment created", slog.String("appointment_id", id.String()))
+
+		w.Header().Set("HX-Trigger", "close-modal")
+		if err := components.Snackbar("Appointment created successfully", components.SnackbarSuccess).Render(ctx, w); err != nil {
+			lg.ErrorContext(ctx, renderSnackbarErrMsg, slog.Any("error", err))
+		}
+		if err := h.renderUpdatedAppointmentsTable(ctx, w); err != nil {
+			lg.ErrorContext(ctx, "error rendering appointments table after create", slog.Any("error", err))
+		}
 	}
 }
 
@@ -156,11 +323,17 @@ func (h *UIHandler) attendUIAppointment() http.HandlerFunc {
 				lg.ErrorContext(ctx, "failed to mark appointment as attended", slog.String("appointment_id", ID.String()), slog.Any("error", err))
 				msg = "Failed to mark appointment as attended"
 			}
-			h.renderUpdatedAppointmentsTable(ctx, w, components.SnackbarError, msg)
+			if err := h.renderUpdatedAppointmentsTable(ctx, w); err != nil {
+				lg.ErrorContext(ctx, "error rendering appointments table after attend operation", slog.Any("error", err))
+			}
+			h.showSnackbar(ctx, lg, components.SnackbarError, w, status, msg)
 			return
 		}
 
-		h.renderUpdatedAppointmentsTable(ctx, w, components.SnackbarSuccess, "Appointment marked as attended successfully")
+		if err := h.renderUpdatedAppointmentsTable(ctx, w); err != nil {
+			lg.ErrorContext(ctx, "error rendering appointments table after attend operation", slog.Any("error", err))
+		}
+		h.showSnackbar(ctx, lg, components.SnackbarSuccess, w, http.StatusOK, "Appointment marked as attended successfully")
 	}
 }
 
@@ -185,11 +358,17 @@ func (h *UIHandler) cancelUIAppointment() http.HandlerFunc {
 				lg.ErrorContext(ctx, "failed to cancel appointment", slog.String("appointment_id", ID.String()), slog.Any("error", err))
 				msg = "Failed to cancel appointment"
 			}
-			h.renderUpdatedAppointmentsTable(ctx, w, components.SnackbarError, msg)
+			if err := h.renderUpdatedAppointmentsTable(ctx, w); err != nil {
+				lg.ErrorContext(ctx, "error rendering appointments table after cancel operation", slog.Any("error", err))
+			}
+			h.showSnackbar(ctx, lg, components.SnackbarError, w, status, msg)
 			return
 		}
 
-		h.renderUpdatedAppointmentsTable(ctx, w, components.SnackbarSuccess, "Appointment cancelled successfully")
+		if err := h.renderUpdatedAppointmentsTable(ctx, w); err != nil {
+			lg.ErrorContext(ctx, "error rendering appointments table after cancel operation", slog.Any("error", err))
+		}
+		h.showSnackbar(ctx, lg, components.SnackbarSuccess, w, http.StatusOK, "Appointment cancelled successfully")
 	}
 }
 
@@ -199,7 +378,7 @@ func (h *UIHandler) showSnackbar(ctx context.Context, lg *slog.Logger, kind comp
 	}
 }
 
-func (h *UIHandler) renderUpdatedAppointmentsTable(ctx context.Context, w http.ResponseWriter, snackType components.SnackbarType, msg string) {
+func (h *UIHandler) renderUpdatedAppointmentsTable(ctx context.Context, w http.ResponseWriter) error {
 	lg := h.logger.With(
 		slog.String("package", "appointments"),
 		slog.String("struct", "UIHandler"),
@@ -209,16 +388,10 @@ func (h *UIHandler) renderUpdatedAppointmentsTable(ctx context.Context, w http.R
 	appointments, err := h.query.List(ctx)
 	if err != nil {
 		lg.ErrorContext(ctx, "failed to list appointments after operation", slog.Any("error", err))
-		h.showSnackbar(ctx, lg, components.SnackbarError, w, http.StatusInternalServerError, "Failed to load appointments")
-		return
+		return err
 	}
 
-	if err := components.Snackbar(msg, snackType).Render(ctx, w); err != nil {
-		lg.ErrorContext(ctx, renderSnackbarErrMsg, slog.Any("error", err))
-	}
-	if err := Table(appointments).Render(ctx, w); err != nil {
-		lg.ErrorContext(ctx, "error rendering appointments table after operation", slog.Any("error", err))
-	}
+	return Table(appointments).Render(ctx, w)
 }
 
 func resolveUIActionProblem(err error) (int, string) {
@@ -235,5 +408,36 @@ func resolveUIActionProblem(err error) (int, string) {
 		return http.StatusConflict, "Appointment status changed, please refresh"
 	default:
 		return http.StatusInternalServerError, "Failed to process request"
+	}
+}
+
+func resolveUICreateProblem(err error) (int, string) {
+	switch {
+	case errors.Is(err, ErrSlotIDRequired):
+		return http.StatusBadRequest, "Slot is required"
+	case errors.Is(err, ErrInvalidSlotID):
+		return http.StatusBadRequest, "Invalid slot selected"
+	case errors.Is(err, ErrPatientIDRequired):
+		return http.StatusBadRequest, "Patient is required"
+	case errors.Is(err, ErrInvalidPatientID):
+		return http.StatusBadRequest, "Invalid patient selected"
+	case errors.Is(err, ErrProfessionalIDRequired):
+		return http.StatusBadRequest, "Professional is required"
+	case errors.Is(err, ErrInvalidProfessionalID):
+		return http.StatusBadRequest, "Invalid professional selected"
+	case errors.Is(err, ErrAssistantIDRequired):
+		return http.StatusBadRequest, "Assistant is required"
+	case errors.Is(err, ErrInvalidAssistantID):
+		return http.StatusBadRequest, "Invalid assistant selected"
+	case errors.Is(err, ErrMultipleActiveAppointmentsDetected):
+		return http.StatusConflict, "Patient already has an active appointment in that time slot"
+	case errors.Is(err, ErrSlotBlocked):
+		return http.StatusConflict, "Selected slot is blocked"
+	case errors.Is(err, ErrSlotWithoutAvailability):
+		return http.StatusConflict, "Selected slot has no available spots"
+	case errors.Is(err, ErrInvalidAppointmentReference):
+		return http.StatusNotFound, "Referenced entity not found"
+	default:
+		return http.StatusInternalServerError, "Failed to create appointment"
 	}
 }

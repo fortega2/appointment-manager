@@ -3,11 +3,15 @@ package appointment
 import "errors"
 
 var (
-	ErrNilLogger     = errors.New("logger cannot be nil")
-	ErrNilService    = errors.New("service cannot be nil")
-	ErrNilQuery      = errors.New("query cannot be nil")
-	ErrNilRepository = errors.New("repository cannot be nil")
-	ErrNilPgxPool    = errors.New("pgx pool cannot be nil")
+	ErrNilLogger               = errors.New("logger cannot be nil")
+	ErrNilService              = errors.New("service cannot be nil")
+	ErrNilQuery                = errors.New("query cannot be nil")
+	ErrNilRepository           = errors.New("repository cannot be nil")
+	ErrNilPgxPool              = errors.New("pgx pool cannot be nil")
+	ErrNilPatientRepository    = errors.New("patient repository cannot be nil")
+	ErrNilProfessionalRepo     = errors.New("professional repository cannot be nil")
+	ErrNilAssistantRepository  = errors.New("assistant repository cannot be nil")
+	ErrNilSlotQuery            = errors.New("slot query cannot be nil")
 
 	ErrInvalidPage   = errors.New("invalid page")
 	ErrInvalidLimit  = errors.New("invalid limit")

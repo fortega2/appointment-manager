@@ -2,12 +2,27 @@ package appointment
 
 import (
 	"fmt"
+	"appointment-manager/internal/ui/form"
 	"appointment-manager/internal/ui/layout"
 )
 
 templ Dashboard(appointments []List) {
 	@layout.Base("Appointment Dashboard", true) {
-		<div class="w-full max-w-6xl mx-auto">
+		<div class="w-full max-w-6xl mx-auto" x-data="{ modalOpen: false }" @close-modal.window="modalOpen = false">
+			<div class="mb-4 flex items-center justify-between">
+				<h1 class="text-2xl font-bold text-gray-900">Appointments</h1>
+
+				<button
+					type="button"
+					hx-get="/appointments/new"
+					hx-target="#modal-content"
+					@click="modalOpen = true"
+					class="bg-indigo-600 text-white text-sm font-medium px-4 py-2 rounded-md hover:bg-indigo-700 transition-colors"
+				>
+					Create Appointment
+				</button>
+			</div>
+
 			if len(appointments) == 0 {
 				<div id="appointments-table" class="mt-6 p-12 bg-white border border-gray-200 rounded-lg text-center shadow-sm">
 					<svg class="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
@@ -19,6 +34,23 @@ templ Dashboard(appointments []List) {
 			} else {
 				@Table(appointments)
 			}
+
+			<div
+				x-show="modalOpen"
+				class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 transition-opacity"
+				x-cloak
+			>
+				<div
+					class="bg-white rounded-lg shadow-xl w-full max-w-lg p-6 relative text-left"
+					@click.away="modalOpen = false"
+				>
+					<button @click="modalOpen = false" class="absolute top-4 right-4 text-gray-400 hover:text-gray-600">
+						<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+					</button>
+
+					<div id="modal-content"></div>
+				</div>
+			</div>
 		</div>
 	}
 }
@@ -52,7 +84,7 @@ templ Table(appointments []List) {
 						<td class="px-4 py-3 text-center align-middle">
 							if a.Status == int(StatusConfirmed) {
 								<div class="flex items-center justify-center space-x-2">
-									<button 
+									<button
 										type="button"
 										title="Attend"
 										aria-label="Mark as Attended"
@@ -63,7 +95,7 @@ templ Table(appointments []List) {
 									>
 										<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
 									</button>
-									<button 
+									<button
 										type="button"
 										title="Cancel"
 										aria-label="Cancel Appointment"
@@ -81,5 +113,112 @@ templ Table(appointments []List) {
 				}
 			</tbody>
 		</table>
+	</div>
+}
+
+templ Form(
+	req FormRequest,
+	method form.Method,
+	actionURL string,
+	slotOpts []SlotOptionDTO,
+	patientOpts []PatientOptionDTO,
+	profOpts []ProfessionalOptionDTO,
+	asstOpts []AssistantOptionDTO,
+) {
+	<div>
+		<h2 class="text-xl font-bold text-gray-900 mb-4">Create Appointment</h2>
+
+		<form
+			hx-post={ actionURL }
+			hx-target="#appointments-table"
+			hx-swap="outerHTML"
+			class="space-y-4"
+		>
+			<div>
+				<label for="slot_id" class="block text-sm font-medium text-gray-700">Slot</label>
+				<select
+					id="slot_id"
+					name="slot_id"
+					required
+					class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm bg-white"
+				>
+					<option value="" disabled selected?={ req.SlotID == "" }>Select a slot</option>
+					for _, s := range slotOpts {
+						<option value={ s.ID } selected?={ req.SlotID == s.ID }>{ s.Label }</option>
+					}
+				</select>
+			</div>
+
+			<div>
+				<label for="patient_id" class="block text-sm font-medium text-gray-700">Patient</label>
+				<select
+					id="patient_id"
+					name="patient_id"
+					required
+					class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm bg-white"
+				>
+					<option value="" disabled selected?={ req.PatientID == "" }>Select a patient</option>
+					for _, p := range patientOpts {
+						<option value={ p.ID } selected?={ req.PatientID == p.ID }>{ p.Label }</option>
+					}
+				</select>
+			</div>
+
+			<div>
+				<label for="professional_id" class="block text-sm font-medium text-gray-700">Professional</label>
+				<select
+					id="professional_id"
+					name="professional_id"
+					required
+					class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm bg-white"
+				>
+					<option value="" disabled selected?={ req.ProfessionalID == "" }>Select a professional</option>
+					for _, p := range profOpts {
+						<option value={ p.ID } selected?={ req.ProfessionalID == p.ID }>{ p.Label }</option>
+					}
+				</select>
+			</div>
+
+			<div>
+				<label for="assistant_id" class="block text-sm font-medium text-gray-700">Assistant</label>
+				<select
+					id="assistant_id"
+					name="assistant_id"
+					required
+					class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm bg-white"
+				>
+					<option value="" disabled selected?={ req.AssistantID == "" }>Select an assistant</option>
+					for _, a := range asstOpts {
+						<option value={ a.ID } selected?={ req.AssistantID == a.ID }>{ a.Label }</option>
+					}
+				</select>
+			</div>
+
+			<div>
+				<label for="notes" class="block text-sm font-medium text-gray-700">Notes</label>
+				<textarea
+					id="notes"
+					name="notes"
+					rows="3"
+					class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+				>{ req.Notes }</textarea>
+			</div>
+
+			<div class="mt-6 flex justify-end space-x-3">
+				<button
+					type="button"
+					@click="modalOpen = false"
+					class="bg-white py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+				>
+					Cancel
+				</button>
+				<button
+					type="submit"
+					class="inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+				>
+					Save
+				</button>
+			</div>
+		</form>
 	</div>
 }
