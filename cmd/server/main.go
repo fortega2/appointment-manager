@@ -135,6 +135,11 @@ func initializeServerHandlers(logger *slog.Logger, sessionStore *session.Store, 
 		logger.Error("failed to create UI home handler", slog.Any("error", err))
 		return nil, err
 	}
+	uiAppointmentHandler, err := initializeUIAppointmentHandler(logger, pool)
+	if err != nil {
+		logger.Error("failed to create UI appointment handler", slog.Any("error", err))
+		return nil, err
+	}
 
 	mux := http.NewServeMux()
 	healthHandler.RegisterHandlers(mux)
@@ -153,6 +158,7 @@ func initializeServerHandlers(logger *slog.Logger, sessionStore *session.Store, 
 	professionalHandler.RegisterUIHandlers(uiProtectedMux)
 	patientHandler.RegisterUIHandlers(uiProtectedMux)
 	slotHandler.RegisterUIHandlers(uiProtectedMux)
+	uiAppointmentHandler.RegisterUIHandlers(uiProtectedMux)
 
 	mux.Handle("/api/v1/", middleware.Session(sessionStore, isDev)(apiProtectedMux))
 	mux.Handle("/", middleware.UISession(sessionStore, isDev)(uiProtectedMux))
@@ -292,4 +298,25 @@ func initializeUIHomeHandler(logger *slog.Logger) (*home.Handler, error) {
 	}
 
 	return homeHandler, nil
+}
+
+func initializeUIAppointmentHandler(logger *slog.Logger, pool *pgxpool.Pool) (*appointment.UIHandler, error) {
+	appointmentRepo, err := appointment.NewPostgresRepository(pool)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create appointment postgres repository: %w", err)
+	}
+	appointmentQuery, err := appointment.NewQuery(pool)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create appointment query: %w", err)
+	}
+	appointmentService, err := appointment.NewService(appointmentRepo)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create appointment service: %w", err)
+	}
+	appointmentHandler, err := appointment.NewUIHandler(logger, appointmentService, appointmentQuery)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create appointment UI handler: %w", err)
+	}
+
+	return appointmentHandler, nil
 }

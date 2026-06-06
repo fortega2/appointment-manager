@@ -1,0 +1,85 @@
+package appointment
+
+import (
+	"fmt"
+	"appointment-manager/internal/ui/layout"
+)
+
+templ Dashboard(appointments []List) {
+	@layout.Base("Appointment Dashboard", true) {
+		<div class="w-full max-w-6xl mx-auto">
+			if len(appointments) == 0 {
+				<div id="appointments-table" class="mt-6 p-12 bg-white border border-gray-200 rounded-lg text-center shadow-sm">
+					<svg class="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+						<path vector-effect="non-scaling-stroke" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+					</svg>
+					<h3 class="mt-2 text-sm font-semibold text-gray-900">There are no appointments</h3>
+					<p class="mt-1 text-sm text-gray-500">Create an appointment to get started.</p>
+				</div>
+			} else {
+				@Table(appointments)
+			}
+		</div>
+	}
+}
+
+templ Table(appointments []List) {
+	<div id="appointments-table" class="overflow-x-auto shadow-sm border border-gray-200 rounded-lg">
+		<table class="w-full text-sm text-left border-collapse">
+			<thead class="bg-gray-100 text-gray-600 uppercase text-xs">
+				<tr>
+					<th class="px-4 py-3">Date / Time</th>
+					<th class="px-4 py-3">Patient</th>
+					<th class="px-4 py-3">Professional</th>
+					<th class="px-4 py-3">Status</th>
+					<th class="px-4 py-3 text-center">Actions</th>
+				</tr>
+			</thead>
+			<tbody class="divide-y divide-gray-200">
+				for _, a := range appointments {
+					<tr class="bg-white hover:bg-gray-50 transition-colors">
+						<td class="px-4 py-3 text-gray-800">
+							<div>{ a.StartTime }</div>
+							<div class="text-xs text-gray-500">to { a.EndTime }</div>
+						</td>
+						<td class="px-4 py-3 text-gray-800">{ a.PatientFullName }</td>
+						<td class="px-4 py-3 text-gray-500">{ a.ProfessionalFullName }</td>
+						<td class="px-4 py-3 text-gray-500">
+							<span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-gray-100 text-gray-800">
+								{ a.StatusName }
+							</span>
+						</td>
+						<td class="px-4 py-3 text-center align-middle">
+							if a.Status == int(StatusConfirmed) {
+								<div class="flex items-center justify-center space-x-2">
+									<button 
+										type="button"
+										title="Attend"
+										aria-label="Mark as Attended"
+										hx-post={ string(templ.URL(fmt.Sprintf("/appointments/%s/attend", a.ID))) }
+										hx-target="#appointments-table"
+										hx-swap="outerHTML"
+										class="text-green-600 hover:text-green-900"
+									>
+										<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+									</button>
+									<button 
+										type="button"
+										title="Cancel"
+										aria-label="Cancel Appointment"
+										hx-post={ string(templ.URL(fmt.Sprintf("/appointments/%s/cancel", a.ID))) }
+										hx-target="#appointments-table"
+										hx-swap="outerHTML"
+										class="text-red-600 hover:text-red-900"
+									>
+										<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+									</button>
+								</div>
+							}
+						</td>
+					</tr>
+				}
+			</tbody>
+		</table>
+	</div>
+}

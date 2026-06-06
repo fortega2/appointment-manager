@@ -12,8 +12,8 @@ const (
 		SELECT
 			a.id,
 			a.slot_id,
-			s.start_time,
-			s.end_time,
+			TO_CHAR(s.start_time AT TIME ZONE 'America/Argentina/Buenos_Aires', 'YYYY-MM-DD HH24:MI') AS start_time,
+			TO_CHAR(s.end_time AT TIME ZONE 'America/Argentina/Buenos_Aires', 'HH24:MI') AS end_time,
 			a.patient_id,
 			p.first_name || ' ' || p.last_name AS patient_full_name,
 			a.professional_id,
@@ -23,8 +23,8 @@ const (
 			a.status,
 			INITCAP(ast.name) AS status_name,
 			COALESCE(a.notes, '') AS notes,
-			a.created_at,
-			a.updated_at
+			TO_CHAR(a.created_at AT TIME ZONE 'America/Argentina/Buenos_Aires', 'YYYY-MM-DD HH24:MI') AS created_at,
+			COALESCE(TO_CHAR(a.updated_at AT TIME ZONE 'America/Argentina/Buenos_Aires', 'YYYY-MM-DD HH24:MI'), '') AS updated_at
 		FROM
 			public.appointment AS a
 		INNER JOIN

@@ -3,6 +3,7 @@ package appointment
 import (
 	"appointment-manager/internal/ui/components"
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -57,17 +58,19 @@ func (h *UIHandler) showDashboard() http.Handler {
 			slog.String("method", "showDashboard"),
 		)
 
-		_, err := h.query.List(ctx)
+		appointments, err := h.query.List(ctx)
 		if err != nil {
 			lg.ErrorContext(ctx, "failed to list appointments", slog.Any("error", err))
 
-			if snackbarErr := components.ShowSnackbar(ctx, components.SnackbarError, w, http.StatusInternalServerError, "Failed to load appointments"); snackbarErr != nil {
-				lg.ErrorContext(ctx, renderSnackbarErrMsg, slog.Any("error", snackbarErr), slog.String("operation", "ShowSnackbar"))
+			if dashErr := Dashboard([]List{}).Render(ctx, w); dashErr != nil {
+				lg.ErrorContext(ctx, "error rendering appointment dashboard", slog.Any("error", dashErr))
 			}
 			return
 		}
 
-		// TODO: Render dashboard template with appointments data
+		if err := Dashboard(appointments).Render(ctx, w); err != nil {
+			lg.ErrorContext(ctx, "error rendering appointment dashboard", slog.Any("error", err))
+		}
 	})
 }
 
@@ -104,7 +107,7 @@ func (h *UIHandler) createUIHandler() http.HandlerFunc {
 		}
 
 		h.showSnackbar(ctx, lg, components.SnackbarSuccess, w, http.StatusOK, fmt.Sprintf("Appointment created with ID: %s", id))
-		// TODO: Redirect to appointment details page or refresh dashboard
+		h.renderUpdatedAppointmentsTable(ctx, w, components.SnackbarSuccess, "Appointment created successfully")
 	}
 }
 
@@ -148,15 +151,16 @@ func (h *UIHandler) attendUIAppointment() http.HandlerFunc {
 		}
 
 		if err := h.service.Attend(ctx, ID); err != nil {
-			if !isActionBusinessError(err) {
+			status, msg := resolveUIActionProblem(err)
+			if status == http.StatusInternalServerError {
 				lg.ErrorContext(ctx, "failed to mark appointment as attended", slog.String("appointment_id", ID.String()), slog.Any("error", err))
+				msg = "Failed to mark appointment as attended"
 			}
-			h.showSnackbar(ctx, lg, components.SnackbarError, w, http.StatusInternalServerError, "Failed to mark appointment as attended")
+			h.renderUpdatedAppointmentsTable(ctx, w, components.SnackbarError, msg)
 			return
 		}
 
-		h.showSnackbar(ctx, lg, components.SnackbarSuccess, w, http.StatusOK, "Appointment marked as attended successfully")
-		// TODO: Redirect to appointment details page or refresh dashboard
+		h.renderUpdatedAppointmentsTable(ctx, w, components.SnackbarSuccess, "Appointment marked as attended successfully")
 	}
 }
 
@@ -176,20 +180,60 @@ func (h *UIHandler) cancelUIAppointment() http.HandlerFunc {
 		}
 
 		if err := h.service.Cancel(ctx, ID); err != nil {
-			if !isActionBusinessError(err) {
+			status, msg := resolveUIActionProblem(err)
+			if status == http.StatusInternalServerError {
 				lg.ErrorContext(ctx, "failed to cancel appointment", slog.String("appointment_id", ID.String()), slog.Any("error", err))
+				msg = "Failed to cancel appointment"
 			}
-			h.showSnackbar(ctx, lg, components.SnackbarError, w, http.StatusInternalServerError, "Failed to cancel appointment")
+			h.renderUpdatedAppointmentsTable(ctx, w, components.SnackbarError, msg)
 			return
 		}
 
-		h.showSnackbar(ctx, lg, components.SnackbarSuccess, w, http.StatusOK, "Appointment cancelled successfully")
-		// TODO: Redirect to appointment details page or refresh dashboard
+		h.renderUpdatedAppointmentsTable(ctx, w, components.SnackbarSuccess, "Appointment cancelled successfully")
 	}
 }
 
 func (h *UIHandler) showSnackbar(ctx context.Context, lg *slog.Logger, kind components.SnackbarType, w http.ResponseWriter, status int, msg string) {
 	if err := components.ShowSnackbar(ctx, kind, w, status, msg); err != nil {
 		lg.ErrorContext(ctx, renderSnackbarErrMsg, slog.Any("error", err), slog.String("operation", "ShowSnackbar"))
+	}
+}
+
+func (h *UIHandler) renderUpdatedAppointmentsTable(ctx context.Context, w http.ResponseWriter, snackType components.SnackbarType, msg string) {
+	lg := h.logger.With(
+		slog.String("package", "appointments"),
+		slog.String("struct", "UIHandler"),
+		slog.String("method", "renderUpdatedAppointmentsTable"),
+	)
+
+	appointments, err := h.query.List(ctx)
+	if err != nil {
+		lg.ErrorContext(ctx, "failed to list appointments after operation", slog.Any("error", err))
+		h.showSnackbar(ctx, lg, components.SnackbarError, w, http.StatusInternalServerError, "Failed to load appointments")
+		return
+	}
+
+	if err := components.Snackbar(msg, snackType).Render(ctx, w); err != nil {
+		lg.ErrorContext(ctx, renderSnackbarErrMsg, slog.Any("error", err))
+	}
+	if err := Table(appointments).Render(ctx, w); err != nil {
+		lg.ErrorContext(ctx, "error rendering appointments table after operation", slog.Any("error", err))
+	}
+}
+
+func resolveUIActionProblem(err error) (int, string) {
+	switch {
+	case errors.Is(err, ErrInvalidAppointmentReference):
+		return http.StatusNotFound, "Appointment not found"
+	case errors.Is(err, ErrAppointmentCannotAttendNow):
+		return http.StatusUnprocessableEntity, "Appointment can only be attended during slot time"
+	case errors.Is(err, ErrAppointmentCannotAttendWithStatus):
+		return http.StatusConflict, "Appointment cannot be attended from current status"
+	case errors.Is(err, ErrAppointmentCannotCancelWithStatus):
+		return http.StatusConflict, "Appointment cannot be cancelled from current status"
+	case errors.Is(err, ErrAppointmentStatusChanged):
+		return http.StatusConflict, "Appointment status changed, please refresh"
+	default:
+		return http.StatusInternalServerError, "Failed to process request"
 	}
 }
