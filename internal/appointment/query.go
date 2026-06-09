@@ -38,7 +38,7 @@ const (
 		INNER JOIN
 			public.appointment_status AS ast ON ast.id = a.status
 		ORDER BY
-			a.created_at
+			a.created_at DESC
 	`
 )
 
