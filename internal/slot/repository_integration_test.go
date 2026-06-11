@@ -26,7 +26,7 @@ func TestRepositoryCreatePersistsSlot(t *testing.T) {
 	pool := newSlotIntegrationPool(ctx, t)
 	repo := newSlotIntegrationRepository(t, pool)
 
-	professionalID := uuid.New()
+	professionalID := uuid.Must(uuid.NewV7())
 	insertProfessionalForSlot(ctx, t, pool, professionalID)
 
 	startTime := mustParseTime(repositoryStartTime)
@@ -58,7 +58,7 @@ func TestRepositoryCreateReturnsErrorWhenProfessionalNotFound(t *testing.T) {
 	startTime := mustParseTime(repositoryStartTime)
 	endTime := mustParseTime(repositoryEndTime)
 
-	newRecord, err := slot.NewSlot(uuid.New(), integrationDate, startTime, endTime, repositoryProfessionalMax)
+	newRecord, err := slot.NewSlot(uuid.Must(uuid.NewV7()), integrationDate, startTime, endTime, repositoryProfessionalMax)
 	require.NoError(t, err)
 
 	err = repo.Create(ctx, newRecord)
@@ -73,7 +73,7 @@ func TestRepositoryCreateReturnsErrorWhenDatabaseUnavailable(t *testing.T) {
 	pool := newSlotIntegrationPool(ctx, t)
 	repo := newSlotIntegrationRepository(t, pool)
 
-	professionalID := uuid.New()
+	professionalID := uuid.Must(uuid.NewV7())
 	insertProfessionalForSlot(ctx, t, pool, professionalID)
 
 	startTime := mustParseTime(repositoryStartTime)
@@ -88,5 +88,3 @@ func TestRepositoryCreateReturnsErrorWhenDatabaseUnavailable(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "create slot:")
 }
-
-

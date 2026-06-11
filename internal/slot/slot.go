@@ -5,6 +5,8 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+
+	"appointment-manager/internal/domain"
 )
 
 type Slot struct {
@@ -23,7 +25,7 @@ func NewSlot(professionalID uuid.UUID, date time.Time, startTime time.Time, endT
 	}
 
 	return &Slot{
-		ID:             uuid.New(),
+		ID:             domain.NewID(),
 		ProfessionalID: professionalID,
 		Date:           date,
 		StartTime:      startTime,

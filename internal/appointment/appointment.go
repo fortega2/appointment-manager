@@ -4,6 +4,8 @@ import (
 	"fmt"
 
 	"github.com/google/uuid"
+
+	"appointment-manager/internal/domain"
 )
 
 type Status int16
@@ -42,7 +44,7 @@ type Appointment struct {
 
 func NewAppointment(slotID, patientID, professionalID, assistantID uuid.UUID, notes *string) *Appointment {
 	return &Appointment{
-		ID:             uuid.New(),
+		ID:             domain.NewID(),
 		SlotID:         slotID,
 		PatientID:      patientID,
 		ProfessionalID: professionalID,

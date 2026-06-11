@@ -152,11 +152,11 @@ func TestCreateEndpointStoresConfirmedStatusAndNullNotes(t *testing.T) {
 
 	pool := newIntegrationPool(ctx, t)
 
-	professionalID := uuid.New()
-	assistantID := uuid.New()
-	patientID := uuid.New()
-	slotOneID := uuid.New()
-	slotTwoID := uuid.New()
+	professionalID := uuid.Must(uuid.NewV7())
+	assistantID := uuid.Must(uuid.NewV7())
+	patientID := uuid.Must(uuid.NewV7())
+	slotOneID := uuid.Must(uuid.NewV7())
+	slotTwoID := uuid.Must(uuid.NewV7())
 
 	insertProfessional(ctx, t, pool, professionalID)
 	insertAssistant(ctx, t, pool, assistantID)
@@ -192,10 +192,10 @@ func TestCreateEndpointRejectsBlockedSlot(t *testing.T) {
 
 	pool := newIntegrationPool(ctx, t)
 
-	professionalID := uuid.New()
-	assistantID := uuid.New()
-	patientID := uuid.New()
-	blockedSlotID := uuid.New()
+	professionalID := uuid.Must(uuid.NewV7())
+	assistantID := uuid.Must(uuid.NewV7())
+	patientID := uuid.Must(uuid.NewV7())
+	blockedSlotID := uuid.Must(uuid.NewV7())
 
 	insertProfessional(ctx, t, pool, professionalID)
 	insertAssistant(ctx, t, pool, assistantID)
@@ -218,18 +218,18 @@ func TestCreateEndpointRejectsSlotWithoutAvailability(t *testing.T) {
 
 	pool := newIntegrationPool(ctx, t)
 
-	professionalID := uuid.New()
-	assistantID := uuid.New()
-	patientOneID := uuid.New()
-	patientTwoID := uuid.New()
-	slotID := uuid.New()
+	professionalID := uuid.Must(uuid.NewV7())
+	assistantID := uuid.Must(uuid.NewV7())
+	patientOneID := uuid.Must(uuid.NewV7())
+	patientTwoID := uuid.Must(uuid.NewV7())
+	slotID := uuid.Must(uuid.NewV7())
 
 	insertProfessional(ctx, t, pool, professionalID)
 	insertAssistant(ctx, t, pool, assistantID)
 	insertPatient(ctx, t, pool, patientOneID)
 	insertPatient(ctx, t, pool, patientTwoID)
 	insertSlot(ctx, t, pool, slotID, professionalID, "2026-02-03", "10:00:00+00", "10:30:00+00", 1, false)
-	insertAppointment(ctx, t, pool, uuid.New(), slotID, patientOneID, professionalID, assistantID, statusConfirmedValue, nil)
+	insertAppointment(ctx, t, pool, uuid.Must(uuid.NewV7()), slotID, patientOneID, professionalID, assistantID, statusConfirmedValue, nil)
 
 	mux := newIntegrationMux(t, pool)
 
@@ -247,12 +247,12 @@ func TestCreateEndpointRejectsOverlappingAppointments(t *testing.T) {
 
 	pool := newIntegrationPool(ctx, t)
 
-	professionalOneID := uuid.New()
-	professionalTwoID := uuid.New()
-	assistantID := uuid.New()
-	patientID := uuid.New()
-	slotOneID := uuid.New()
-	slotTwoID := uuid.New()
+	professionalOneID := uuid.Must(uuid.NewV7())
+	professionalTwoID := uuid.Must(uuid.NewV7())
+	assistantID := uuid.Must(uuid.NewV7())
+	patientID := uuid.Must(uuid.NewV7())
+	slotOneID := uuid.Must(uuid.NewV7())
+	slotTwoID := uuid.Must(uuid.NewV7())
 
 	insertProfessional(ctx, t, pool, professionalOneID)
 	insertProfessional(ctx, t, pool, professionalTwoID)
@@ -260,7 +260,7 @@ func TestCreateEndpointRejectsOverlappingAppointments(t *testing.T) {
 	insertPatient(ctx, t, pool, patientID)
 	insertSlot(ctx, t, pool, slotOneID, professionalOneID, "2026-02-04", "12:00:00+00", "13:00:00+00", 2, false)
 	insertSlot(ctx, t, pool, slotTwoID, professionalTwoID, "2026-02-04", "12:30:00+00", "13:30:00+00", 2, false)
-	insertAppointment(ctx, t, pool, uuid.New(), slotOneID, patientID, professionalOneID, assistantID, statusConfirmedValue, nil)
+	insertAppointment(ctx, t, pool, uuid.Must(uuid.NewV7()), slotOneID, patientID, professionalOneID, assistantID, statusConfirmedValue, nil)
 
 	mux := newIntegrationMux(t, pool)
 
@@ -278,10 +278,10 @@ func TestCreateEndpointReturnsUnprocessableEntityForInvalidReference(t *testing.
 
 	pool := newIntegrationPool(ctx, t)
 
-	professionalID := uuid.New()
-	assistantID := uuid.New()
-	patientID := uuid.New()
-	slotID := uuid.New()
+	professionalID := uuid.Must(uuid.NewV7())
+	assistantID := uuid.Must(uuid.NewV7())
+	patientID := uuid.Must(uuid.NewV7())
+	slotID := uuid.Must(uuid.NewV7())
 
 	insertProfessional(ctx, t, pool, professionalID)
 	insertAssistant(ctx, t, pool, assistantID)
@@ -290,7 +290,7 @@ func TestCreateEndpointReturnsUnprocessableEntityForInvalidReference(t *testing.
 
 	mux := newIntegrationMux(t, pool)
 
-	rec := performCreateRequest(ctx, mux, createRequestBody(t, slotID, patientID, uuid.New(), assistantID, nil))
+	rec := performCreateRequest(ctx, mux, createRequestBody(t, slotID, patientID, uuid.Must(uuid.NewV7()), assistantID, nil))
 	assert.Equal(t, http.StatusUnprocessableEntity, rec.Code)
 	assert.Equal(t, problemContentType, rec.Header().Get(contentTypeHeader))
 	assert.Equal(t, appointment.ErrInvalidAppointmentReference.Error(), decodeProblemDetail(t, rec).Detail)
@@ -304,11 +304,11 @@ func TestCreateEndpointConcurrentRequestsRespectSlotCapacity(t *testing.T) {
 
 	pool := newIntegrationPool(ctx, t)
 
-	professionalID := uuid.New()
-	assistantID := uuid.New()
-	patientOneID := uuid.New()
-	patientTwoID := uuid.New()
-	slotID := uuid.New()
+	professionalID := uuid.Must(uuid.NewV7())
+	assistantID := uuid.Must(uuid.NewV7())
+	patientOneID := uuid.Must(uuid.NewV7())
+	patientTwoID := uuid.Must(uuid.NewV7())
+	slotID := uuid.Must(uuid.NewV7())
 
 	insertProfessional(ctx, t, pool, professionalID)
 	insertAssistant(ctx, t, pool, assistantID)
@@ -337,12 +337,12 @@ func TestCreateEndpointConcurrentRequestsPreventOverlappingAppointments(t *testi
 
 	pool := newIntegrationPool(ctx, t)
 
-	professionalOneID := uuid.New()
-	professionalTwoID := uuid.New()
-	assistantID := uuid.New()
-	patientID := uuid.New()
-	slotOneID := uuid.New()
-	slotTwoID := uuid.New()
+	professionalOneID := uuid.Must(uuid.NewV7())
+	professionalTwoID := uuid.Must(uuid.NewV7())
+	assistantID := uuid.Must(uuid.NewV7())
+	patientID := uuid.Must(uuid.NewV7())
+	slotOneID := uuid.Must(uuid.NewV7())
+	slotTwoID := uuid.Must(uuid.NewV7())
 
 	insertProfessional(ctx, t, pool, professionalOneID)
 	insertProfessional(ctx, t, pool, professionalTwoID)
@@ -499,17 +499,17 @@ type createResponse struct {
 func seedAppointments(ctx context.Context, t *testing.T, pool *pgxpool.Pool) appointmentFixture {
 	t.Helper()
 
-	professionalID := uuid.New()
-	assistantID := uuid.New()
-	patientOneID := uuid.New()
-	patientTwoID := uuid.New()
-	patientThreeID := uuid.New()
-	slotOneID := uuid.New()
-	slotTwoID := uuid.New()
-	slotThreeID := uuid.New()
-	confirmedOldestID := uuid.New()
-	confirmedNewestID := uuid.New()
-	cancelledID := uuid.New()
+	professionalID := uuid.Must(uuid.NewV7())
+	assistantID := uuid.Must(uuid.NewV7())
+	patientOneID := uuid.Must(uuid.NewV7())
+	patientTwoID := uuid.Must(uuid.NewV7())
+	patientThreeID := uuid.Must(uuid.NewV7())
+	slotOneID := uuid.Must(uuid.NewV7())
+	slotTwoID := uuid.Must(uuid.NewV7())
+	slotThreeID := uuid.Must(uuid.NewV7())
+	confirmedOldestID := uuid.Must(uuid.NewV7())
+	confirmedNewestID := uuid.Must(uuid.NewV7())
+	cancelledID := uuid.Must(uuid.NewV7())
 
 	_, err := pool.Exec(ctx, `
 		INSERT INTO professional (id, first_name, last_name, phone, specialty, active)
@@ -619,11 +619,11 @@ func seedAppointmentForAction(
 ) uuid.UUID {
 	t.Helper()
 
-	professionalID := uuid.New()
-	assistantID := uuid.New()
-	patientID := uuid.New()
-	slotID := uuid.New()
-	appointmentID := uuid.New()
+	professionalID := uuid.Must(uuid.NewV7())
+	assistantID := uuid.Must(uuid.NewV7())
+	patientID := uuid.Must(uuid.NewV7())
+	slotID := uuid.Must(uuid.NewV7())
+	appointmentID := uuid.Must(uuid.NewV7())
 
 	insertProfessional(ctx, t, pool, professionalID)
 	insertAssistant(ctx, t, pool, assistantID)

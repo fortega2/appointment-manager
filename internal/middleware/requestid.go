@@ -4,7 +4,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/google/uuid"
+	"appointment-manager/internal/domain"
 )
 
 const requestIDHeader = "X-Request-Id"
@@ -18,7 +18,7 @@ func RequestID() func(http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			requestID := strings.TrimSpace(r.Header.Get(requestIDHeader))
 			if requestID == "" {
-				requestID = uuid.NewString()
+				requestID = domain.NewIDString()
 				r.Header.Set(requestIDHeader, requestID)
 			}
 

@@ -4,6 +4,8 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
+
+	"appointment-manager/internal/domain"
 )
 
 const maxInsuranceNumberLength = 11
@@ -67,7 +69,7 @@ func NewPatient(
 	}
 
 	return &Patient{
-		ID:              uuid.New(),
+		ID:              domain.NewID(),
 		FirstName:       trimmedFirstName,
 		LastName:        trimmedLastName,
 		Phone:           trimmedPhone,

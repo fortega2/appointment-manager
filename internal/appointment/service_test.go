@@ -90,7 +90,7 @@ func TestServiceListSuccess(t *testing.T) {
 	svc, err := NewService(repo)
 	require.NoError(t, err)
 
-	expected := []Appointment{{ID: uuid.New()}}
+	expected := []Appointment{{ID: uuid.Must(uuid.NewV7())}}
 	repo.On("List", mock.Anything, ListFilter{Page: 1, Limit: 20, Status: StatusConfirmed}).Return(expected, nil).Once()
 
 	result, listErr := svc.List(context.Background(), ListInput{})
@@ -125,12 +125,12 @@ func TestServiceCreateSuccess(t *testing.T) {
 	svc, err := NewService(repo)
 	require.NoError(t, err)
 
-	slotID := uuid.New()
-	patientID := uuid.New()
-	professionalID := uuid.New()
-	assistantID := uuid.New()
+	slotID := uuid.Must(uuid.NewV7())
+	patientID := uuid.Must(uuid.NewV7())
+	professionalID := uuid.Must(uuid.NewV7())
+	assistantID := uuid.Must(uuid.NewV7())
 	notes := " follow-up "
-	createdID := uuid.New()
+	createdID := uuid.Must(uuid.NewV7())
 
 	repo.On("Create", mock.Anything, mock.MatchedBy(func(appoint Appointment) bool {
 		return appoint.SlotID == slotID &&
@@ -157,7 +157,7 @@ func TestServiceCreateSuccess(t *testing.T) {
 func TestServiceCancel(t *testing.T) {
 	t.Parallel()
 
-	appointmentID := uuid.New()
+	appointmentID := uuid.Must(uuid.NewV7())
 	referenceTime := time.Date(2026, 2, 1, 10, 0, 0, 0, time.UTC)
 
 	t.Run("confirmed before 24h becomes cancelled", func(t *testing.T) {
@@ -265,7 +265,7 @@ func TestServiceCancel(t *testing.T) {
 func TestServiceAttend(t *testing.T) {
 	t.Parallel()
 
-	appointmentID := uuid.New()
+	appointmentID := uuid.Must(uuid.NewV7())
 	referenceTime := time.Date(2026, 2, 1, 10, 0, 0, 0, time.UTC)
 
 	t.Run("confirmed in slot range becomes attended", func(t *testing.T) {
@@ -376,7 +376,7 @@ func TestServiceActionRepositoryError(t *testing.T) {
 	t.Parallel()
 
 	referenceTime := time.Date(2026, 2, 1, 10, 0, 0, 0, time.UTC)
-	appointmentID := uuid.New()
+	appointmentID := uuid.Must(uuid.NewV7())
 
 	t.Run("cancel propagates update status error", func(t *testing.T) {
 		t.Parallel()

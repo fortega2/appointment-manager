@@ -154,7 +154,7 @@ func TestSlot_Update(t *testing.T) {
 	parsedProfessionalID := uuid.MustParse(professionalID)
 	s, _ := slot.NewSlot(parsedProfessionalID, mustParseTime(slotDate), mustParseTime(slotStartTime), mustParseTime(slotEndTime), slotMaxCapacity)
 
-	newProfID := uuid.New()
+	newProfID := uuid.Must(uuid.NewV7())
 	newDate := mustParseTime("2026-05-26")
 	newStart := mustParseTime("2026-05-26T12:00:00Z")
 	newEnd := mustParseTime("2026-05-26T13:00:00Z")

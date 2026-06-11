@@ -38,7 +38,7 @@ func TestPostgresRepositoryCreateListGet(t *testing.T) {
 
 	createdIDs := make([]uuid.UUID, 0, 2)
 	for i := range 2 {
-		newID := uuid.New()
+		newID := uuid.Must(uuid.NewV7())
 		createdID, err := repo.Create(ctx, assistant.Assistant{
 			ID:           newID,
 			FirstName:    fmt.Sprintf(repoNamesFmt, i),
@@ -89,7 +89,7 @@ func TestPostgresRepositoryCreateDuplicateEmail(t *testing.T) {
 
 	duplicateEmail := "duplicate@email.com"
 	firstID, err := repo.Create(ctx, assistant.Assistant{
-		ID:           uuid.New(),
+		ID:           uuid.Must(uuid.NewV7()),
 		FirstName:    "First",
 		LastName:     "Assistant",
 		Email:        duplicateEmail,
@@ -99,7 +99,7 @@ func TestPostgresRepositoryCreateDuplicateEmail(t *testing.T) {
 	assert.NotEqual(t, uuid.Nil, firstID)
 
 	secondID, err := repo.Create(ctx, assistant.Assistant{
-		ID:           uuid.New(),
+		ID:           uuid.Must(uuid.NewV7()),
 		FirstName:    "Second",
 		LastName:     "Assistant",
 		Email:        duplicateEmail,

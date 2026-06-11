@@ -12,10 +12,10 @@ import (
 func TestNewAppointment(t *testing.T) {
 	t.Parallel()
 
-	slotID := uuid.New()
-	patientID := uuid.New()
-	professionalID := uuid.New()
-	assistantID := uuid.New()
+	slotID := uuid.Must(uuid.NewV7())
+	patientID := uuid.Must(uuid.NewV7())
+	professionalID := uuid.Must(uuid.NewV7())
+	assistantID := uuid.Must(uuid.NewV7())
 	notes := "follow-up"
 
 	t.Run("with notes", func(t *testing.T) {
@@ -47,10 +47,10 @@ func TestNewAppointment(t *testing.T) {
 func TestNewAppointmentCreatesUniqueID(t *testing.T) {
 	t.Parallel()
 
-	slotID := uuid.New()
-	patientID := uuid.New()
-	professionalID := uuid.New()
-	assistantID := uuid.New()
+	slotID := uuid.Must(uuid.NewV7())
+	patientID := uuid.Must(uuid.NewV7())
+	professionalID := uuid.Must(uuid.NewV7())
+	assistantID := uuid.Must(uuid.NewV7())
 
 	first := appointment.NewAppointment(slotID, patientID, professionalID, assistantID, nil)
 	second := appointment.NewAppointment(slotID, patientID, professionalID, assistantID, nil)

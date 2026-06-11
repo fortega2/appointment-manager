@@ -4,6 +4,8 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
+
+	"appointment-manager/internal/domain"
 )
 
 type Assistant struct {
@@ -30,7 +32,7 @@ func NewAssistant(firstName, lastName, email, passwordHash string) (*Assistant, 
 	loweredEmail := strings.ToLower(email)
 
 	return &Assistant{
-		ID:           uuid.New(),
+		ID:           domain.NewID(),
 		FirstName:    firstName,
 		LastName:     lastName,
 		Email:        loweredEmail,

@@ -4,6 +4,8 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
+
+	"appointment-manager/internal/domain"
 )
 
 type Professional struct {
@@ -27,7 +29,7 @@ func NewProfessional(firstName, lastName, phone string) (*Professional, error) {
 	}
 
 	return &Professional{
-		ID:        uuid.New(),
+		ID:        domain.NewID(),
 		FirstName: firstName,
 		LastName:  lastName,
 		Phone:     phone,

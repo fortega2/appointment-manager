@@ -7,11 +7,17 @@ import (
 	"fmt"
 	"net/url"
 	"strings"
+	"time"
 
 	"github.com/golang-migrate/migrate/v4"
 	_ "github.com/golang-migrate/migrate/v4/database/pgx/v5" // Register pgx v5 migrate driver.
 	"github.com/golang-migrate/migrate/v4/source/iofs"
 	"github.com/jackc/pgx/v5/pgxpool"
+)
+
+const (
+	maxConnIdleTime   time.Duration = 10 * time.Minute
+	healthCheckPeriod time.Duration = 30 * time.Second
 )
 
 //go:embed migrations/*.sql
@@ -35,6 +41,12 @@ func NewPostgresPool(ctx context.Context, databaseURL string) (*pgxpool.Pool, er
 	if err != nil {
 		return nil, fmt.Errorf("parse pgx pool config: %w", err)
 	}
+
+	poolConfig.MaxConns = 20
+	poolConfig.MinConns = 2
+	poolConfig.MaxConnLifetime = time.Hour
+	poolConfig.MaxConnIdleTime = maxConnIdleTime
+	poolConfig.HealthCheckPeriod = healthCheckPeriod
 
 	pool, err := pgxpool.NewWithConfig(ctx, poolConfig)
 	if err != nil {

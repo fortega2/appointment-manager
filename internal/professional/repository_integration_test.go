@@ -49,8 +49,8 @@ func TestRepositoryListReturnsOnlyActiveProfessionals(t *testing.T) {
 	pool := newProfessionalIntegrationPool(ctx, t)
 	repo := newProfessionalIntegrationRepository(t, pool)
 
-	activeID := uuid.New()
-	inactiveID := uuid.New()
+	activeID := uuid.Must(uuid.NewV7())
+	inactiveID := uuid.Must(uuid.NewV7())
 
 	insertProfessional(ctx, t, pool, activeID, "Laura", "Gomez", "1111111111", true)
 	insertProfessional(ctx, t, pool, inactiveID, "Ana", "Perez", "2222222222", false)
@@ -74,7 +74,7 @@ func TestRepositoryListReturnsEmptySliceWhenNoActiveProfessionals(t *testing.T) 
 	pool := newProfessionalIntegrationPool(ctx, t)
 	repo := newProfessionalIntegrationRepository(t, pool)
 
-	insertProfessional(ctx, t, pool, uuid.New(), "Laura", "Gomez", "1111111111", false)
+	insertProfessional(ctx, t, pool, uuid.Must(uuid.NewV7()), "Laura", "Gomez", "1111111111", false)
 
 	list, err := repo.List(ctx)
 	require.NoError(t, err)

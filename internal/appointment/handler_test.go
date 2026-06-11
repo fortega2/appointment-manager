@@ -165,7 +165,7 @@ func TestListEndpointReturnsInternalServerErrorWhenServiceFails(t *testing.T) {
 func TestCreateEndpointValidationAndBusinessErrors(t *testing.T) {
 	t.Parallel()
 
-	body := `{"slot_id":"` + uuid.NewString() + `","patient_id":"` + uuid.NewString() + `","professional_id":"` + uuid.NewString() + `","assistant_id":"` + uuid.NewString() + `"}`
+	body := `{"slot_id":"` + uuid.Must(uuid.NewV7()).String() + `","patient_id":"` + uuid.Must(uuid.NewV7()).String() + `","professional_id":"` + uuid.Must(uuid.NewV7()).String() + `","assistant_id":"` + uuid.Must(uuid.NewV7()).String() + `"}`
 
 	tests := []struct {
 		name           string
@@ -202,7 +202,7 @@ func TestCreateEndpointValidationAndBusinessErrors(t *testing.T) {
 func TestCancelEndpointValidationAndBusinessErrors(t *testing.T) {
 	t.Parallel()
 
-	id := uuid.New()
+	id := uuid.Must(uuid.NewV7())
 
 	tests := []struct {
 		name           string
@@ -242,7 +242,7 @@ func TestCancelEndpointValidationAndBusinessErrors(t *testing.T) {
 func TestAttendEndpointValidationAndBusinessErrors(t *testing.T) {
 	t.Parallel()
 
-	id := uuid.New()
+	id := uuid.Must(uuid.NewV7())
 
 	tests := []struct {
 		name           string
