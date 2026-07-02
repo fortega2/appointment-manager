@@ -141,6 +141,7 @@ func TestLogoutEndpointIdempotent(t *testing.T) {
 
 			req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, authLogoutPath, nil)
 			if tt.withCookie {
+				//nolint:gosec // G124 false positive: this is a request cookie via AddCookie, which only serializes Name/Value; Secure/HttpOnly/SameSite are meaningless here.
 				req.AddCookie(&http.Cookie{Name: session.CookieName, Value: "session-id"})
 			}
 			rec := httptest.NewRecorder()

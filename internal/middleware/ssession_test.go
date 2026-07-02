@@ -45,6 +45,7 @@ func TestSessionMiddlewareRejectsInvalidCookieAndClearsIt(t *testing.T) {
 	}))
 
 	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, middlewareSessionPath, nil)
+	//nolint:gosec // G124 false positive: this is a request cookie via AddCookie, which only serializes Name/Value; Secure/HttpOnly/SameSite are meaningless here.
 	req.AddCookie(&http.Cookie{Name: session.CookieName, Value: "missing"})
 	rec := httptest.NewRecorder()
 
@@ -77,6 +78,7 @@ func TestSessionMiddlewareInjectsSessionInContext(t *testing.T) {
 	}))
 
 	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, middlewareSessionPath, nil)
+	//nolint:gosec // G124 false positive: this is a request cookie via AddCookie, which only serializes Name/Value; Secure/HttpOnly/SameSite are meaningless here.
 	req.AddCookie(&http.Cookie{Name: session.CookieName, Value: sessionID})
 	rec := httptest.NewRecorder()
 

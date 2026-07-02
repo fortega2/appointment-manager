@@ -71,6 +71,8 @@ Guidance for coding agents working in `appointment-manager`.
 Notes:
 - Lint is strict (security, complexity, modernize, sloglint, copyloopvar, etc.).
 - `//nolint:<linter>` must be specific and justified.
+- `golangci-lint` must be built with a Go toolchain >= the `go` directive in `go.mod` (currently `1.26.3`), otherwise it refuses to run (`can't load config: the Go language version ... is lower than the targeted Go version`). If your installed binary is out of date, update it with `go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest` (or per https://golangci-lint.run/welcome/install/).
+- `formatters.enable` in `.golangci.yml` includes `gofmt`, so `golangci-lint run ./...` also fails on unformatted files — a separate manual `gofmt -w` pass shouldn't normally be needed, but is listed above as a fallback.
 
 ## 4) Test Commands
 

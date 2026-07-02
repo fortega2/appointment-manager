@@ -112,6 +112,7 @@ func TestLogoutEndpointIsIdempotent(t *testing.T) {
 	require.NoError(t, err)
 
 	withCookieReq := httptest.NewRequestWithContext(ctx, http.MethodPost, authPathLogout, nil)
+	//nolint:gosec // G124 false positive: this is a request cookie via AddCookie, which only serializes Name/Value; Secure/HttpOnly/SameSite are meaningless here.
 	withCookieReq.AddCookie(&http.Cookie{Name: session.CookieName, Value: sessionID})
 	withCookieRec := httptest.NewRecorder()
 	mux.ServeHTTP(withCookieRec, withCookieReq)

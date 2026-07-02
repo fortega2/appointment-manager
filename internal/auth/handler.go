@@ -128,6 +128,7 @@ func (h *Handler) loginAPIHandler() http.HandlerFunc {
 			return
 		}
 
+		//nolint:gosec // G124 false positive: Secure is dynamically !h.isDevelopment (true in prod, false only for local HTTP dev); HttpOnly/SameSite are already set.
 		http.SetCookie(w, &http.Cookie{
 			Name:     session.CookieName,
 			Value:    sessionID,
@@ -147,6 +148,7 @@ func (h *Handler) logoutAPIHandler() http.HandlerFunc {
 			h.store.Delete(cookie.Value)
 		}
 
+		//nolint:gosec // G124 false positive: Secure is dynamically !h.isDevelopment (true in prod, false only for local HTTP dev); HttpOnly/SameSite are already set.
 		http.SetCookie(w, &http.Cookie{
 			Name:     session.CookieName,
 			Path:     "/",
@@ -218,6 +220,7 @@ func (h *Handler) processLoginUIHandler() http.HandlerFunc {
 			h.renderError(w, r, "Error interno al crear sesión")
 			return
 		}
+		//nolint:gosec // G124 false positive: Secure is dynamically !h.isDevelopment (true in prod, false only for local HTTP dev); HttpOnly/SameSite are already set.
 		http.SetCookie(w, &http.Cookie{
 			Name:     session.CookieName,
 			Value:    sessionID,
@@ -258,6 +261,7 @@ func (h *Handler) logoutUIHandler() http.HandlerFunc {
 			h.store.Delete(cookie.Value)
 		}
 
+		//nolint:gosec // G124 false positive: Secure is dynamically !h.isDevelopment (true in prod, false only for local HTTP dev); HttpOnly/SameSite are already set.
 		http.SetCookie(w, &http.Cookie{
 			Name:     session.CookieName,
 			Path:     "/",
