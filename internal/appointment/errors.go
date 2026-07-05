@@ -31,6 +31,8 @@ var (
 	ErrMultipleActiveAppointmentsDetected = errors.New("patient cannot have multiple active appointments in overlapping time slots")
 	ErrSlotBlocked                        = errors.New("slot is blocked")
 	ErrSlotWithoutAvailability            = errors.New("slot has no available spots")
+	ErrNoActivePrescription               = errors.New("patient has no active prescription")
+	ErrNoRemainingSessions                = errors.New("prescription has no remaining sessions")
 	ErrInvalidAppointmentReference        = errors.New("invalid appointment reference")
 	ErrAppointmentStatusChanged           = errors.New("appointment status changed")
 	ErrAppointmentCannotAttendNow         = errors.New("appointment can only be attended during slot time")

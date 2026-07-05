@@ -435,6 +435,10 @@ func resolveUICreateProblem(err error) (int, string) {
 		return http.StatusConflict, "Selected slot is blocked"
 	case errors.Is(err, ErrSlotWithoutAvailability):
 		return http.StatusConflict, "Selected slot has no available spots"
+	case errors.Is(err, ErrNoActivePrescription):
+		return http.StatusConflict, "Patient has no active prescription"
+	case errors.Is(err, ErrNoRemainingSessions):
+		return http.StatusConflict, "Patient's prescription has no remaining sessions"
 	case errors.Is(err, ErrInvalidAppointmentReference):
 		return http.StatusNotFound, "Referenced entity not found"
 	default:

@@ -23,6 +23,12 @@ const (
 	constraintAppointmentProfessionalFK    = "fk_appointment_professional"
 	constraintAppointmentAssistantFK       = "fk_appointment_assistant"
 
+	// Prescription status value used to mark a prescription as fully consumed.
+	// Mirrors prescription.StatusCompleted; kept as a local literal so the
+	// appointment repository stays decoupled from the prescription package,
+	// consistent with how it queries the patient and slot tables directly.
+	prescriptionStatusCompleted int16 = 2
+
 	listAppointmentsQuery = `
 		SELECT
 			id,
@@ -50,9 +56,38 @@ const (
 			patient_id,
 			professional_id,
 			assistant_id,
-			notes
+			notes,
+			prescription_id
 		)
-		VALUES ($1, $2, $3, $4, $5, $6)
+		VALUES ($1, $2, $3, $4, $5, $6, $7)
+	`
+	selectActivePrescriptionForUpdateQuery = `
+		SELECT
+			id,
+			total_sessions
+		FROM
+			prescription
+		WHERE
+			patient_id = $1
+			AND status = 1
+		FOR UPDATE
+	`
+	countConsumedSessionsQuery = `
+		SELECT
+			COUNT(*)
+		FROM
+			appointment
+		WHERE
+			prescription_id = $1
+			AND status IN ($2, $3, $4)
+	`
+	completePrescriptionQuery = `
+		UPDATE
+			prescription
+		SET
+			status = $1
+		WHERE
+			id = $2
 	`
 	selectPatientForUpdateQuery = `
 		SELECT
@@ -187,28 +222,13 @@ func (r *PostgresRepository) Create(ctx context.Context, appoint Appointment) (u
 		return uuid.Nil, err
 	}
 
-	blocked, maxCapacity, err := fetchSlotRulesForUpdate(ctx, tx, appoint.SlotID)
+	prescriptionID, isLastSession, err := reserveActivePrescriptionSession(ctx, tx, appoint.PatientID)
 	if err != nil {
 		return uuid.Nil, err
-	}
-	if blocked {
-		return uuid.Nil, ErrSlotBlocked
 	}
 
-	confirmedAppointments, err := countConfirmedAppointmentsInSlot(ctx, tx, appoint.SlotID)
-	if err != nil {
+	if err := validateSlotForBooking(ctx, tx, appoint.PatientID, appoint.SlotID); err != nil {
 		return uuid.Nil, err
-	}
-	if confirmedAppointments >= int64(maxCapacity) {
-		return uuid.Nil, ErrSlotWithoutAvailability
-	}
-
-	hasOverlappingAppointment, err := hasOverlappingConfirmedAppointment(ctx, tx, appoint.PatientID, appoint.SlotID)
-	if err != nil {
-		return uuid.Nil, err
-	}
-	if hasOverlappingAppointment {
-		return uuid.Nil, ErrMultipleActiveAppointmentsDetected
 	}
 
 	if _, err := tx.Exec(
@@ -220,11 +240,21 @@ func (r *PostgresRepository) Create(ctx context.Context, appoint Appointment) (u
 		appoint.ProfessionalID,
 		appoint.AssistantID,
 		normalizeNotes(appoint.Notes),
+		prescriptionID,
 	); err != nil {
 		if mappedErr := mapCreateAppointmentConstraintError(err); mappedErr != nil {
 			return uuid.Nil, mappedErr
 		}
 		return uuid.Nil, fmt.Errorf("create db appointment: %w", err)
+	}
+
+	// This booking consumed the last authorized session, so the prescription
+	// is completed within the same transaction. This frees the partial unique
+	// index so the patient can later be assigned a new active prescription.
+	if isLastSession {
+		if err := completePrescription(ctx, tx, prescriptionID); err != nil {
+			return uuid.Nil, err
+		}
 	}
 
 	if err := tx.Commit(ctx); err != nil {
@@ -293,6 +323,96 @@ func lockPatientForUpdate(ctx context.Context, tx pgx.Tx, patientID uuid.UUID) e
 			return ErrInvalidAppointmentReference
 		}
 		return fmt.Errorf("lock patient for update: %w", err)
+	}
+
+	return nil
+}
+
+// validateSlotForBooking enforces the slot-level booking rules against the
+// locked slot: it must not be blocked, must have remaining capacity, and must
+// not overlap another confirmed appointment for the same patient.
+func validateSlotForBooking(ctx context.Context, tx pgx.Tx, patientID, slotID uuid.UUID) error {
+	blocked, maxCapacity, err := fetchSlotRulesForUpdate(ctx, tx, slotID)
+	if err != nil {
+		return err
+	}
+	if blocked {
+		return ErrSlotBlocked
+	}
+
+	confirmedAppointments, err := countConfirmedAppointmentsInSlot(ctx, tx, slotID)
+	if err != nil {
+		return err
+	}
+	if confirmedAppointments >= int64(maxCapacity) {
+		return ErrSlotWithoutAvailability
+	}
+
+	hasOverlappingAppointment, err := hasOverlappingConfirmedAppointment(ctx, tx, patientID, slotID)
+	if err != nil {
+		return err
+	}
+	if hasOverlappingAppointment {
+		return ErrMultipleActiveAppointmentsDetected
+	}
+
+	return nil
+}
+
+// reserveActivePrescriptionSession locks the patient's active prescription,
+// verifies it still has an authorized session available, and reports whether
+// this booking consumes its last one (so the caller can complete it).
+func reserveActivePrescriptionSession(ctx context.Context, tx pgx.Tx, patientID uuid.UUID) (uuid.UUID, bool, error) {
+	prescriptionID, totalSessions, err := lockActivePrescriptionForUpdate(ctx, tx, patientID)
+	if err != nil {
+		return uuid.Nil, false, err
+	}
+
+	consumedSessions, err := countConsumedSessions(ctx, tx, prescriptionID)
+	if err != nil {
+		return uuid.Nil, false, err
+	}
+	if consumedSessions >= int64(totalSessions) {
+		return uuid.Nil, false, ErrNoRemainingSessions
+	}
+
+	isLastSession := consumedSessions+1 >= int64(totalSessions)
+
+	return prescriptionID, isLastSession, nil
+}
+
+func lockActivePrescriptionForUpdate(ctx context.Context, tx pgx.Tx, patientID uuid.UUID) (uuid.UUID, int16, error) {
+	var prescriptionID uuid.UUID
+	var totalSessions int16
+	if err := tx.QueryRow(ctx, selectActivePrescriptionForUpdateQuery, patientID).Scan(&prescriptionID, &totalSessions); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return uuid.Nil, 0, ErrNoActivePrescription
+		}
+		return uuid.Nil, 0, fmt.Errorf("lock active prescription for update: %w", err)
+	}
+
+	return prescriptionID, totalSessions, nil
+}
+
+func countConsumedSessions(ctx context.Context, tx pgx.Tx, prescriptionID uuid.UUID) (int64, error) {
+	var consumedCount int64
+	if err := tx.QueryRow(
+		ctx,
+		countConsumedSessionsQuery,
+		prescriptionID,
+		StatusConfirmed,
+		StatusAbsent,
+		StatusAttended,
+	).Scan(&consumedCount); err != nil {
+		return 0, fmt.Errorf("count consumed sessions: %w", err)
+	}
+
+	return consumedCount, nil
+}
+
+func completePrescription(ctx context.Context, tx pgx.Tx, prescriptionID uuid.UUID) error {
+	if _, err := tx.Exec(ctx, completePrescriptionQuery, prescriptionStatusCompleted, prescriptionID); err != nil {
+		return fmt.Errorf("complete prescription: %w", err)
 	}
 
 	return nil

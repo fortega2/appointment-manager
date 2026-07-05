@@ -39,7 +39,9 @@ func problemFromCreateError(err error, path string) web.ProblemDetail {
 		return web.NewProblem(http.StatusUnprocessableEntity, web.ProblemTypeValidationFailed, err.Error(), path)
 	case errors.Is(err, ErrMultipleActiveAppointmentsDetected),
 		errors.Is(err, ErrSlotBlocked),
-		errors.Is(err, ErrSlotWithoutAvailability):
+		errors.Is(err, ErrSlotWithoutAvailability),
+		errors.Is(err, ErrNoActivePrescription),
+		errors.Is(err, ErrNoRemainingSessions):
 		return web.NewProblem(http.StatusConflict, web.ProblemTypeConflict, err.Error(), path)
 	case errors.Is(err, ErrInvalidAppointmentReference):
 		return web.NewProblem(http.StatusUnprocessableEntity, web.ProblemTypeValidationFailed, err.Error(), path)

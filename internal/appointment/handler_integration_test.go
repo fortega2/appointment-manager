@@ -43,6 +43,10 @@ const (
 	statusCancelledValue int16 = 2
 	statusAbsentValue    int16 = 3
 	statusAttendedValue  int16 = 4
+
+	// Generous session count so seeded patients can always book in tests that
+	// are not specifically exercising prescription-session limits.
+	defaultPrescriptionSessions int16 = 100
 )
 
 func TestListEndpointFiltersAndPaginatesByStatus(t *testing.T) {
@@ -532,6 +536,10 @@ func seedAppointments(ctx context.Context, t *testing.T, pool *pgxpool.Pool) app
 	`, patientOneID, patientTwoID, patientThreeID)
 	require.NoError(t, err)
 
+	insertActivePrescription(ctx, t, pool, patientOneID, defaultPrescriptionSessions)
+	insertActivePrescription(ctx, t, pool, patientTwoID, defaultPrescriptionSessions)
+	insertActivePrescription(ctx, t, pool, patientThreeID, defaultPrescriptionSessions)
+
 	_, err = pool.Exec(ctx, `
 		INSERT INTO slot (id, professional_id, date, start_time, end_time, max_capacity, blocked)
 		VALUES
@@ -542,20 +550,20 @@ func seedAppointments(ctx context.Context, t *testing.T, pool *pgxpool.Pool) app
 	require.NoError(t, err)
 
 	_, err = pool.Exec(ctx, `
-		INSERT INTO appointment (id, slot_id, patient_id, professional_id, assistant_id, status, notes, created_at)
-		VALUES ($1, $2, $3, $4, $5, 1, NULL, '2026-01-10T08:00:00Z')
+		INSERT INTO appointment (id, slot_id, patient_id, professional_id, assistant_id, status, notes, created_at, prescription_id)
+		VALUES ($1, $2, $3, $4, $5, 1, NULL, '2026-01-10T08:00:00Z', (SELECT id FROM prescription WHERE patient_id = $3 AND status = 1))
 	`, confirmedOldestID, slotOneID, patientOneID, professionalID, assistantID)
 	require.NoError(t, err)
 
 	_, err = pool.Exec(ctx, `
-		INSERT INTO appointment (id, slot_id, patient_id, professional_id, assistant_id, status, notes, created_at)
-		VALUES ($1, $2, $3, $4, $5, 1, NULL, '2026-01-10T09:00:00Z')
+		INSERT INTO appointment (id, slot_id, patient_id, professional_id, assistant_id, status, notes, created_at, prescription_id)
+		VALUES ($1, $2, $3, $4, $5, 1, NULL, '2026-01-10T09:00:00Z', (SELECT id FROM prescription WHERE patient_id = $3 AND status = 1))
 	`, confirmedNewestID, slotTwoID, patientTwoID, professionalID, assistantID)
 	require.NoError(t, err)
 
 	_, err = pool.Exec(ctx, `
-		INSERT INTO appointment (id, slot_id, patient_id, professional_id, assistant_id, status, notes, created_at)
-		VALUES ($1, $2, $3, $4, $5, 2, NULL, '2026-01-10T10:00:00Z')
+		INSERT INTO appointment (id, slot_id, patient_id, professional_id, assistant_id, status, notes, created_at, prescription_id)
+		VALUES ($1, $2, $3, $4, $5, 2, NULL, '2026-01-10T10:00:00Z', (SELECT id FROM prescription WHERE patient_id = $3 AND status = 1))
 	`, cancelledID, slotThreeID, patientThreeID, professionalID, assistantID)
 	require.NoError(t, err)
 
@@ -821,7 +829,18 @@ func insertAssistant(ctx context.Context, t *testing.T, pool *pgxpool.Pool, assi
 	require.NoError(t, err)
 }
 
+// insertPatient seeds a patient together with an active prescription so the
+// patient can immediately book appointments (every appointment consumes a
+// prescription session). Use insertPatientWithoutPrescription when a test needs
+// a patient that cannot yet book.
 func insertPatient(ctx context.Context, t *testing.T, pool *pgxpool.Pool, patientID uuid.UUID) {
+	t.Helper()
+
+	insertPatientWithoutPrescription(ctx, t, pool, patientID)
+	insertActivePrescription(ctx, t, pool, patientID, defaultPrescriptionSessions)
+}
+
+func insertPatientWithoutPrescription(ctx context.Context, t *testing.T, pool *pgxpool.Pool, patientID uuid.UUID) {
 	t.Helper()
 
 	_, err := pool.Exec(ctx, `
@@ -829,6 +848,25 @@ func insertPatient(ctx context.Context, t *testing.T, pool *pgxpool.Pool, patien
 		VALUES ($1, 'Pablo', 'Sosa', '1111111111', $2, 1, $3, NULL)
 	`, patientID, patientID.String()+"@clinic.test", patientID.String()[:11])
 	require.NoError(t, err)
+}
+
+func insertActivePrescription(
+	ctx context.Context,
+	t *testing.T,
+	pool *pgxpool.Pool,
+	patientID uuid.UUID,
+	totalSessions int16,
+) uuid.UUID {
+	t.Helper()
+
+	prescriptionID := uuid.Must(uuid.NewV7())
+	_, err := pool.Exec(ctx, `
+		INSERT INTO prescription (id, patient_id, file_path, total_sessions)
+		VALUES ($1, $2, $3, $4)
+	`, prescriptionID, patientID, "prescriptions/"+prescriptionID.String()+".pdf", totalSessions)
+	require.NoError(t, err)
+
+	return prescriptionID
 }
 
 func insertSlot(
@@ -848,8 +886,20 @@ func insertSlot(
 	_, err := pool.Exec(ctx, `
 		INSERT INTO slot (id, professional_id, date, start_time, end_time, max_capacity, blocked)
 		VALUES ($1, $2, $3, $4, $5, $6, $7)
-	`, slotID, professionalID, date, startTime, endTime, maxCapacity, blocked)
+	`, slotID, professionalID, date, slotTimestamp(date, startTime), slotTimestamp(date, endTime), maxCapacity, blocked)
 	require.NoError(t, err)
+}
+
+// slotTimestamp normalizes a slot time value into a full TIMESTAMPTZ literal.
+// Some callers pass a complete RFC3339 timestamp (e.g. "2026-01-01T09:00:00Z"),
+// while others pass only a time-of-day (e.g. "09:00:00+00"); the latter is
+// combined with the slot date so it is valid for the TIMESTAMPTZ column.
+func slotTimestamp(date, value string) string {
+	if strings.Contains(value, "T") {
+		return value
+	}
+
+	return date + " " + value
 }
 
 func insertAppointment(
@@ -867,8 +917,8 @@ func insertAppointment(
 	t.Helper()
 
 	_, err := pool.Exec(ctx, `
-		INSERT INTO appointment (id, slot_id, patient_id, professional_id, assistant_id, status, notes)
-		VALUES ($1, $2, $3, $4, $5, $6, $7)
+		INSERT INTO appointment (id, slot_id, patient_id, professional_id, assistant_id, status, notes, prescription_id)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, (SELECT id FROM prescription WHERE patient_id = $3 AND status = 1))
 	`, appointmentID, slotID, patientID, professionalID, assistantID, status, notes)
 	require.NoError(t, err)
 }
