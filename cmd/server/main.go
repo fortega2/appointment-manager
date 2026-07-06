@@ -384,9 +384,9 @@ func initializeUIAppointmentHandler(logger *slog.Logger, pool *pgxpool.Pool) (*a
 	if err != nil {
 		return nil, fmt.Errorf("failed to create appointment service: %w", err)
 	}
-	patientRepo, err := patient.NewRepository(pool)
+	prescriptionQuery, err := prescription.NewQuery(pool)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create patient repository for appointment UI: %w", err)
+		return nil, fmt.Errorf("failed to create prescription query for appointment UI: %w", err)
 	}
 	profRepo, err := professional.NewRepository(pool)
 	if err != nil {
@@ -400,7 +400,7 @@ func initializeUIAppointmentHandler(logger *slog.Logger, pool *pgxpool.Pool) (*a
 	if err != nil {
 		return nil, fmt.Errorf("failed to create slot query for appointment UI: %w", err)
 	}
-	appointmentHandler, err := appointment.NewUIHandler(logger, appointmentService, appointmentQuery, patientRepo, profRepo, asstRepo, slotQuery)
+	appointmentHandler, err := appointment.NewUIHandler(logger, appointmentService, appointmentQuery, prescriptionQuery, profRepo, asstRepo, slotQuery)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create appointment UI handler: %w", err)
 	}

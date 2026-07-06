@@ -26,7 +26,8 @@ const (
 	listEligiblePatientsQuery = `
 		SELECT
 			p.id,
-			p.first_name || ' ' || p.last_name AS full_name
+			p.first_name || ' ' || p.last_name AS full_name,
+			b.remaining_sessions
 		FROM
 			public.patient_session_balance b
 		INNER JOIN
@@ -64,6 +65,15 @@ type Balance struct {
 type PatientOption struct {
 	ID    string
 	Label string
+}
+
+// EligiblePatient is a patient with a remaining session balance, used to
+// populate the appointment booking form's patient dropdown and to show the
+// selected patient's remaining sessions without a round trip.
+type EligiblePatient struct {
+	ID                string
+	Label             string
+	RemainingSessions int
 }
 
 type Query struct {
@@ -107,8 +117,27 @@ func (q *Query) ListActiveBalances(ctx context.Context) ([]Balance, error) {
 	return balances, nil
 }
 
-func (q *Query) EligiblePatients(ctx context.Context) ([]PatientOption, error) {
-	return q.listPatientOptions(ctx, listEligiblePatientsQuery, "eligible patients")
+func (q *Query) EligiblePatients(ctx context.Context) ([]EligiblePatient, error) {
+	rows, err := q.pool.Query(ctx, listEligiblePatientsQuery)
+	if err != nil {
+		return nil, fmt.Errorf("list eligible patients: query: %w", err)
+	}
+	defer rows.Close()
+
+	patients := make([]EligiblePatient, 0)
+	for rows.Next() {
+		var p EligiblePatient
+		if err := rows.Scan(&p.ID, &p.Label, &p.RemainingSessions); err != nil {
+			return nil, fmt.Errorf("list eligible patients: scan: %w", err)
+		}
+		patients = append(patients, p)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("list eligible patients: iterate: %w", err)
+	}
+
+	return patients, nil
 }
 
 func (q *Query) AvailablePatients(ctx context.Context) ([]PatientOption, error) {

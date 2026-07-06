@@ -14,8 +14,9 @@ type SlotOptionDTO struct {
 }
 
 type PatientOptionDTO struct {
-	ID    string
-	Label string
+	ID                string
+	Label             string
+	RemainingSessions int
 }
 
 type ProfessionalOptionDTO struct {

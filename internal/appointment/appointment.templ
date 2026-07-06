@@ -2,6 +2,7 @@ package appointment
 
 import (
 	"fmt"
+	"strconv"
 	"appointment-manager/internal/ui/form"
 	"appointment-manager/internal/ui/layout"
 )
@@ -125,7 +126,7 @@ templ Form(
 	profOpts []ProfessionalOptionDTO,
 	asstOpts []AssistantOptionDTO,
 ) {
-	<div>
+	<div x-data="{ remainingSessions: '' }">
 		<h2 class="text-xl font-bold text-gray-900 mb-4">Create Appointment</h2>
 
 		<form
@@ -155,13 +156,17 @@ templ Form(
 					id="patient_id"
 					name="patient_id"
 					required
+					@change="remainingSessions = $event.target.selectedOptions[0]?.dataset.remaining || ''"
 					class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm bg-white"
 				>
 					<option value="" disabled selected?={ req.PatientID == "" }>Select a patient</option>
 					for _, p := range patientOpts {
-						<option value={ p.ID } selected?={ req.PatientID == p.ID }>{ p.Label }</option>
+						<option value={ p.ID } data-remaining={ strconv.Itoa(p.RemainingSessions) } selected?={ req.PatientID == p.ID }>{ p.Label }</option>
 					}
 				</select>
+				<p x-show="remainingSessions !== ''" x-cloak class="mt-1 text-xs text-gray-500">
+					Remaining sessions: <span x-text="remainingSessions" class="font-medium"></span>
+				</p>
 			</div>
 
 			<div>

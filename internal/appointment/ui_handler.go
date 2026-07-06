@@ -2,7 +2,7 @@ package appointment
 
 import (
 	"appointment-manager/internal/assistant"
-	"appointment-manager/internal/patient"
+	"appointment-manager/internal/prescription"
 	"appointment-manager/internal/professional"
 	"appointment-manager/internal/slot"
 	"appointment-manager/internal/ui/components"
@@ -22,18 +22,18 @@ const (
 type UIHandler struct {
 	Handler
 
-	query       *Query
-	patientRepo *patient.Repository
-	profRepo    *professional.Repository
-	asstRepo    *assistant.PostgresRepository
-	slotQuery   *slot.Query
+	query             *Query
+	prescriptionQuery *prescription.Query
+	profRepo          *professional.Repository
+	asstRepo          *assistant.PostgresRepository
+	slotQuery         *slot.Query
 }
 
 func NewUIHandler(
 	logger *slog.Logger,
 	service service,
 	query *Query,
-	patientRepo *patient.Repository,
+	prescriptionQuery *prescription.Query,
 	profRepo *professional.Repository,
 	asstRepo *assistant.PostgresRepository,
 	slotQuery *slot.Query,
@@ -50,8 +50,8 @@ func NewUIHandler(
 		return nil, ErrNilQuery
 	}
 
-	if patientRepo == nil {
-		return nil, ErrNilPatientRepository
+	if prescriptionQuery == nil {
+		return nil, ErrNilPrescriptionQuery
 	}
 
 	if profRepo == nil {
@@ -72,7 +72,7 @@ func NewUIHandler(
 			logger:  logger,
 		},
 		query,
-		patientRepo,
+		prescriptionQuery,
 		profRepo,
 		asstRepo,
 		slotQuery,
@@ -177,17 +177,18 @@ func (h *UIHandler) loadAvailableSlotOptions(ctx context.Context, lg *slog.Logge
 }
 
 func (h *UIHandler) loadPatientOptions(ctx context.Context, lg *slog.Logger) ([]PatientOptionDTO, error) {
-	patients, err := h.patientRepo.List(ctx)
+	patients, err := h.prescriptionQuery.EligiblePatients(ctx)
 	if err != nil {
-		lg.ErrorContext(ctx, "failed to list patients for form", slog.Any("error", err))
+		lg.ErrorContext(ctx, "failed to list eligible patients for form", slog.Any("error", err))
 		return nil, err
 	}
 
 	options := make([]PatientOptionDTO, len(patients))
 	for i, p := range patients {
 		options[i] = PatientOptionDTO{
-			ID:    p.ID,
-			Label: fmt.Sprintf("%s %s", p.FirstName, p.LastName),
+			ID:                p.ID,
+			Label:             p.Label,
+			RemainingSessions: p.RemainingSessions,
 		}
 	}
 	return options, nil

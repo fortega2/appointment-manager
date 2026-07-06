@@ -51,6 +51,7 @@ func TestQueryListActiveBalancesEligibleAndAvailablePatients(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, eligible, 1)
 	assert.Equal(t, activePatient.String(), eligible[0].ID)
+	assert.Equal(t, queryActivePrescriptionSessions, eligible[0].RemainingSessions)
 
 	available, err := query.AvailablePatients(ctx)
 	require.NoError(t, err)
