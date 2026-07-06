@@ -1,0 +1,174 @@
+package prescription
+
+import (
+	"fmt"
+	"strconv"
+
+	"appointment-manager/internal/ui/layout"
+)
+
+templ Dashboard(balances []Balance) {
+	@layout.Base("Prescriptions", true) {
+		<div class="w-full max-w-5xl mx-auto" x-data="{ modalOpen: false }" @close-modal.window="modalOpen = false">
+			<div class="mb-4 flex items-center justify-end">
+				<button
+					type="button"
+					hx-get="/prescriptions/new"
+					hx-target="#modal-content"
+					@click="modalOpen = true"
+					class="bg-indigo-600 text-white text-sm font-medium px-4 py-2 rounded-md hover:bg-indigo-700 transition-colors"
+				>
+					Load Prescription
+				</button>
+			</div>
+
+			if len(balances) == 0 {
+				<div id="prescriptions-table" class="mt-6 p-12 bg-white border border-gray-200 rounded-lg text-center shadow-sm">
+					<svg class="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+						<path vector-effect="non-scaling-stroke" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+					</svg>
+					<h3 class="mt-2 text-sm font-semibold text-gray-900">There are no active prescriptions</h3>
+					<p class="mt-1 text-sm text-gray-500">Load a prescription to authorize sessions for a patient.</p>
+				</div>
+			} else {
+				@Table(balances)
+			}
+
+			<div
+				x-show="modalOpen"
+				class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 transition-opacity"
+				x-cloak
+			>
+				<div
+					class="bg-white rounded-lg shadow-xl w-full max-w-lg p-6 relative text-left"
+					@click.away="modalOpen = false"
+				>
+					<button @click="modalOpen = false" class="absolute top-4 right-4 text-gray-400 hover:text-gray-600">
+						<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+					</button>
+
+					<div id="modal-content"></div>
+				</div>
+			</div>
+		</div>
+	}
+}
+
+templ Table(balances []Balance) {
+	<div id="prescriptions-table" class="overflow-x-auto shadow-sm border border-gray-200 rounded-lg">
+		<table class="w-full text-sm text-left border-collapse">
+			<thead class="bg-gray-100 text-gray-600 uppercase text-xs">
+				<tr>
+					<th class="px-4 py-3">Patient</th>
+					<th class="px-4 py-3">Total Sessions</th>
+					<th class="px-4 py-3">Remaining Sessions</th>
+					<th class="px-4 py-3">Document</th>
+					<th class="px-4 py-3">Action</th>
+				</tr>
+			</thead>
+			<tbody class="divide-y divide-gray-200">
+				for _, b := range balances {
+					<tr class="bg-white hover:bg-gray-50 transition-colors">
+						<td class="px-4 py-3 text-gray-800">{ b.PatientFullName }</td>
+						<td class="px-4 py-3 text-gray-500">{ strconv.Itoa(b.TotalSessions) }</td>
+						<td class="px-4 py-3 text-gray-500">{ strconv.Itoa(b.RemainingSessions) }</td>
+						<td class="px-4 py-3">
+							<a
+								href={ templ.URL(fmt.Sprintf("/prescriptions/%s/file", b.PrescriptionID)) }
+								target="_blank"
+								rel="noopener noreferrer"
+								class="text-indigo-600 hover:text-indigo-900"
+							>
+								View
+							</a>
+						</td>
+						<td class="px-4 py-3 text-center align-middle">
+							<button
+								type="button"
+								title="Cancel"
+								aria-label="Cancel Prescription"
+								hx-post={ string(templ.URL(fmt.Sprintf("/prescriptions/%s/cancel", b.PrescriptionID))) }
+								hx-target="#prescriptions-table"
+								hx-swap="outerHTML"
+								hx-confirm="Cancel this prescription? The patient will need a new one loaded before booking again."
+								class="text-red-600 hover:text-red-900"
+							>
+								✖
+							</button>
+						</td>
+					</tr>
+				}
+			</tbody>
+		</table>
+	</div>
+}
+
+templ Form(patients []PatientOption, actionURL string) {
+	<div>
+		<h2 class="text-xl font-bold text-gray-900 mb-4">Load Prescription</h2>
+
+		<form
+			hx-post={ actionURL }
+			hx-encoding="multipart/form-data"
+			hx-target="#prescriptions-table"
+			hx-swap="outerHTML"
+			class="space-y-4"
+		>
+			<div>
+				<label for="patient_id" class="block text-sm font-medium text-gray-700">Patient</label>
+				<select
+					id="patient_id"
+					name="patient_id"
+					required
+					class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm bg-white"
+				>
+					<option value="" disabled selected>Select a patient</option>
+					for _, p := range patients {
+						<option value={ p.ID }>{ p.Label }</option>
+					}
+				</select>
+			</div>
+
+			<div>
+				<label for="total_sessions" class="block text-sm font-medium text-gray-700">Total Sessions</label>
+				<input
+					type="number"
+					id="total_sessions"
+					name="total_sessions"
+					min="1"
+					step="1"
+					required
+					class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+				/>
+			</div>
+
+			<div>
+				<label for="document" class="block text-sm font-medium text-gray-700">Document</label>
+				<input
+					type="file"
+					id="document"
+					name="document"
+					accept=".pdf,.jpg,.jpeg,.png"
+					required
+					class="mt-1 block w-full text-sm text-gray-700 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-medium file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100"
+				/>
+			</div>
+
+			<div class="mt-6 flex justify-end space-x-3">
+				<button
+					type="button"
+					@click="modalOpen = false"
+					class="bg-white py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+				>
+					Cancel
+				</button>
+				<button
+					type="submit"
+					class="inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+				>
+					Save
+				</button>
+			</div>
+		</form>
+	</div>
+}

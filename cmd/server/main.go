@@ -10,6 +10,7 @@ import (
 	"appointment-manager/internal/middleware"
 	"appointment-manager/internal/password"
 	"appointment-manager/internal/patient"
+	"appointment-manager/internal/prescription"
 	"appointment-manager/internal/professional"
 	"appointment-manager/internal/server"
 	"appointment-manager/internal/session"
@@ -28,6 +29,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/joho/godotenv"
 )
 
 const (
@@ -62,6 +64,14 @@ func run() error {
 	}))
 	logger.Info("starting server")
 
+	if err := godotenv.Load(); err != nil {
+		if !os.IsNotExist(err) {
+			logger.Error("failed to load .env file", slog.Any("error", err))
+			return err
+		}
+		logger.Debug(".env file not found, using OS environment variables")
+	}
+
 	databaseURL := strings.TrimSpace(os.Getenv(databaseURLEnv))
 	if databaseURL == "" {
 		logger.Error("database URL is not set")
@@ -79,13 +89,12 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	_ = storageClient // TODO: wire up storage client to handlers that need it
 
 	env := strings.TrimSpace(os.Getenv(environmentEnv))
 	isDev := env == "" || strings.EqualFold(env, environmentDevelopment)
 
 	sessionStore := session.NewStore()
-	handler, err := initializeServerHandlers(logger, sessionStore, pool, isDev)
+	handler, err := initializeServerHandlers(logger, sessionStore, pool, storageClient, isDev)
 	if err != nil {
 		return err
 	}
@@ -145,7 +154,7 @@ func initializeStorageClient(ctx context.Context, logger *slog.Logger) (*storage
 	return client, nil
 }
 
-func initializeServerHandlers(logger *slog.Logger, sessionStore *session.Store, pool *pgxpool.Pool, isDev bool) (http.Handler, error) {
+func initializeServerHandlers(logger *slog.Logger, sessionStore *session.Store, pool *pgxpool.Pool, storageClient *storage.Client, isDev bool) (http.Handler, error) {
 	authHandler, err := initializeAuthHandler(logger, sessionStore, pool, password.NewArgon2(), isDev)
 	if err != nil {
 		logger.Error("failed to create auth handler", slog.Any("error", err))
@@ -210,6 +219,17 @@ func initializeServerHandlers(logger *slog.Logger, sessionStore *session.Store, 
 	patientHandler.RegisterUIHandlers(uiProtectedMux)
 	slotHandler.RegisterUIHandlers(uiProtectedMux)
 	uiAppointmentHandler.RegisterUIHandlers(uiProtectedMux)
+
+	if storageClient != nil {
+		uiPrescriptionHandler, err := initializeUIPrescriptionHandler(logger, pool, storageClient)
+		if err != nil {
+			logger.Error("failed to create UI prescription handler", slog.Any("error", err))
+			return nil, err
+		}
+		uiPrescriptionHandler.RegisterUIHandlers(uiProtectedMux)
+	} else {
+		logger.Warn("storage client disabled, prescription UI routes are not registered")
+	}
 
 	mux.Handle("/api/v1/", middleware.Session(sessionStore, isDev)(apiProtectedMux))
 	mux.Handle("/", middleware.UISession(sessionStore, isDev)(uiProtectedMux))
@@ -386,4 +406,25 @@ func initializeUIAppointmentHandler(logger *slog.Logger, pool *pgxpool.Pool) (*a
 	}
 
 	return appointmentHandler, nil
+}
+
+func initializeUIPrescriptionHandler(logger *slog.Logger, pool *pgxpool.Pool, storageClient *storage.Client) (*prescription.UIHandler, error) {
+	repo, err := prescription.NewRepository(pool)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create prescription repository: %w", err)
+	}
+	query, err := prescription.NewQuery(pool)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create prescription query: %w", err)
+	}
+	svc, err := prescription.NewService(repo, storageClient)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create prescription service: %w", err)
+	}
+	prescriptionHandler, err := prescription.NewUIHandler(logger, svc, query)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create prescription UI handler: %w", err)
+	}
+
+	return prescriptionHandler, nil
 }

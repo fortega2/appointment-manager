@@ -33,6 +33,11 @@ func NewClient(ctx context.Context, cfg Config) (*Client, error) {
 		Creds:  credentials.NewStaticV4(cfg.AccessKey, cfg.SecretKey, ""),
 		Secure: cfg.UseSSL,
 		Region: cfg.Region,
+		// Garage (and most self-hosted MinIO setups behind a reverse proxy) route by
+		// path, not by bucket subdomain: force path-style so requests hit
+		// https://endpoint/bucket instead of https://bucket.endpoint, which the
+		// reverse proxy has no vhost for.
+		BucketLookup: minio.BucketLookupPath,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("create minio client: %w", err)

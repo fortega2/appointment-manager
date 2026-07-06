@@ -97,6 +97,11 @@ The server starts on `:8080`. Visit `http://localhost:8080` for the UI or `http:
 
 ### Environment variables
 
+On startup the server loads a `.env` file from the working directory if one is present
+(via [godotenv](https://github.com/joho/godotenv)); if it's missing, it silently falls
+back to the OS environment. Variables already set in the OS environment take precedence
+over the `.env` file.
+
 | Variable | Required | Description |
 | --- | --- | --- |
 | `DATABASE_URL` | yes | Postgres connection string. |

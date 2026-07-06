@@ -5,6 +5,7 @@ package prescription_test
 import (
 	"appointment-manager/internal/db"
 	"appointment-manager/internal/prescription"
+	"appointment-manager/internal/storage"
 	"context"
 	"testing"
 
@@ -12,6 +13,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go"
+	"github.com/testcontainers/testcontainers-go/modules/minio"
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
 )
 
@@ -21,6 +23,9 @@ const (
 	prescriptionIntegrationDBUser   = "appointment_user"
 	prescriptionIntegrationDBPass   = "appointment_password"
 	prescriptionIntegrationSSLParam = "sslmode=disable"
+
+	prescriptionStorageImage  = "minio/minio:RELEASE.2024-01-16T16-07-38Z"
+	prescriptionStorageBucket = "prescriptions"
 
 	seedPatientHealthInsurance = 1
 	seedPatientInsuranceNumber = "12345678901"
@@ -60,9 +65,39 @@ func newPrescriptionIntegrationRepository(t *testing.T, pool *pgxpool.Pool) *pre
 	return repo
 }
 
+func newPrescriptionIntegrationStorage(ctx context.Context, t *testing.T) *storage.Client {
+	t.Helper()
+
+	container, err := minio.Run(ctx, prescriptionStorageImage)
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		require.NoError(t, testcontainers.TerminateContainer(container))
+	})
+
+	endpoint, err := container.ConnectionString(ctx)
+	require.NoError(t, err)
+
+	client, err := storage.NewClient(ctx, storage.Config{
+		Endpoint:  endpoint,
+		AccessKey: container.Username,
+		SecretKey: container.Password,
+		Bucket:    prescriptionStorageBucket,
+		UseSSL:    false,
+	})
+	require.NoError(t, err)
+
+	return client
+}
+
 // seedPatient inserts a minimal valid patient row and returns its ID so
 // prescriptions (which reference patient via a foreign key) can be created.
 func seedPatient(ctx context.Context, t *testing.T, pool *pgxpool.Pool) uuid.UUID {
+	t.Helper()
+
+	return seedPatientNamed(ctx, t, pool, "Laura", "Gomez")
+}
+
+func seedPatientNamed(ctx context.Context, t *testing.T, pool *pgxpool.Pool, firstName, lastName string) uuid.UUID {
 	t.Helper()
 
 	id := uuid.Must(uuid.NewV7())
@@ -78,10 +113,10 @@ func seedPatient(ctx context.Context, t *testing.T, pool *pgxpool.Pool) uuid.UUI
 		) VALUES ($1, $2, $3, $4, $5, $6, $7)
 	`,
 		id,
-		"Laura",
-		"Gomez",
+		firstName,
+		lastName,
 		"1133334444",
-		"laura@mail.com",
+		"patient@mail.com",
 		seedPatientHealthInsurance,
 		seedPatientInsuranceNumber,
 	)
