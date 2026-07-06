@@ -14,6 +14,7 @@ import (
 	"appointment-manager/internal/server"
 	"appointment-manager/internal/session"
 	"appointment-manager/internal/slot"
+	"appointment-manager/internal/storage"
 	"appointment-manager/internal/ui/home"
 	"context"
 	"fmt"
@@ -21,6 +22,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -32,6 +34,12 @@ const (
 	databaseURLEnv          = "DATABASE_URL"
 	environmentEnv          = "ENV"
 	environmentDevelopment  = "development"
+	storageEndpointEnv      = "STORAGE_ENDPOINT"
+	storageAccessKeyEnv     = "STORAGE_ACCESS_KEY"
+	storageSecretKeyEnv     = "STORAGE_SECRET_KEY"
+	storageBucketEnv        = "STORAGE_BUCKET"
+	storageRegionEnv        = "STORAGE_REGION"
+	storageUseSSLEnv        = "STORAGE_USE_SSL"
 	serverAddr              = ":8080"
 	serverReadHeaderTimeout = 5 * time.Second
 	serverReadTimeout       = 10 * time.Second
@@ -67,6 +75,12 @@ func run() error {
 	}
 	defer pool.Close()
 
+	storageClient, err := initializeStorageClient(context.Background(), logger)
+	if err != nil {
+		return err
+	}
+	_ = storageClient // TODO: wire up storage client to handlers that need it
+
 	env := strings.TrimSpace(os.Getenv(environmentEnv))
 	isDev := env == "" || strings.EqualFold(env, environmentDevelopment)
 
@@ -92,6 +106,43 @@ func run() error {
 	}
 
 	return nil
+}
+
+// initializeStorageClient builds the object-storage client from the STORAGE_*
+// env vars. When STORAGE_ENDPOINT is unset the client is disabled (returns nil)
+// so the server still boots in dev without Garage; a set-but-misconfigured
+// store fails fast here rather than on the first upload.
+func initializeStorageClient(ctx context.Context, logger *slog.Logger) (*storage.Client, error) {
+	endpoint := strings.TrimSpace(os.Getenv(storageEndpointEnv))
+	if endpoint == "" {
+		logger.Warn("storage endpoint is not set, object storage is disabled")
+		return nil, nil //nolint:nilnil // nil client + nil error is the documented "disabled" signal; callers check client == nil, not err.
+	}
+
+	useSSL := true
+	if raw := strings.TrimSpace(os.Getenv(storageUseSSLEnv)); raw != "" {
+		parsed, err := strconv.ParseBool(raw)
+		if err != nil {
+			return nil, fmt.Errorf("invalid %s: %w", storageUseSSLEnv, err)
+		}
+		useSSL = parsed
+	}
+
+	client, err := storage.NewClient(ctx, storage.Config{
+		Endpoint:  endpoint,
+		AccessKey: strings.TrimSpace(os.Getenv(storageAccessKeyEnv)),
+		SecretKey: strings.TrimSpace(os.Getenv(storageSecretKeyEnv)),
+		Bucket:    strings.TrimSpace(os.Getenv(storageBucketEnv)),
+		Region:    strings.TrimSpace(os.Getenv(storageRegionEnv)),
+		UseSSL:    useSSL,
+	})
+	if err != nil {
+		logger.Error("failed to initialize storage client", slog.Any("error", err))
+		return nil, err
+	}
+
+	logger.Info("storage client initialized", slog.String("endpoint", endpoint))
+	return client, nil
 }
 
 func initializeServerHandlers(logger *slog.Logger, sessionStore *session.Store, pool *pgxpool.Pool, isDev bool) (http.Handler, error) {

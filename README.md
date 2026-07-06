@@ -95,6 +95,19 @@ go run ./cmd/server
 
 The server starts on `:8080`. Visit `http://localhost:8080` for the UI or `http://localhost:8080/healthz` for a health check.
 
+### Environment variables
+
+| Variable | Required | Description |
+| --- | --- | --- |
+| `DATABASE_URL` | yes | Postgres connection string. |
+| `ENV` | no | `development` (default) enables dev-friendly settings. |
+| `STORAGE_ENDPOINT` | no | S3-compatible endpoint, e.g. `s3.example.com`. When unset, object storage is disabled. |
+| `STORAGE_ACCESS_KEY` | with storage | Access key for the object store. |
+| `STORAGE_SECRET_KEY` | with storage | Secret key for the object store. |
+| `STORAGE_BUCKET` | with storage | Bucket where prescription documents are stored (created if missing). |
+| `STORAGE_REGION` | no | Optional region for the object store. |
+| `STORAGE_USE_SSL` | no | `true` (default) uses HTTPS; set `false` for a plain-HTTP store. |
+
 ## Highlights for Developers
 
 - **Zero external HTTP frameworks** — pure `net/http` with idiomatic Go patterns. Demonstrates deep understanding of the standard library.
