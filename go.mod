@@ -7,7 +7,7 @@ require github.com/google/uuid v1.6.0
 require (
 	github.com/a-h/templ v0.3.1020
 	github.com/golang-migrate/migrate/v4 v4.19.1
-	github.com/jackc/pgx/v5 v5.9.1
+	github.com/jackc/pgx/v5 v5.9.2
 	github.com/joho/godotenv v1.5.1
 	github.com/minio/minio-go/v7 v7.2.1
 	github.com/stretchr/testify v1.11.1

@@ -8,6 +8,12 @@ package layout
 import "github.com/a-h/templ"
 import templruntime "github.com/a-h/templ/runtime"
 
+// PrescriptionsEnabled controls whether the nav shows the Prescriptions
+// link. Set once at startup: the prescription UI routes are only
+// registered when object storage is configured, so the link is hidden
+// otherwise to avoid a dead link.
+var PrescriptionsEnabled = true
+
 func Base(title string, isAuthenticated bool) templ.Component {
 	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
@@ -29,14 +35,14 @@ func Base(title string, isAuthenticated bool) templ.Component {
 			templ_7745c5c3_Var1 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<!doctype html><html lang=\"es\"><head><meta charset=\"UTF-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"><title>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<!doctype html><html lang=\"en\"><head><meta charset=\"UTF-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"><title>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var2 string
 		templ_7745c5c3_Var2, templ_7745c5c3_Err = templ.JoinStringErrs(title)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/ui/layout/base.templ`, Line: 9, Col: 17}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/ui/layout/base.templ`, Line: 15, Col: 17}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var2))
 		if templ_7745c5c3_Err != nil {
@@ -47,12 +53,22 @@ func Base(title string, isAuthenticated bool) templ.Component {
 			return templ_7745c5c3_Err
 		}
 		if isAuthenticated {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, "<nav class=\"flex items-center space-x-6\"><a href=\"/\" class=\"text-sm font-medium text-gray-700 hover:text-indigo-600 transition-colors\">Home</a><div x-data=\"{ open: false }\" @mouseenter=\"open = true\" @mouseleave=\"open = false\" class=\"relative\"><button @click=\"open = !open\" class=\"flex items-center space-x-1 text-sm font-medium text-gray-700 hover:text-indigo-600 transition-colors focus:outline-none\"><span>Management</span> <svg class=\"w-4 h-4\" fill=\"none\" stroke=\"currentColor\" viewBox=\"0 0 24 24\" xmlns=\"http://www.w3.org/2000/svg\"><path stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"2\" d=\"M19 9l-7 7-7-7\"></path></svg></button><div x-show=\"open\" x-transition:enter=\"transition ease-out duration-100\" x-transition:enter-start=\"transform opacity-0 scale-95\" x-transition:enter-end=\"transform opacity-100 scale-100\" x-transition:leave=\"transition ease-in duration-75\" x-transition:leave-start=\"transform opacity-100 scale-100\" x-transition:leave-end=\"transform opacity-0 scale-95\" class=\"absolute right-0 w-48 mt-2 origin-top-right bg-white border border-gray-100 rounded-md shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none z-50\" x-cloak><div class=\"py-1\"><a href=\"/appointments\" class=\"block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 hover:text-indigo-600\">Appointments</a> <a href=\"/prescriptions\" class=\"block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 hover:text-indigo-600\">Prescriptions</a> <a href=\"/patients\" class=\"block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 hover:text-indigo-600\">Patients</a> <a href=\"/slots\" class=\"block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 hover:text-indigo-600\">Slots</a> <a href=\"/professionals\" class=\"block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 hover:text-indigo-600\">Professionals</a></div></div></div><span class=\"text-gray-300\">|</span> <button hx-post=\"/logout\" hx-target=\"body\" class=\"text-sm font-medium text-white bg-red-500 hover:bg-red-600 px-3 py-1.5 rounded-md transition-colors\">Cerrar Sesión</button></nav>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, "<nav class=\"flex items-center space-x-6\"><a href=\"/\" class=\"text-sm font-medium text-gray-700 hover:text-indigo-600 transition-colors\">Home</a><div x-data=\"{ open: false }\" @mouseenter=\"open = true\" @mouseleave=\"open = false\" class=\"relative\"><button @click=\"open = !open\" class=\"flex items-center space-x-1 text-sm font-medium text-gray-700 hover:text-indigo-600 transition-colors focus:outline-none\"><span>Management</span> <svg class=\"w-4 h-4\" fill=\"none\" stroke=\"currentColor\" viewBox=\"0 0 24 24\" xmlns=\"http://www.w3.org/2000/svg\"><path stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"2\" d=\"M19 9l-7 7-7-7\"></path></svg></button><div x-show=\"open\" x-transition:enter=\"transition ease-out duration-100\" x-transition:enter-start=\"transform opacity-0 scale-95\" x-transition:enter-end=\"transform opacity-100 scale-100\" x-transition:leave=\"transition ease-in duration-75\" x-transition:leave-start=\"transform opacity-100 scale-100\" x-transition:leave-end=\"transform opacity-0 scale-95\" class=\"absolute right-0 w-48 mt-2 origin-top-right bg-white border border-gray-100 rounded-md shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none z-50\" x-cloak><div class=\"py-1\"><a href=\"/appointments\" class=\"block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 hover:text-indigo-600\">Appointments</a> ")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			if PrescriptionsEnabled {
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, "<a href=\"/prescriptions\" class=\"block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 hover:text-indigo-600\">Prescriptions</a> ")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, "<a href=\"/patients\" class=\"block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 hover:text-indigo-600\">Patients</a> <a href=\"/slots\" class=\"block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 hover:text-indigo-600\">Slots</a> <a href=\"/professionals\" class=\"block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 hover:text-indigo-600\">Professionals</a></div></div></div><span class=\"text-gray-300\">|</span> <button hx-post=\"/logout\" hx-target=\"body\" class=\"text-sm font-medium text-white bg-red-500 hover:bg-red-600 px-3 py-1.5 rounded-md transition-colors\">Log Out</button></nav>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, "</div></header><main class=\"flex-grow flex flex-col justify-center items-center\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 6, "</div></header><main class=\"flex-grow flex flex-col justify-center items-center\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -60,7 +76,7 @@ func Base(title string, isAuthenticated bool) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, "</main><footer class=\"bg-white border-t border-gray-200 mt-auto\"><div class=\"max-w-7xl mx-auto py-4 px-4 sm:px-6 lg:px-8 flex justify-center text-sm text-gray-500\">&copy; 2026 Appointment Manager</div></footer><div id=\"snackbar-container\" class=\"fixed inset-x-0 bottom-4 z-[60] flex flex-col items-center gap-2 px-4 pointer-events-none\"><style>\n\t\t\t\t\t#snackbar-container > div {\n\t\t\t\t\t\tpointer-events: auto;\n\t\t\t\t\t\twidth: 100%;\n\t\t\t\t\t\tmax-width: 28rem;\n\t\t\t\t\t}\n\n\t\t\t\t\t.snackbar-card {\n\t\t\t\t\t\tdisplay: flex;\n\t\t\t\t\t\talign-items: center;\n\t\t\t\t\t\tjustify-content: space-between;\n\t\t\t\t\t\tgap: 1rem;\n\t\t\t\t\t\tpadding: 0.875rem 1rem;\n\t\t\t\t\t\tborder-radius: 0.5rem;\n\t\t\t\t\t\tbox-shadow: 0 4px 12px rgb(0 0 0 / 0.1);\n\t\t\t\t\t}\n\n\t\t\t\t\t.snackbar-success {\n\t\t\t\t\t\tbackground-color: #dcfce7;\n\t\t\t\t\t\tborder: 1px solid #bbf7d0;\n\t\t\t\t\t\tcolor: #166534;\n\t\t\t\t\t}\n\n\t\t\t\t\t.snackbar-error {\n\t\t\t\t\t\tbackground-color: #fee2e2;\n\t\t\t\t\t\tborder: 1px solid #fecaca;\n\t\t\t\t\t\tcolor: #991b1b;\n\t\t\t\t\t}\n\n\t\t\t\t\t.snackbar-info {\n\t\t\t\t\t\tbackground-color: #dbeafe;\n\t\t\t\t\t\tborder: 1px solid #bfdbfe;\n\t\t\t\t\t\tcolor: #1e40af;\n\t\t\t\t\t}\n\t\t\t\t</style></div></body></html>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 7, "</main><footer class=\"bg-white border-t border-gray-200 mt-auto\"><div class=\"max-w-7xl mx-auto py-4 px-4 sm:px-6 lg:px-8 flex justify-center text-sm text-gray-500\">&copy; 2026 Appointment Manager</div></footer><div id=\"snackbar-container\" class=\"fixed inset-x-0 bottom-4 z-[60] flex flex-col items-center gap-2 px-4 pointer-events-none\"><style>\n\t\t\t\t\t#snackbar-container > div {\n\t\t\t\t\t\tpointer-events: auto;\n\t\t\t\t\t\twidth: 100%;\n\t\t\t\t\t\tmax-width: 28rem;\n\t\t\t\t\t}\n\n\t\t\t\t\t.snackbar-card {\n\t\t\t\t\t\tdisplay: flex;\n\t\t\t\t\t\talign-items: center;\n\t\t\t\t\t\tjustify-content: space-between;\n\t\t\t\t\t\tgap: 1rem;\n\t\t\t\t\t\tpadding: 0.875rem 1rem;\n\t\t\t\t\t\tborder-radius: 0.5rem;\n\t\t\t\t\t\tbox-shadow: 0 4px 12px rgb(0 0 0 / 0.1);\n\t\t\t\t\t}\n\n\t\t\t\t\t.snackbar-success {\n\t\t\t\t\t\tbackground-color: #dcfce7;\n\t\t\t\t\t\tborder: 1px solid #bbf7d0;\n\t\t\t\t\t\tcolor: #166534;\n\t\t\t\t\t}\n\n\t\t\t\t\t.snackbar-error {\n\t\t\t\t\t\tbackground-color: #fee2e2;\n\t\t\t\t\t\tborder: 1px solid #fecaca;\n\t\t\t\t\t\tcolor: #991b1b;\n\t\t\t\t\t}\n\n\t\t\t\t\t.snackbar-info {\n\t\t\t\t\t\tbackground-color: #dbeafe;\n\t\t\t\t\t\tborder: 1px solid #bfdbfe;\n\t\t\t\t\t\tcolor: #1e40af;\n\t\t\t\t\t}\n\t\t\t\t</style></div></body></html>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

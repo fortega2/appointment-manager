@@ -17,6 +17,7 @@ import (
 	"appointment-manager/internal/slot"
 	"appointment-manager/internal/storage"
 	"appointment-manager/internal/ui/home"
+	"appointment-manager/internal/ui/layout"
 	"context"
 	"fmt"
 	"log/slog"
@@ -220,6 +221,7 @@ func initializeServerHandlers(logger *slog.Logger, sessionStore *session.Store, 
 	slotHandler.RegisterUIHandlers(uiProtectedMux)
 	uiAppointmentHandler.RegisterUIHandlers(uiProtectedMux)
 
+	layout.PrescriptionsEnabled = storageClient != nil
 	if storageClient != nil {
 		uiPrescriptionHandler, err := initializeUIPrescriptionHandler(logger, pool, storageClient)
 		if err != nil {

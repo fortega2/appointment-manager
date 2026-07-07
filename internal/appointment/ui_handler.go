@@ -6,7 +6,6 @@ import (
 	"appointment-manager/internal/professional"
 	"appointment-manager/internal/slot"
 	"appointment-manager/internal/ui/components"
-	"appointment-manager/internal/ui/form"
 	"context"
 	"errors"
 	"fmt"
@@ -147,7 +146,6 @@ func (h *UIHandler) showCreateFormUIHandler() http.HandlerFunc {
 
 		if err := Form(
 			FormRequest{},
-			form.MethodPost,
 			"/appointments",
 			slotOpts,
 			patientOpts,

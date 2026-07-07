@@ -25,19 +25,6 @@ const (
 		) VALUES ($1, $2, $3, $4, $5)
 	`
 
-	getActivePrescriptionByPatientQuery = `
-		SELECT
-			id,
-			patient_id,
-			file_path,
-			total_sessions,
-			status
-		FROM
-			prescription
-		WHERE
-			patient_id = $1 AND status = 1
-	`
-
 	getPrescriptionByIDQuery = `
 		SELECT
 			id,
@@ -104,24 +91,6 @@ func (r *Repository) Create(ctx context.Context, p *Prescription) error {
 	}
 
 	return nil
-}
-
-func (r *Repository) GetActiveByPatient(ctx context.Context, patientID uuid.UUID) (*Prescription, error) {
-	var p Prescription
-	if err := r.pool.QueryRow(ctx, getActivePrescriptionByPatientQuery, patientID).Scan(
-		&p.ID,
-		&p.PatientID,
-		&p.FilePath,
-		&p.TotalSessions,
-		&p.Status,
-	); err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, fmt.Errorf("get active prescription for patient %s: %w", patientID, ErrNoActivePrescription)
-		}
-		return nil, fmt.Errorf("get active prescription by patient: %w", err)
-	}
-
-	return &p, nil
 }
 
 func (r *Repository) GetByID(ctx context.Context, id uuid.UUID) (*Prescription, error) {

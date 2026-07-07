@@ -11,20 +11,12 @@ const (
 	listAppointmentsGridQuery string = `
 		SELECT
 			a.id,
-			a.slot_id,
 			TO_CHAR(s.start_time AT TIME ZONE 'America/Argentina/Buenos_Aires', 'YYYY-MM-DD HH24:MI') AS start_time,
 			TO_CHAR(s.end_time AT TIME ZONE 'America/Argentina/Buenos_Aires', 'HH24:MI') AS end_time,
-			a.patient_id,
 			p.first_name || ' ' || p.last_name AS patient_full_name,
-			a.professional_id,
 			pr.first_name || ' ' || pr.last_name AS professional_full_name,
-			a.assistant_id,
-			asst.first_name || ' ' || asst.last_name AS assistant_full_name,
 			a.status,
-			INITCAP(ast.name) AS status_name,
-			COALESCE(a.notes, '') AS notes,
-			TO_CHAR(a.created_at AT TIME ZONE 'America/Argentina/Buenos_Aires', 'YYYY-MM-DD HH24:MI') AS created_at,
-			COALESCE(TO_CHAR(a.updated_at AT TIME ZONE 'America/Argentina/Buenos_Aires', 'YYYY-MM-DD HH24:MI'), '') AS updated_at
+			INITCAP(ast.name) AS status_name
 		FROM
 			public.appointment AS a
 		INNER JOIN
@@ -34,8 +26,6 @@ const (
 		INNER JOIN
 			public.professional AS pr ON pr.id = a.professional_id
 		INNER JOIN
-			public.assistant AS asst ON asst.id = a.assistant_id
-		INNER JOIN
 			public.appointment_status AS ast ON ast.id = a.status
 		ORDER BY
 			a.created_at DESC
@@ -44,19 +34,11 @@ const (
 
 type List struct {
 	ID                   string
-	SlotID               string
 	StartTime            string
 	EndTime              string
-	PatientID            string
 	PatientFullName      string
-	ProfessionalID       string
 	ProfessionalFullName string
-	AssistantID          string
-	AssistantFullName    string
 	StatusName           string
-	Notes                string
-	CreatedAt            string
-	UpdatedAt            string
 	Status               int
 }
 
@@ -84,20 +66,12 @@ func (q *Query) List(ctx context.Context) ([]List, error) {
 		var item List
 		if err := rows.Scan(
 			&item.ID,
-			&item.SlotID,
 			&item.StartTime,
 			&item.EndTime,
-			&item.PatientID,
 			&item.PatientFullName,
-			&item.ProfessionalID,
 			&item.ProfessionalFullName,
-			&item.AssistantID,
-			&item.AssistantFullName,
 			&item.Status,
 			&item.StatusName,
-			&item.Notes,
-			&item.CreatedAt,
-			&item.UpdatedAt,
 		); err != nil {
 			return nil, fmt.Errorf("list: scan appointment: %w", err)
 		}

@@ -3,7 +3,6 @@ package appointment
 import (
 	"fmt"
 	"strconv"
-	"appointment-manager/internal/ui/form"
 	"appointment-manager/internal/ui/layout"
 )
 
@@ -119,7 +118,6 @@ templ Table(appointments []List) {
 
 templ Form(
 	req FormRequest,
-	method form.Method,
 	actionURL string,
 	slotOpts []SlotOptionDTO,
 	patientOpts []PatientOptionDTO,

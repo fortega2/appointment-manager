@@ -29,7 +29,7 @@ func TestLogin(t *testing.T) {
 
 		output := buf.String()
 
-		assert.Contains(t, output, "Iniciar Sesión")
+		assert.Contains(t, output, "Log In")
 		assert.Contains(t, output, `hx-post="/login"`)
 		assert.Contains(t, output, `name="email"`)
 		assert.Contains(t, output, `name="password"`)
@@ -42,7 +42,7 @@ func TestLoginError(t *testing.T) {
 	t.Run(loginCaseRenderError, func(t *testing.T) {
 		t.Parallel()
 
-		msg := "Credenciales inválidas"
+		msg := "Invalid credentials"
 		component := auth.LoginError(msg)
 
 		var buf bytes.Buffer

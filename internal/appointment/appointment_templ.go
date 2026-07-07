@@ -9,7 +9,6 @@ import "github.com/a-h/templ"
 import templruntime "github.com/a-h/templ/runtime"
 
 import (
-	"appointment-manager/internal/ui/form"
 	"appointment-manager/internal/ui/layout"
 	"fmt"
 	"strconv"
@@ -110,7 +109,7 @@ func Table(appointments []List) templ.Component {
 			var templ_7745c5c3_Var4 string
 			templ_7745c5c3_Var4, templ_7745c5c3_Err = templ.JoinStringErrs(a.StartTime)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/appointment/appointment.templ`, Line: 75, Col: 25}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/appointment/appointment.templ`, Line: 74, Col: 25}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var4))
 			if templ_7745c5c3_Err != nil {
@@ -123,7 +122,7 @@ func Table(appointments []List) templ.Component {
 			var templ_7745c5c3_Var5 string
 			templ_7745c5c3_Var5, templ_7745c5c3_Err = templ.JoinStringErrs(a.EndTime)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/appointment/appointment.templ`, Line: 76, Col: 56}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/appointment/appointment.templ`, Line: 75, Col: 56}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var5))
 			if templ_7745c5c3_Err != nil {
@@ -136,7 +135,7 @@ func Table(appointments []List) templ.Component {
 			var templ_7745c5c3_Var6 string
 			templ_7745c5c3_Var6, templ_7745c5c3_Err = templ.JoinStringErrs(a.PatientFullName)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/appointment/appointment.templ`, Line: 78, Col: 61}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/appointment/appointment.templ`, Line: 77, Col: 61}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var6))
 			if templ_7745c5c3_Err != nil {
@@ -149,7 +148,7 @@ func Table(appointments []List) templ.Component {
 			var templ_7745c5c3_Var7 string
 			templ_7745c5c3_Var7, templ_7745c5c3_Err = templ.JoinStringErrs(a.ProfessionalFullName)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/appointment/appointment.templ`, Line: 79, Col: 66}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/appointment/appointment.templ`, Line: 78, Col: 66}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var7))
 			if templ_7745c5c3_Err != nil {
@@ -162,7 +161,7 @@ func Table(appointments []List) templ.Component {
 			var templ_7745c5c3_Var8 string
 			templ_7745c5c3_Var8, templ_7745c5c3_Err = templ.JoinStringErrs(a.StatusName)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/appointment/appointment.templ`, Line: 82, Col: 22}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/appointment/appointment.templ`, Line: 81, Col: 22}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var8))
 			if templ_7745c5c3_Err != nil {
@@ -180,7 +179,7 @@ func Table(appointments []List) templ.Component {
 				var templ_7745c5c3_Var9 string
 				templ_7745c5c3_Var9, templ_7745c5c3_Err = templ.ResolveAttributeValue(string(templ.URL(fmt.Sprintf("/appointments/%s/attend", a.ID))))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/appointment/appointment.templ`, Line: 92, Col: 83}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/appointment/appointment.templ`, Line: 91, Col: 83}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var9)
 				if templ_7745c5c3_Err != nil {
@@ -193,7 +192,7 @@ func Table(appointments []List) templ.Component {
 				var templ_7745c5c3_Var10 string
 				templ_7745c5c3_Var10, templ_7745c5c3_Err = templ.ResolveAttributeValue(string(templ.URL(fmt.Sprintf("/appointments/%s/cancel", a.ID))))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/appointment/appointment.templ`, Line: 103, Col: 83}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/appointment/appointment.templ`, Line: 102, Col: 83}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var10)
 				if templ_7745c5c3_Err != nil {
@@ -219,7 +218,6 @@ func Table(appointments []List) templ.Component {
 
 func Form(
 	req FormRequest,
-	method form.Method,
 	actionURL string,
 	slotOpts []SlotOptionDTO,
 	patientOpts []PatientOptionDTO,
@@ -253,7 +251,7 @@ func Form(
 		var templ_7745c5c3_Var12 string
 		templ_7745c5c3_Var12, templ_7745c5c3_Err = templ.ResolveAttributeValue(actionURL)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/appointment/appointment.templ`, Line: 133, Col: 22}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/appointment/appointment.templ`, Line: 131, Col: 22}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var12)
 		if templ_7745c5c3_Err != nil {
@@ -281,7 +279,7 @@ func Form(
 			var templ_7745c5c3_Var13 string
 			templ_7745c5c3_Var13, templ_7745c5c3_Err = templ.ResolveAttributeValue(s.ID)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/appointment/appointment.templ`, Line: 148, Col: 26}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/appointment/appointment.templ`, Line: 146, Col: 26}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var13)
 			if templ_7745c5c3_Err != nil {
@@ -304,7 +302,7 @@ func Form(
 			var templ_7745c5c3_Var14 string
 			templ_7745c5c3_Var14, templ_7745c5c3_Err = templ.JoinStringErrs(s.Label)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/appointment/appointment.templ`, Line: 148, Col: 71}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/appointment/appointment.templ`, Line: 146, Col: 71}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var14))
 			if templ_7745c5c3_Err != nil {
@@ -337,7 +335,7 @@ func Form(
 			var templ_7745c5c3_Var15 string
 			templ_7745c5c3_Var15, templ_7745c5c3_Err = templ.ResolveAttributeValue(p.ID)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/appointment/appointment.templ`, Line: 164, Col: 26}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/appointment/appointment.templ`, Line: 162, Col: 26}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var15)
 			if templ_7745c5c3_Err != nil {
@@ -350,7 +348,7 @@ func Form(
 			var templ_7745c5c3_Var16 string
 			templ_7745c5c3_Var16, templ_7745c5c3_Err = templ.ResolveAttributeValue(strconv.Itoa(p.RemainingSessions))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/appointment/appointment.templ`, Line: 164, Col: 79}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/appointment/appointment.templ`, Line: 162, Col: 79}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var16)
 			if templ_7745c5c3_Err != nil {
@@ -373,7 +371,7 @@ func Form(
 			var templ_7745c5c3_Var17 string
 			templ_7745c5c3_Var17, templ_7745c5c3_Err = templ.JoinStringErrs(p.Label)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/appointment/appointment.templ`, Line: 164, Col: 127}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/appointment/appointment.templ`, Line: 162, Col: 127}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var17))
 			if templ_7745c5c3_Err != nil {
@@ -406,7 +404,7 @@ func Form(
 			var templ_7745c5c3_Var18 string
 			templ_7745c5c3_Var18, templ_7745c5c3_Err = templ.ResolveAttributeValue(p.ID)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/appointment/appointment.templ`, Line: 182, Col: 26}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/appointment/appointment.templ`, Line: 180, Col: 26}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var18)
 			if templ_7745c5c3_Err != nil {
@@ -429,7 +427,7 @@ func Form(
 			var templ_7745c5c3_Var19 string
 			templ_7745c5c3_Var19, templ_7745c5c3_Err = templ.JoinStringErrs(p.Label)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/appointment/appointment.templ`, Line: 182, Col: 79}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/appointment/appointment.templ`, Line: 180, Col: 79}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var19))
 			if templ_7745c5c3_Err != nil {
@@ -462,7 +460,7 @@ func Form(
 			var templ_7745c5c3_Var20 string
 			templ_7745c5c3_Var20, templ_7745c5c3_Err = templ.ResolveAttributeValue(a.ID)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/appointment/appointment.templ`, Line: 197, Col: 26}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/appointment/appointment.templ`, Line: 195, Col: 26}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var20)
 			if templ_7745c5c3_Err != nil {
@@ -485,7 +483,7 @@ func Form(
 			var templ_7745c5c3_Var21 string
 			templ_7745c5c3_Var21, templ_7745c5c3_Err = templ.JoinStringErrs(a.Label)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/appointment/appointment.templ`, Line: 197, Col: 76}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/appointment/appointment.templ`, Line: 195, Col: 76}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var21))
 			if templ_7745c5c3_Err != nil {
@@ -503,7 +501,7 @@ func Form(
 		var templ_7745c5c3_Var22 string
 		templ_7745c5c3_Var22, templ_7745c5c3_Err = templ.JoinStringErrs(req.Notes)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/appointment/appointment.templ`, Line: 209, Col: 16}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/appointment/appointment.templ`, Line: 207, Col: 16}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var22))
 		if templ_7745c5c3_Err != nil {

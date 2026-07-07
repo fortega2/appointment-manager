@@ -80,38 +80,6 @@ func TestRepositoryCreateInvalidPatientReturnsError(t *testing.T) {
 	assert.Equal(t, int64(0), countPrescriptions(ctx, t, pool))
 }
 
-func TestRepositoryGetActiveByPatient(t *testing.T) {
-	testcontainers.SkipIfProviderIsNotHealthy(t)
-	ctx := context.Background()
-
-	pool := newPrescriptionIntegrationPool(ctx, t)
-	repo := newPrescriptionIntegrationRepository(t, pool)
-	patientID := seedPatient(ctx, t, pool)
-
-	created, err := prescription.New(patientID, repositoryPrescriptionFilePath, repositoryPrescriptionSessions)
-	require.NoError(t, err)
-	require.NoError(t, repo.Create(ctx, created))
-
-	active, err := repo.GetActiveByPatient(ctx, patientID)
-	require.NoError(t, err)
-	assert.Equal(t, created.ID, active.ID)
-	assert.Equal(t, prescription.StatusActive, active.Status)
-}
-
-func TestRepositoryGetActiveByPatientNotFound(t *testing.T) {
-	testcontainers.SkipIfProviderIsNotHealthy(t)
-	ctx := context.Background()
-
-	pool := newPrescriptionIntegrationPool(ctx, t)
-	repo := newPrescriptionIntegrationRepository(t, pool)
-	patientID := seedPatient(ctx, t, pool)
-
-	active, err := repo.GetActiveByPatient(ctx, patientID)
-	require.Error(t, err)
-	assert.Nil(t, active)
-	assert.ErrorIs(t, err, prescription.ErrNoActivePrescription)
-}
-
 func TestRepositoryGetByIDNotFound(t *testing.T) {
 	testcontainers.SkipIfProviderIsNotHealthy(t)
 	ctx := context.Background()
@@ -147,9 +115,9 @@ func TestRepositoryUpdateStatusCancelAllowsNewActive(t *testing.T) {
 	err = repo.Create(ctx, second)
 	require.NoError(t, err)
 
-	active, err := repo.GetActiveByPatient(ctx, patientID)
+	active, err := repo.GetByID(ctx, second.ID)
 	require.NoError(t, err)
-	assert.Equal(t, second.ID, active.ID)
+	assert.Equal(t, prescription.StatusActive, active.Status)
 	assert.Equal(t, int64(2), countPrescriptions(ctx, t, pool))
 }
 

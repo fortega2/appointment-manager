@@ -190,7 +190,7 @@ func (h *Handler) processLoginUIHandler() http.HandlerFunc {
 			}
 			const dummyHash = "$argon2id$v=19$m=65536,t=3,p=2$P+GDBz2vGj467VpP0f5zWg$N/J6HjG8M1nJ8Jt3Vb4N/D1T1V7G7Q6H2C8P9W1L9Q"
 			_, _ = h.pass.Compare(dummyHash, pass) // Compare with a dummy hash to mitigate timing attacks.
-			h.renderError(w, r, "Email o contraseña incorrectos")
+			h.renderError(w, r, "Incorrect email or password")
 			return
 		}
 		ok, err := h.pass.Compare(a.PasswordHash, pass)
@@ -201,11 +201,11 @@ func (h *Handler) processLoginUIHandler() http.HandlerFunc {
 				slog.String("assistant_id", a.ID.String()),
 				slog.String("email", a.Email),
 				slog.Any("error", err))
-			h.renderError(w, r, "Error al verificar la contraseña")
+			h.renderError(w, r, "Error verifying password")
 			return
 		}
 		if !ok {
-			h.renderError(w, r, "Email o contraseña incorrectos")
+			h.renderError(w, r, "Incorrect email or password")
 			return
 		}
 
