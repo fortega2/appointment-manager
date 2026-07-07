@@ -7,3 +7,6 @@ pre-commit:
       run: govulncheck ./...
     tests:
       run: go test -short ./...
+    css-drift:
+      glob: "**/*.templ"
+      run: make check-css

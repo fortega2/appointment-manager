@@ -43,3 +43,6 @@ go.work
 .env
 docker-compose.dev.yml
 Dockerfile.*
+
+# Downloaded Tailwind CLI binary (see Makefile `css` target) — output is committed, binary is not
+/bin/

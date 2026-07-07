@@ -18,24 +18,34 @@ Guidance for coding agents working in `appointment-manager`.
   - cancel: if now is before start-24h -> `cancelled`; otherwise -> `absent`.
   - attend: only allowed when now is within [start, end].
 - Appointment status updates must be concurrency-safe (atomic update with expected current status, or equivalent locking).
+- Frontend assets (Tailwind CSS, htmx, Alpine.js) are self-hosted and pinned — no CDN `<script src="https://...">` tags in `.templ` files. Pinned versions: Tailwind CSS v4.3.2, htmx v2.0.10, Alpine.js v3.15.12. See "Frontend Assets" below.
 
 ## 1) Repository Snapshot
 
-- Language: Go (`go 1.26.3` in `go.mod`).
+- Language: Go (`go 1.26.4` in `go.mod`).
 - Module: `appointment-manager`.
 - Main entrypoint: `cmd/server/main.go`.
 - Core packages:
   - `internal/appointment`
   - `internal/assistant`
+  - `internal/auth`
   - `internal/password`
   - `internal/web`
 - Domain packages:
   - `internal/professional`
   - `internal/patient`
   - `internal/slot`
+  - `internal/prescription`
+  - `internal/healthinsurance`
   - `internal/domain`
-- DB package:
+- Infra / cross-cutting packages:
   - `internal/db/migrations`
+  - `internal/middleware`
+  - `internal/session`
+  - `internal/storage` (S3-compatible client; needs `STORAGE_*` env vars, see README)
+  - `internal/server`
+  - `internal/health`
+  - `internal/ui` (templ views + static assets)
 - Planned:
   - `internal/shared`
 - Lint config: `.golangci.yml` (strict, many linters enabled).
@@ -47,6 +57,15 @@ Guidance for coding agents working in `appointment-manager`.
   - `go build ./...`
 - Run API locally:
   - `go run ./cmd/server`
+
+### Frontend Assets
+
+- Tailwind CSS, htmx, and Alpine.js are self-hosted under `internal/ui/static/{css,vendor}/` — never reintroduce CDN `<script>`/`<link>` tags in `.templ` files.
+- Tailwind source lives at `internal/ui/css/input.css`; generated output at `internal/ui/static/css/app.css` is **committed to git**, same convention as `_templ.go`.
+- Regenerate CSS with `make css` whenever you add/remove Tailwind utility classes in any `.templ` file, then `git add internal/ui/static/css/app.css` before committing.
+- `lefthook` pre-commit runs `make check-css` automatically when a commit touches `.templ` files, and fails if `app.css` is stale — run `make css` and re-stage if it does.
+- `htmx.min.js` / `alpine.min.js` are pinned, vendored, committed files. Bump versions via `make vendor-js HTMX_VERSION=... ALPINE_VERSION=...` (update the version variables in the `Makefile` first), then review the diff of the downloaded files before committing.
+- Fresh clone requires **no** extra setup step — `app.css` and the vendored JS are already committed, so `go run ./cmd/server` serves working CSS/JS immediately. `make css` is only needed when actively changing Tailwind classes.
 
 ### Database migration commands (`migrate`)
 
@@ -71,7 +90,11 @@ Guidance for coding agents working in `appointment-manager`.
 Notes:
 - Lint is strict (security, complexity, modernize, sloglint, copyloopvar, etc.).
 - `//nolint:<linter>` must be specific and justified.
-- `golangci-lint` must be built with a Go toolchain >= the `go` directive in `go.mod` (currently `1.26.3`), otherwise it refuses to run (`can't load config: the Go language version ... is lower than the targeted Go version`). If your installed binary is out of date, update it with `go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest` (or per https://golangci-lint.run/welcome/install/).
+- Run vulnerability scan: `govulncheck ./...`
+- `lefthook` pre-commit already runs `golangci-lint run`, `govulncheck ./...`, `go test -short ./...`,
+  and `make check-css` (on `.templ` changes) in parallel on every commit — a failing commit may be
+  any of these, not just CSS drift.
+- `golangci-lint` must be built with a Go toolchain >= the `go` directive in `go.mod` (currently `1.26.4`), otherwise it refuses to run (`can't load config: the Go language version ... is lower than the targeted Go version`). If your installed binary is out of date, update it with `go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest` (or per https://golangci-lint.run/welcome/install/).
 - `formatters.enable` in `.golangci.yml` includes `gofmt`, so `golangci-lint run ./...` also fails on unformatted files — a separate manual `gofmt -w` pass shouldn't normally be needed, but is listed above as a fallback.
 
 ## 4) Test Commands

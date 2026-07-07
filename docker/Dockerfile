@@ -1,4 +1,4 @@
-FROM golang:1.26.2-alpine3.23 AS builder
+FROM golang:1.26.4-alpine3.23 AS builder
 
 RUN adduser -D -g '' -u 10001 appuser
 
@@ -23,6 +23,7 @@ FROM scratch
 COPY --from=builder /etc/passwd /etc/passwd
 COPY --from=builder /app/appointment-manager-server /appointment-manager-server
 COPY --from=builder /app/healthcheck /healthcheck
+COPY --from=builder /app/internal/ui/static /internal/ui/static
 
 USER appuser
 

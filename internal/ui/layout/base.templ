@@ -14,9 +14,9 @@ templ Base(title string, isAuthenticated bool) {
 			<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 			<title>{ title } - Appointment Manager</title>
 			<link rel="icon" href="/static/favicon.ico" type="image/x-icon"/>
-			<script src="https://unpkg.com/htmx.org@1.9.11"></script>
-			<script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
-			<script src="https://cdn.tailwindcss.com"></script>
+			<link rel="stylesheet" href="/static/css/app.css"/>
+			<script src="/static/vendor/htmx.min.js"></script>
+			<script defer src="/static/vendor/alpine.min.js"></script>
 			<script>
 				document.addEventListener('htmx:beforeSwap', function(evt) {
 					if(evt.detail.xhr.status >= 400){

@@ -21,7 +21,7 @@ A production-grade medical appointment scheduling system built entirely in Go. D
 | Database | PostgreSQL 17 + `pgx` driver |
 | Migrations | `golang-migrate` with embedded SQL |
 | Templates | `a-h/templ` — type-safe HTML templates |
-| Frontend | HTMX + Alpine.js (minimal JavaScript) |
+| Frontend | HTMX + Alpine.js + Tailwind CSS (self-hosted, pinned versions — no CDN) |
 | Auth | Session-based (in-memory store) + Argon2id |
 | Container | Multi-stage Docker (scratch-based) + docker-compose |
 | Testing | `testify` (assert, require, mock) + `testcontainers-go` |
@@ -94,6 +94,8 @@ go run ./cmd/server
 ```
 
 The server starts on `:8080`. Visit `http://localhost:8080` for the UI or `http://localhost:8080/healthz` for a health check.
+
+Frontend assets (Tailwind CSS, htmx, Alpine.js) are self-hosted and already committed under `internal/ui/static/`, so no extra setup is needed. If you change Tailwind utility classes in any `.templ` file, run `make css` and commit the regenerated `internal/ui/static/css/app.css`.
 
 ### Environment variables
 
