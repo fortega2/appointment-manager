@@ -32,6 +32,22 @@ const (
 			active
 		FROM
 			professional
+		WHERE
+			active = true
+		ORDER BY
+			created_at DESC
+	`
+
+	listAllProfessionalsQuery string = `
+		SELECT
+			id,
+			first_name,
+			last_name,
+			phone,
+			INITCAP(specialty) AS specialty,
+			active
+		FROM
+			professional
 		ORDER BY
 			created_at DESC
 	`
@@ -94,33 +110,17 @@ func (r *Repository) Create(ctx context.Context, p *Professional) error {
 	return nil
 }
 
+// List returns only active professionals. Use this for booking flows and any
+// other consumer that must not offer a deactivated professional.
 func (r *Repository) List(ctx context.Context) ([]Professional, error) {
-	rows, err := r.pool.Query(ctx, listProfessionalsQuery)
-	if err != nil {
-		return nil, fmt.Errorf("query professionals: %w", err)
-	}
-	defer rows.Close()
+	return r.queryProfessionals(ctx, listProfessionalsQuery)
+}
 
-	professionals := make([]Professional, 0)
-	for rows.Next() {
-		var item Professional
-		if err := rows.Scan(
-			&item.ID,
-			&item.FirstName,
-			&item.LastName,
-			&item.Phone,
-			&item.Specialty,
-			&item.Active,
-		); err != nil {
-			return nil, fmt.Errorf("scan professional: %w", err)
-		}
-		professionals = append(professionals, item)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("iterate professionals: %w", err)
-	}
-
-	return professionals, nil
+// ListAll returns every professional regardless of active status. Use this
+// for the management dashboard, where staff need to see and reactivate
+// inactive professionals.
+func (r *Repository) ListAll(ctx context.Context) ([]Professional, error) {
+	return r.queryProfessionals(ctx, listAllProfessionalsQuery)
 }
 
 func (r *Repository) GetByID(ctx context.Context, id uuid.UUID) (*Professional, error) {
@@ -178,4 +178,33 @@ func (r *Repository) mapCreateError(err error) error {
 	default:
 		return fmt.Errorf("create professional: %w", err)
 	}
+}
+
+func (r *Repository) queryProfessionals(ctx context.Context, query string) ([]Professional, error) {
+	rows, err := r.pool.Query(ctx, query)
+	if err != nil {
+		return nil, fmt.Errorf("query professionals: %w", err)
+	}
+	defer rows.Close()
+
+	professionals := make([]Professional, 0)
+	for rows.Next() {
+		var item Professional
+		if err := rows.Scan(
+			&item.ID,
+			&item.FirstName,
+			&item.LastName,
+			&item.Phone,
+			&item.Specialty,
+			&item.Active,
+		); err != nil {
+			return nil, fmt.Errorf("scan professional: %w", err)
+		}
+		professionals = append(professionals, item)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate professionals: %w", err)
+	}
+
+	return professionals, nil
 }

@@ -63,7 +63,7 @@ func TestRepositoryListReturnsOnlyActiveProfessionals(t *testing.T) {
 	assert.Equal(t, "Laura", list[0].FirstName)
 	assert.Equal(t, "Gomez", list[0].LastName)
 	assert.Equal(t, "1111111111", list[0].Phone)
-	assert.Equal(t, "kinesiology", list[0].Specialty)
+	assert.Equal(t, "Kinesiology", list[0].Specialty)
 	assert.True(t, list[0].Active)
 }
 

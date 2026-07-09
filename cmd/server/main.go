@@ -37,6 +37,7 @@ const (
 	databaseURLEnv          = "DATABASE_URL"
 	environmentEnv          = "ENV"
 	environmentDevelopment  = "development"
+	logLevelEnv             = "LOG_LEVEL"
 	storageEndpointEnv      = "STORAGE_ENDPOINT"
 	storageAccessKeyEnv     = "STORAGE_ACCESS_KEY"
 	storageSecretKeyEnv     = "STORAGE_SECRET_KEY"
@@ -60,8 +61,14 @@ func main() {
 }
 
 func run() error {
+	logLevel, err := parseLogLevel(os.Getenv(logLevelEnv))
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return err
+	}
+
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
-		Level: slog.LevelDebug,
+		Level: logLevel,
 	}))
 	logger.Info("starting server")
 
@@ -116,6 +123,23 @@ func run() error {
 	}
 
 	return nil
+}
+
+// parseLogLevel reads LOG_LEVEL ("debug", "info", "warn", "error", case
+// insensitive). When unset it falls back to debug, matching the default
+// development experience.
+func parseLogLevel(raw string) (slog.Level, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return slog.LevelDebug, nil
+	}
+
+	var level slog.Level
+	if err := level.UnmarshalText([]byte(raw)); err != nil {
+		return 0, fmt.Errorf("invalid %s: %w", logLevelEnv, err)
+	}
+
+	return level, nil
 }
 
 // initializeStorageClient builds the object-storage client from the STORAGE_*

@@ -126,7 +126,7 @@ func (h *Handler) showDashboardUIHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 
-		professionals, err := h.repo.List(ctx)
+		professionals, err := h.repo.ListAll(ctx)
 		if err != nil {
 			h.logger.ErrorContext(ctx, "failed to list professionals for dashboard", slog.Any("error", err))
 			return
@@ -209,10 +209,10 @@ func (h *Handler) createUIHandler() http.HandlerFunc {
 			}
 		}
 
-		professionals, err := h.repo.List(ctx)
+		professionals, err := h.repo.ListAll(ctx)
 		if err != nil {
 			h.logger.ErrorContext(ctx, "failed to list professionals after creating new one", slog.Any("error", err))
-			h.createSnackbarError(ctx, w, http.StatusInternalServerError, "Failed to load professionals", "repo.List")
+			h.createSnackbarError(ctx, w, http.StatusInternalServerError, "Failed to load professionals", "repo.ListAll")
 			return
 		}
 
@@ -307,10 +307,10 @@ func (h *Handler) processProfessionalUpdate(ctx context.Context, w http.Response
 }
 
 func (h *Handler) renderUpdatedProfessionalsTable(ctx context.Context, w http.ResponseWriter) {
-	professionals, err := h.repo.List(ctx)
+	professionals, err := h.repo.ListAll(ctx)
 	if err != nil {
 		h.logger.ErrorContext(ctx, "failed to list professionals after updating one", slog.Any("error", err))
-		h.createSnackbarError(ctx, w, http.StatusInternalServerError, "Failed to load professionals", "repo.List")
+		h.createSnackbarError(ctx, w, http.StatusInternalServerError, "Failed to load professionals", "repo.ListAll")
 		return
 	}
 

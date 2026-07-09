@@ -1,5 +1,7 @@
 FROM golang:1.26.4-alpine3.23 AS builder
 
+RUN apk add --no-cache ca-certificates && update-ca-certificates
+
 RUN adduser -D -g '' -u 10001 appuser
 
 WORKDIR /app
@@ -21,6 +23,7 @@ RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
 FROM scratch
 
 COPY --from=builder /etc/passwd /etc/passwd
+COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
 COPY --from=builder /app/appointment-manager-server /appointment-manager-server
 COPY --from=builder /app/healthcheck /healthcheck
 COPY --from=builder /app/internal/ui/static /internal/ui/static
