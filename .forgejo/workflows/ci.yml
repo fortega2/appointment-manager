@@ -20,6 +20,15 @@ jobs:
       - name: Checkout
         uses: https://code.forgejo.org/actions/checkout@v4
 
+      - name: Cache Go modules and tools
+        uses: https://code.forgejo.org/actions/cache@v4
+        with:
+          path: |
+            ~/go/pkg/mod
+            ~/.cache/go-build
+            ~/go/bin
+          key: go-${{ hashFiles('go.sum') }}
+
       - name: Download dependencies
         run: go mod download
 
@@ -45,4 +54,6 @@ jobs:
         run: go test ./... -race
 
       - name: Integration tests
-        run: go test -tags=integration ./... -race
+        run: |
+          pkgs=$(grep -rl '^//go:build integration$' --include='*_test.go' . | xargs -n1 dirname | sort -u)
+          go test -tags=integration -race $pkgs
