@@ -73,20 +73,28 @@ func run() error {
 		return err
 	}
 
+	deps, err := newDependencies(pool)
+	if err != nil {
+		logger.Error("failed to initialize dependencies", slog.Any("error", err))
+		return err
+	}
+
 	env := strings.TrimSpace(os.Getenv(environmentEnv))
 	isDev := env == "" || strings.EqualFold(env, environmentDevelopment)
 
 	sessionStore := session.NewStore()
-	handler, err := initializeServerHandlers(logger, sessionStore, pool, storageClient, isDev)
+	handler, err := initializeServerHandlers(logger, sessionStore, deps, storageClient, isDev)
 	if err != nil {
+		logger.Error("failed to initialize server handlers", slog.Any("error", err))
 		return err
 	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	stopWorker, err := startOverdueWorker(ctx, logger, pool)
+	stopWorker, err := startOverdueWorker(ctx, logger, deps)
 	if err != nil {
+		logger.ErrorContext(ctx, "failed to start overdue appointment worker", slog.Any("error", err))
 		return err
 	}
 	defer stopWorker()

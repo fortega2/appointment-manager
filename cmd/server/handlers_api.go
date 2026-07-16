@@ -5,8 +5,6 @@ import (
 	"appointment-manager/internal/assistant"
 	"appointment-manager/internal/auth"
 	"appointment-manager/internal/health"
-	"appointment-manager/internal/healthinsurance"
-	"appointment-manager/internal/password"
 	"appointment-manager/internal/patient"
 	"appointment-manager/internal/professional"
 	"appointment-manager/internal/session"
@@ -14,18 +12,12 @@ import (
 	"fmt"
 	"log/slog"
 	"time"
-
-	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 const readinessTimeout = 300 * time.Millisecond
 
-func initializeAuthHandler(logger *slog.Logger, store *session.Store, pool *pgxpool.Pool, pass *password.Argon2, isDev bool) (*auth.Handler, error) {
-	authRepo, err := assistant.NewPostgresRepository(pool)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create auth postgres repository: %w", err)
-	}
-	authHandler, err := auth.NewHandler(logger, store, authRepo, pass, isDev)
+func initializeAuthHandler(logger *slog.Logger, store *session.Store, deps *dependencies, isDev bool) (*auth.Handler, error) {
+	authHandler, err := auth.NewHandler(logger, store, deps.assistantRepo, deps.passwordHasher, isDev)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create auth handler: %w", err)
 	}
@@ -33,13 +25,8 @@ func initializeAuthHandler(logger *slog.Logger, store *session.Store, pool *pgxp
 	return authHandler, nil
 }
 
-func initializeAssistantHandler(logger *slog.Logger, pool *pgxpool.Pool) (*assistant.Handler, error) {
-	assistantRepo, err := assistant.NewPostgresRepository(pool)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create assistant postgres repository: %w", err)
-	}
-	passwordHasher := password.NewArgon2()
-	assistantService, err := assistant.NewService(assistantRepo, passwordHasher)
+func initializeAssistantHandler(logger *slog.Logger, deps *dependencies) (*assistant.Handler, error) {
+	assistantService, err := assistant.NewService(deps.assistantRepo, deps.passwordHasher)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create assistant service: %w", err)
 	}
@@ -51,16 +38,8 @@ func initializeAssistantHandler(logger *slog.Logger, pool *pgxpool.Pool) (*assis
 	return assistantHandler, nil
 }
 
-func initializeAppointmentHandler(logger *slog.Logger, pool *pgxpool.Pool) (*appointment.Handler, error) {
-	appointmentRepo, err := appointment.NewPostgresRepository(pool)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create appointment postgres repository: %w", err)
-	}
-	appointmentService, err := appointment.NewService(appointmentRepo)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create appointment service: %w", err)
-	}
-	appointmentHandler, err := appointment.NewHandler(logger, appointmentService)
+func initializeAppointmentHandler(logger *slog.Logger, deps *dependencies) (*appointment.Handler, error) {
+	appointmentHandler, err := appointment.NewHandler(logger, deps.appointmentService)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create appointment handler: %w", err)
 	}
@@ -68,12 +47,8 @@ func initializeAppointmentHandler(logger *slog.Logger, pool *pgxpool.Pool) (*app
 	return appointmentHandler, nil
 }
 
-func initializeProfessionalHandler(logger *slog.Logger, pool *pgxpool.Pool) (*professional.Handler, error) {
-	professionalRepo, err := professional.NewRepository(pool)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create professional repository: %w", err)
-	}
-	professionalHandler, err := professional.NewHandler(logger, professionalRepo)
+func initializeProfessionalHandler(logger *slog.Logger, deps *dependencies) (*professional.Handler, error) {
+	professionalHandler, err := professional.NewHandler(logger, deps.professionalRepo)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create professional handler: %w", err)
 	}
@@ -81,16 +56,8 @@ func initializeProfessionalHandler(logger *slog.Logger, pool *pgxpool.Pool) (*pr
 	return professionalHandler, nil
 }
 
-func initializePatientHandler(logger *slog.Logger, pool *pgxpool.Pool) (*patient.Handler, error) {
-	patientRepo, err := patient.NewRepository(pool)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create patient repository: %w", err)
-	}
-	healthInsuranceRepo, err := healthinsurance.NewRepository(pool)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create health insurance repository: %w", err)
-	}
-	patientHandler, err := patient.NewHandler(logger, patientRepo, healthInsuranceRepo)
+func initializePatientHandler(logger *slog.Logger, deps *dependencies) (*patient.Handler, error) {
+	patientHandler, err := patient.NewHandler(logger, deps.patientRepo, deps.healthInsuranceRepo)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create patient handler: %w", err)
 	}
@@ -98,37 +65,20 @@ func initializePatientHandler(logger *slog.Logger, pool *pgxpool.Pool) (*patient
 	return patientHandler, nil
 }
 
-func initializeSlotHandler(logger *slog.Logger, pool *pgxpool.Pool) (*slot.Handler, error) {
-	repo, err := slot.NewRepository(pool)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create slot repository: %w", err)
-	}
-	query, err := slot.NewQuery(pool)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create slot query: %w", err)
-	}
-	pRepo, err := professional.NewRepository(pool)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create professional repository for slot handler: %w", err)
-	}
-
-	h, err := slot.NewHandler(logger, repo, query, pRepo)
+func initializeSlotHandler(logger *slog.Logger, deps *dependencies) (*slot.Handler, error) {
+	slotHandler, err := slot.NewHandler(logger, deps.slotRepo, deps.slotQuery, deps.professionalRepo)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create slot handler: %w", err)
 	}
 
-	return h, nil
+	return slotHandler, nil
 }
 
-func initializeHealthHandler(logger *slog.Logger, pool *pgxpool.Pool) (*health.Handler, error) {
-	checkReady, err := health.NewPgxReadinessCheck(pool)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create health readiness checker: %w", err)
-	}
-	handler, err := health.NewHandler(logger, checkReady, readinessTimeout)
+func initializeHealthHandler(logger *slog.Logger, deps *dependencies) (*health.Handler, error) {
+	healthHandler, err := health.NewHandler(logger, deps.readinessCheck, readinessTimeout)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create health handler: %w", err)
 	}
 
-	return handler, nil
+	return healthHandler, nil
 }

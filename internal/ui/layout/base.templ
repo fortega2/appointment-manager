@@ -1,11 +1,5 @@
 package layout
 
-// PrescriptionsEnabled controls whether the nav shows the Prescriptions
-// link. Set once at startup: the prescription UI routes are only
-// registered when object storage is configured, so the link is hidden
-// otherwise to avoid a dead link.
-var PrescriptionsEnabled = true
-
 templ Base(title string, isAuthenticated bool) {
 	<!DOCTYPE html>
 	<html lang="en">
@@ -80,7 +74,7 @@ templ Base(title string, isAuthenticated bool) {
 								>
 									<div class="py-1">
 										<a href="/appointments" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 hover:text-indigo-600">Appointments</a>
-										if PrescriptionsEnabled {
+										if prescriptionsEnabled(ctx) {
 											<a href="/prescriptions" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 hover:text-indigo-600">Prescriptions</a>
 										}
 										<a href="/patients" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 hover:text-indigo-600">Patients</a>
