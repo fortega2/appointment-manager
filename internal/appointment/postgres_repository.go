@@ -163,6 +163,19 @@ const (
 		WHERE
 			id = $1
 	`
+	expireOverdueAppointmentsQuery = `
+		UPDATE
+			appointment AS a
+		SET
+			status = $1,
+			updated_at = CURRENT_TIMESTAMP
+		FROM
+			slot AS s
+		WHERE
+			s.id = a.slot_id
+			AND a.status = $2
+			AND s.end_time < CURRENT_TIMESTAMP
+	`
 )
 
 type PostgresRepository struct {
@@ -301,6 +314,20 @@ func (r *PostgresRepository) UpdateStatus(ctx context.Context, appointmentID uui
 	}
 
 	return nil
+}
+
+// ExpireOverdue marks every CONFIRMED appointment whose slot has already ended
+// as ABSENT (a no-show) in a single atomic statement and returns the number of
+// rows updated. The status = CONFIRMED predicate makes the update
+// concurrency-safe: a row concurrently attended or cancelled no longer matches
+// and is skipped. Zero rows is a valid, non-error result.
+func (r *PostgresRepository) ExpireOverdue(ctx context.Context) (int64, error) {
+	cmd, err := r.pool.Exec(ctx, expireOverdueAppointmentsQuery, StatusAbsent, StatusConfirmed)
+	if err != nil {
+		return 0, fmt.Errorf("expire overdue appointments: %w", err)
+	}
+
+	return cmd.RowsAffected(), nil
 }
 
 func (r *PostgresRepository) readStatus(ctx context.Context, appointmentID uuid.UUID) (Status, error) {

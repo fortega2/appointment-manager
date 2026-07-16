@@ -18,6 +18,7 @@ import (
 	"appointment-manager/internal/storage"
 	"appointment-manager/internal/ui/home"
 	"appointment-manager/internal/ui/layout"
+	"appointment-manager/internal/worker"
 	"context"
 	"fmt"
 	"log/slog"
@@ -34,24 +35,26 @@ import (
 )
 
 const (
-	databaseURLEnv          = "DATABASE_URL"
-	environmentEnv          = "ENV"
-	environmentDevelopment  = "development"
-	logLevelEnv             = "LOG_LEVEL"
-	storageEndpointEnv      = "STORAGE_ENDPOINT"
-	storageAccessKeyEnv     = "STORAGE_ACCESS_KEY"
-	storageSecretKeyEnv     = "STORAGE_SECRET_KEY"
-	storageBucketEnv        = "STORAGE_BUCKET"
-	storageRegionEnv        = "STORAGE_REGION"
-	storageUseSSLEnv        = "STORAGE_USE_SSL"
-	serverAddr              = ":8080"
-	serverReadHeaderTimeout = 5 * time.Second
-	serverReadTimeout       = 10 * time.Second
-	serverWriteTimeout      = 15 * time.Second
-	serverIdleTimeout       = 60 * time.Second
-	serverMaxHeaderBytes    = 1 << 20
-	serverShutdownTimeout   = 3 * time.Second
-	readinessTimeout        = 300 * time.Millisecond
+	databaseURLEnv              = "DATABASE_URL"
+	environmentEnv              = "ENV"
+	environmentDevelopment      = "development"
+	logLevelEnv                 = "LOG_LEVEL"
+	storageEndpointEnv          = "STORAGE_ENDPOINT"
+	storageAccessKeyEnv         = "STORAGE_ACCESS_KEY"
+	storageSecretKeyEnv         = "STORAGE_SECRET_KEY"
+	storageBucketEnv            = "STORAGE_BUCKET"
+	storageRegionEnv            = "STORAGE_REGION"
+	storageUseSSLEnv            = "STORAGE_USE_SSL"
+	workerIntervalEnv           = "WORKER_TICKER_INTERVAL"
+	serverAddr                  = ":8080"
+	serverReadHeaderTimeout     = 5 * time.Second
+	serverReadTimeout           = 10 * time.Second
+	serverWriteTimeout          = 15 * time.Second
+	serverIdleTimeout           = 60 * time.Second
+	serverMaxHeaderBytes        = 1 << 20
+	serverShutdownTimeout       = 3 * time.Second
+	readinessTimeout            = 300 * time.Millisecond
+	defaultWorkerTickerInterval = 30 * time.Minute
 )
 
 func main() {
@@ -92,6 +95,9 @@ func run() error {
 		return err
 	}
 	defer pool.Close()
+	defer func(logger *slog.Logger) {
+		logger.Info("postgres pool closed")
+	}(logger)
 
 	storageClient, err := initializeStorageClient(context.Background(), logger)
 	if err != nil {
@@ -109,6 +115,37 @@ func run() error {
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+
+	appointmentRepo, err := appointment.NewPostgresRepository(pool)
+	if err != nil {
+		logger.ErrorContext(ctx, "failed to initialize appointment repository", slog.Any("error", err))
+		return err
+	}
+
+	workerInterval, err := parseWorkerInterval(os.Getenv(workerIntervalEnv))
+	if err != nil {
+		logger.ErrorContext(ctx, "invalid worker ticker interval", slog.Any("error", err))
+		return err
+	}
+
+	overdueWorker, err := worker.NewWorker(logger, appointmentRepo.ExpireOverdue, workerInterval)
+	if err != nil {
+		logger.ErrorContext(ctx, "failed to initialize overdue appointment worker", slog.Any("error", err))
+		return err
+	}
+
+	workerCtx, cancelWorker := context.WithCancel(ctx)
+	workerDone := make(chan struct{})
+	go func() {
+		defer close(workerDone)
+		overdueWorker.Run(workerCtx)
+	}()
+	logger.InfoContext(ctx, "overdue appointment worker started", slog.Duration("interval", workerInterval))
+	defer func(logger *slog.Logger) {
+		<-workerDone
+		logger.InfoContext(ctx, "overdue appointment worker stopped")
+	}(logger)
+	defer cancelWorker()
 
 	if err := server.Start(ctx, logger, handler, serverAddr, server.Config{
 		ReadHeaderTimeout: serverReadHeaderTimeout,
@@ -140,6 +177,26 @@ func parseLogLevel(raw string) (slog.Level, error) {
 	}
 
 	return level, nil
+}
+
+// parseWorkerInterval reads WORKER_TICKER_INTERVAL as a Go duration string (e.g.
+// "30m", "1h"). When unset it falls back to defaultWorkerTickerInterval; a
+// malformed or non-positive value is rejected so misconfiguration fails fast.
+func parseWorkerInterval(raw string) (time.Duration, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return defaultWorkerTickerInterval, nil
+	}
+
+	interval, err := time.ParseDuration(raw)
+	if err != nil {
+		return 0, fmt.Errorf("invalid %s: %w", workerIntervalEnv, err)
+	}
+	if interval <= 0 {
+		return 0, fmt.Errorf("invalid %s: must be greater than zero", workerIntervalEnv)
+	}
+
+	return interval, nil
 }
 
 // initializeStorageClient builds the object-storage client from the STORAGE_*
