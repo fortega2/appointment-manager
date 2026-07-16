@@ -1,8 +1,8 @@
 services:
   server:
-    container_name: appointment-manager-server
+    container_name: appointment-manager
     hostname: server
-    image: git.sonuserver.com/fortega21/appointment-manager-server:latest
+    image: git.sonuserver.com/fortega21/appointment-manager:latest
     environment:
       DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?sslmode=disable
       ENV: production
