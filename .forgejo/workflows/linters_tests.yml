@@ -14,6 +14,12 @@ jobs:
   ci:
     runs-on: golang
     steps:
+      - name: DNS debug
+        run: |
+          echo "=== resolv.conf ==="
+          cat /etc/resolv.conf
+          echo "=== nslookup directo 1.1.1.1 ==="
+          getent hosts deb.debian.org || echo "getent FALLO"
       - name: Install Node.js (required by JS-based actions like checkout)
         run: |
           for i in 1 2 3 4 5; do
