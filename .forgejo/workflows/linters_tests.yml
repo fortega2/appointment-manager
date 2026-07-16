@@ -15,7 +15,14 @@ jobs:
     runs-on: golang
     steps:
       - name: Install Node.js (required by JS-based actions like checkout)
-        run: apt-get update && apt-get install -y --no-install-recommends nodejs && rm -rf /var/lib/apt/lists/*
+        run: |
+          for i in 1 2 3 4 5; do
+            apt-get update && break
+            echo "apt-get update failed, retrying in 3s... ($i/5)"
+            sleep 3
+          done
+          apt-get install -y --no-install-recommends nodejs
+          rm -rf /var/lib/apt/lists/*
 
       - name: Checkout
         uses: https://code.forgejo.org/actions/checkout@v4
