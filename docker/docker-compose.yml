@@ -6,6 +6,14 @@ services:
     environment:
       DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?sslmode=disable
       ENV: production
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      STORAGE_ENDPOINT: ${STORAGE_ENDPOINT}
+      STORAGE_ACCESS_KEY: ${STORAGE_ACCESS_KEY}
+      STORAGE_SECRET_KEY: ${STORAGE_SECRET_KEY}
+      STORAGE_BUCKET: ${STORAGE_BUCKET}
+      STORAGE_REGION: ${STORAGE_REGION:-}
+      STORAGE_USE_SSL: ${STORAGE_USE_SSL}
+      WORKER_TICKER_INTERVAL: ${WORKER_TICKER_INTERVAL}
     networks:
       - caddy_network
       - backend_network
