@@ -14,6 +14,7 @@ RUN go mod download
 
 COPY cmd ./cmd
 COPY internal ./internal
+RUN chmod -R a+rX internal/ui/static
 
 RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
     go build -ldflags="-s -w" -o /app/appointment-manager ./cmd/server
