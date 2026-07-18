@@ -11,19 +11,18 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  ci:
+  linter-tests:
     runs-on: golang
     steps:
       - name: Checkout
         uses: https://code.forgejo.org/actions/checkout@v4
 
-      - name: Cache Go modules and tools
+      - name: Cache Go modules
         uses: https://code.forgejo.org/actions/cache@v4
         with:
           path: |
             ~/go/pkg/mod
             ~/.cache/go-build
-            ~/go/bin
           key: go-${{ hashFiles('go.sum') }}
 
       - name: Download dependencies
@@ -35,14 +34,8 @@ jobs:
       - name: go build
         run: go build ./...
 
-      - name: Install golangci-lint
-        run: curl -sSfL https://golangci-lint.run/install.sh | sh -s -- -b $(go env GOPATH)/bin v2.12.2
-
       - name: golangci-lint
         run: golangci-lint run ./...
-
-      - name: Install govulncheck
-        run: go install golang.org/x/vuln/cmd/govulncheck@v1.1.4
 
       - name: govulncheck
         run: govulncheck ./...
@@ -54,3 +47,21 @@ jobs:
         run: |
           pkgs=$(grep -rl '^//go:build integration$' --include='*_test.go' . | xargs -n1 dirname | sort -u)
           go test -tags=integration -race $pkgs
+
+  docker:
+    runs-on: golang
+    needs: linter-tests
+    if: github.event_name == 'push'
+    steps:
+      - name: Checkout
+        uses: https://code.forgejo.org/actions/checkout@v4
+
+      - name: Build and push
+        run: |
+          export DOCKER_HOST=tcp://$(ip route | awk '/^default/{print $3}'):2375
+          echo "${{ secrets.REGISTRY_TOKEN }}" \
+            | docker login git.sonuserver.com -u fortega21 --password-stdin
+          IMAGE=git.sonuserver.com/fortega21/appointment-manager
+          docker build -t "$IMAGE:${{ github.sha }}" -t "$IMAGE:latest" .
+          docker push "$IMAGE:${{ github.sha }}"
+          docker push "$IMAGE:latest"
