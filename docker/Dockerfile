@@ -20,9 +20,7 @@ RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
     go build -ldflags="-s -w" -o /app/appointment-manager ./cmd/server
 RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
     go build -ldflags="-s -w" -o /app/healthcheck ./cmd/healthcheck/main.go
-
-# Check that the files are executable and readable by all users
-RUN ls -l /app/appointment-manager /app/healthcheck && umask
+RUN chmod 0755 /app/appointment-manager /app/healthcheck
 
 FROM scratch
 

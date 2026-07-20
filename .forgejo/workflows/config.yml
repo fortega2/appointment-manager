@@ -62,7 +62,7 @@ jobs:
           echo "${{ secrets.REGISTRY_TOKEN }}" \
             | docker login git.sonuserver.com -u fortega21 --password-stdin
           IMAGE=git.sonuserver.com/fortega21/appointment-manager
-          docker build -f docker/Dockerfile \
+          docker build --no-cache -f docker/Dockerfile \
             -t "$IMAGE:${{ github.sha }}" -t "$IMAGE:latest" .
           docker push "$IMAGE:${{ github.sha }}"
           docker push "$IMAGE:latest"
