@@ -21,12 +21,16 @@ RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
 RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
     go build -ldflags="-s -w" -o /app/healthcheck ./cmd/healthcheck/main.go
 
+# Check that the files are executable and readable by all users
+RUN ls -l /app/appointment-manager /app/healthcheck && umask
+
 FROM scratch
 
 COPY --from=builder /etc/passwd /etc/passwd
+COPY --from=builder /etc/group /etc/group
 COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
-COPY --from=builder /app/appointment-manager /appointment-manager
-COPY --from=builder /app/healthcheck /healthcheck
+COPY --from=builder --chmod=755 /app/appointment-manager /appointment-manager
+COPY --from=builder --chmod=755 /app/healthcheck /healthcheck
 COPY --from=builder /app/internal/ui/static /internal/ui/static
 
 USER appuser
