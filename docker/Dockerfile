@@ -20,16 +20,17 @@ RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
     go build -ldflags="-s -w" -o /app/appointment-manager ./cmd/server
 RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
     go build -ldflags="-s -w" -o /app/healthcheck ./cmd/healthcheck/main.go
-RUN chmod 0755 /app/appointment-manager /app/healthcheck
+RUN mkdir -p /out/etc/ssl/certs /out/internal/ui \
+ && cp /etc/passwd /etc/group /out/etc/ \
+ && cp /etc/ssl/certs/ca-certificates.crt /out/etc/ssl/certs/ \
+ && cp /app/appointment-manager /app/healthcheck /out/ \
+ && cp -r /app/internal/ui/static /out/internal/ui/static \
+ && chmod -R a+rX /out \
+ && chmod 0755 /out/appointment-manager /out/healthcheck
 
 FROM scratch
 
-COPY --from=builder /etc/passwd /etc/passwd
-COPY --from=builder /etc/group /etc/group
-COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
-COPY --from=builder --chmod=755 /app/appointment-manager /appointment-manager
-COPY --from=builder --chmod=755 /app/healthcheck /healthcheck
-COPY --from=builder /app/internal/ui/static /internal/ui/static
+COPY --from=builder /out/ /
 
 USER appuser
 
