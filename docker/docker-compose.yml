@@ -14,11 +14,14 @@ services:
       STORAGE_REGION: ${STORAGE_REGION:-}
       STORAGE_USE_SSL: ${STORAGE_USE_SSL}
       WORKER_TICKER_INTERVAL: ${WORKER_TICKER_INTERVAL}
+      METRICS_ADDR: ":${METRICS_PORT:-9090}"
     networks:
       - caddy_network
       - backend_network
     expose:
       - ${API_PORT:-8080}
+      # Prometheus /metrics; reachable from a Prometheus attached to caddy_network.
+      - ${METRICS_PORT:-9090}
     restart: unless-stopped
     read_only: true
     tmpfs:

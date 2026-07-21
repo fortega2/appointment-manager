@@ -12,6 +12,7 @@ import (
 	"github.com/golang-migrate/migrate/v4"
 	_ "github.com/golang-migrate/migrate/v4/database/pgx/v5" // Register pgx v5 migrate driver.
 	"github.com/golang-migrate/migrate/v4/source/iofs"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -23,7 +24,20 @@ const (
 //go:embed migrations/*.sql
 var migrationsFS embed.FS
 
-func NewPostgresPool(ctx context.Context, databaseURL string) (*pgxpool.Pool, error) {
+// Option customises the pgx pool configuration before the pool is created.
+type Option func(*pgxpool.Config)
+
+// WithQueryTracer attaches a pgx query tracer to every connection in the pool,
+// enabling centralised query instrumentation without touching repositories.
+func WithQueryTracer(tracer pgx.QueryTracer) Option {
+	return func(cfg *pgxpool.Config) {
+		cfg.ConnConfig.Tracer = tracer
+	}
+}
+
+// NewPostgresPool runs migrations and builds a configured pgx pool. Optional
+// Options (e.g. WithQueryTracer) tune the pool config before it is opened.
+func NewPostgresPool(ctx context.Context, databaseURL string, opts ...Option) (*pgxpool.Pool, error) {
 	if ctx == nil {
 		return nil, ErrNilContext
 	}
@@ -47,6 +61,10 @@ func NewPostgresPool(ctx context.Context, databaseURL string) (*pgxpool.Pool, er
 	poolConfig.MaxConnLifetime = time.Hour
 	poolConfig.MaxConnIdleTime = maxConnIdleTime
 	poolConfig.HealthCheckPeriod = healthCheckPeriod
+
+	for _, opt := range opts {
+		opt(poolConfig)
+	}
 
 	pool, err := pgxpool.NewWithConfig(ctx, poolConfig)
 	if err != nil {

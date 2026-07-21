@@ -53,7 +53,7 @@ func (m *serviceRepoMock) UpdateStatus(ctx context.Context, appointmentID uuid.U
 func TestNewServiceValidation(t *testing.T) {
 	t.Parallel()
 
-	svc, err := NewService(nil)
+	svc, err := NewService(nil, nil)
 
 	require.Error(t, err)
 	assert.Nil(t, svc)
@@ -64,7 +64,7 @@ func TestServiceListValidation(t *testing.T) {
 	t.Parallel()
 
 	repo := new(serviceRepoMock)
-	svc, err := NewService(repo)
+	svc, err := NewService(repo, nil)
 	require.NoError(t, err)
 
 	_, err = svc.List(context.Background(), ListInput{Page: "0"})
@@ -87,7 +87,7 @@ func TestServiceListSuccess(t *testing.T) {
 	t.Parallel()
 
 	repo := new(serviceRepoMock)
-	svc, err := NewService(repo)
+	svc, err := NewService(repo, nil)
 	require.NoError(t, err)
 
 	expected := []Appointment{{ID: uuid.Must(uuid.NewV7())}}
@@ -104,7 +104,7 @@ func TestServiceCreateValidation(t *testing.T) {
 	t.Parallel()
 
 	repo := new(serviceRepoMock)
-	svc, err := NewService(repo)
+	svc, err := NewService(repo, nil)
 	require.NoError(t, err)
 
 	_, createErr := svc.Create(context.Background(), CreateInput{})
@@ -122,7 +122,7 @@ func TestServiceCreateSuccess(t *testing.T) {
 	t.Parallel()
 
 	repo := new(serviceRepoMock)
-	svc, err := NewService(repo)
+	svc, err := NewService(repo, nil)
 	require.NoError(t, err)
 
 	slotID := uuid.Must(uuid.NewV7())
@@ -164,7 +164,7 @@ func TestServiceCancel(t *testing.T) {
 		t.Parallel()
 
 		repo := new(serviceRepoMock)
-		svc, err := newServiceWithClock(repo, func() time.Time { return referenceTime })
+		svc, err := newServiceWithClock(repo, func() time.Time { return referenceTime }, nil)
 		require.NoError(t, err)
 
 		repo.On("GetWindow", mock.Anything, appointmentID).Return(Window{
@@ -184,7 +184,7 @@ func TestServiceCancel(t *testing.T) {
 		t.Parallel()
 
 		repo := new(serviceRepoMock)
-		svc, err := newServiceWithClock(repo, func() time.Time { return referenceTime })
+		svc, err := newServiceWithClock(repo, func() time.Time { return referenceTime }, nil)
 		require.NoError(t, err)
 
 		repo.On("GetWindow", mock.Anything, appointmentID).Return(Window{
@@ -204,7 +204,7 @@ func TestServiceCancel(t *testing.T) {
 		t.Parallel()
 
 		repo := new(serviceRepoMock)
-		svc, err := newServiceWithClock(repo, func() time.Time { return referenceTime })
+		svc, err := newServiceWithClock(repo, func() time.Time { return referenceTime }, nil)
 		require.NoError(t, err)
 
 		repo.On("GetWindow", mock.Anything, appointmentID).Return(Window{
@@ -224,7 +224,7 @@ func TestServiceCancel(t *testing.T) {
 		t.Parallel()
 
 		repo := new(serviceRepoMock)
-		svc, err := newServiceWithClock(repo, func() time.Time { return referenceTime })
+		svc, err := newServiceWithClock(repo, func() time.Time { return referenceTime }, nil)
 		require.NoError(t, err)
 
 		repo.On("GetWindow", mock.Anything, appointmentID).Return(Window{
@@ -244,7 +244,7 @@ func TestServiceCancel(t *testing.T) {
 		t.Parallel()
 
 		repo := new(serviceRepoMock)
-		svc, err := newServiceWithClock(repo, func() time.Time { return referenceTime })
+		svc, err := newServiceWithClock(repo, func() time.Time { return referenceTime }, nil)
 		require.NoError(t, err)
 
 		repo.On("GetWindow", mock.Anything, appointmentID).Return(Window{
@@ -272,7 +272,7 @@ func TestServiceAttend(t *testing.T) {
 		t.Parallel()
 
 		repo := new(serviceRepoMock)
-		svc, err := newServiceWithClock(repo, func() time.Time { return referenceTime })
+		svc, err := newServiceWithClock(repo, func() time.Time { return referenceTime }, nil)
 		require.NoError(t, err)
 
 		repo.On("GetWindow", mock.Anything, appointmentID).Return(Window{
@@ -292,7 +292,7 @@ func TestServiceAttend(t *testing.T) {
 		t.Parallel()
 
 		repo := new(serviceRepoMock)
-		svc, err := newServiceWithClock(repo, func() time.Time { return referenceTime })
+		svc, err := newServiceWithClock(repo, func() time.Time { return referenceTime }, nil)
 		require.NoError(t, err)
 
 		repo.On("GetWindow", mock.Anything, appointmentID).Return(Window{
@@ -313,7 +313,7 @@ func TestServiceAttend(t *testing.T) {
 		t.Parallel()
 
 		repo := new(serviceRepoMock)
-		svc, err := newServiceWithClock(repo, func() time.Time { return referenceTime })
+		svc, err := newServiceWithClock(repo, func() time.Time { return referenceTime }, nil)
 		require.NoError(t, err)
 
 		repo.On("GetWindow", mock.Anything, appointmentID).Return(Window{
@@ -334,7 +334,7 @@ func TestServiceAttend(t *testing.T) {
 		t.Parallel()
 
 		repo := new(serviceRepoMock)
-		svc, err := newServiceWithClock(repo, func() time.Time { return referenceTime })
+		svc, err := newServiceWithClock(repo, func() time.Time { return referenceTime }, nil)
 		require.NoError(t, err)
 
 		repo.On("GetWindow", mock.Anything, appointmentID).Return(Window{
@@ -354,7 +354,7 @@ func TestServiceAttend(t *testing.T) {
 		t.Parallel()
 
 		repo := new(serviceRepoMock)
-		svc, err := newServiceWithClock(repo, func() time.Time { return referenceTime })
+		svc, err := newServiceWithClock(repo, func() time.Time { return referenceTime }, nil)
 		require.NoError(t, err)
 
 		repo.On("GetWindow", mock.Anything, appointmentID).Return(Window{
@@ -382,7 +382,7 @@ func TestServiceActionRepositoryError(t *testing.T) {
 		t.Parallel()
 
 		repo := new(serviceRepoMock)
-		svc, err := newServiceWithClock(repo, func() time.Time { return referenceTime })
+		svc, err := newServiceWithClock(repo, func() time.Time { return referenceTime }, nil)
 		require.NoError(t, err)
 
 		repo.On("GetWindow", mock.Anything, appointmentID).Return(Window{
@@ -402,7 +402,7 @@ func TestServiceActionRepositoryError(t *testing.T) {
 		t.Parallel()
 
 		repo := new(serviceRepoMock)
-		svc, err := newServiceWithClock(repo, func() time.Time { return referenceTime })
+		svc, err := newServiceWithClock(repo, func() time.Time { return referenceTime }, nil)
 		require.NoError(t, err)
 
 		repo.On("GetWindow", mock.Anything, appointmentID).Return(Window{
@@ -415,6 +415,150 @@ func TestServiceActionRepositoryError(t *testing.T) {
 		err = svc.Attend(context.Background(), appointmentID)
 
 		require.Error(t, err)
+		repo.AssertExpectations(t)
+	})
+}
+
+type serviceMetricsMock struct {
+	created   int
+	attended  int
+	cancelled int
+	absent    int
+}
+
+func (m *serviceMetricsMock) RecordAppointmentCreated()   { m.created++ }
+func (m *serviceMetricsMock) RecordAppointmentAttended()  { m.attended++ }
+func (m *serviceMetricsMock) RecordAppointmentCancelled() { m.cancelled++ }
+func (m *serviceMetricsMock) RecordAppointmentAbsent()    { m.absent++ }
+
+func validCreateInput() CreateInput {
+	return CreateInput{
+		SlotID:         uuid.Must(uuid.NewV7()).String(),
+		PatientID:      uuid.Must(uuid.NewV7()).String(),
+		ProfessionalID: uuid.Must(uuid.NewV7()).String(),
+		AssistantID:    uuid.Must(uuid.NewV7()).String(),
+	}
+}
+
+func TestServiceRecordsBusinessMetrics(t *testing.T) {
+	t.Parallel()
+
+	referenceTime := time.Date(2026, 2, 1, 10, 0, 0, 0, time.UTC)
+	appointmentID := uuid.Must(uuid.NewV7())
+
+	t.Run("create success records created", func(t *testing.T) {
+		t.Parallel()
+
+		repo := new(serviceRepoMock)
+		recorder := &serviceMetricsMock{}
+		svc, err := NewService(repo, recorder)
+		require.NoError(t, err)
+
+		repo.On("Create", mock.Anything, mock.Anything).Return(uuid.Must(uuid.NewV7()), nil).Once()
+
+		_, err = svc.Create(context.Background(), validCreateInput())
+
+		require.NoError(t, err)
+		assert.Equal(t, 1, recorder.created)
+		repo.AssertExpectations(t)
+	})
+
+	t.Run("create failure records nothing", func(t *testing.T) {
+		t.Parallel()
+
+		repo := new(serviceRepoMock)
+		recorder := &serviceMetricsMock{}
+		svc, err := NewService(repo, recorder)
+		require.NoError(t, err)
+
+		repo.On("Create", mock.Anything, mock.Anything).Return(nil, errors.New(serviceBoomError)).Once()
+
+		_, err = svc.Create(context.Background(), validCreateInput())
+
+		require.Error(t, err)
+		assert.Equal(t, 0, recorder.created)
+		repo.AssertExpectations(t)
+	})
+
+	t.Run("cancel outside window records cancelled", func(t *testing.T) {
+		t.Parallel()
+
+		repo := new(serviceRepoMock)
+		recorder := &serviceMetricsMock{}
+		svc, err := newServiceWithClock(repo, func() time.Time { return referenceTime }, recorder)
+		require.NoError(t, err)
+
+		repo.On("GetWindow", mock.Anything, appointmentID).Return(Window{
+			StartTime: referenceTime.Add(25 * time.Hour),
+			EndTime:   referenceTime.Add(26 * time.Hour),
+			Status:    StatusConfirmed,
+		}, nil).Once()
+		repo.On("UpdateStatus", mock.Anything, appointmentID, StatusCancelled, StatusConfirmed).Return(nil).Once()
+
+		require.NoError(t, svc.Cancel(context.Background(), appointmentID))
+		assert.Equal(t, 1, recorder.cancelled)
+		assert.Equal(t, 0, recorder.absent)
+		repo.AssertExpectations(t)
+	})
+
+	t.Run("cancel inside window records absent", func(t *testing.T) {
+		t.Parallel()
+
+		repo := new(serviceRepoMock)
+		recorder := &serviceMetricsMock{}
+		svc, err := newServiceWithClock(repo, func() time.Time { return referenceTime }, recorder)
+		require.NoError(t, err)
+
+		repo.On("GetWindow", mock.Anything, appointmentID).Return(Window{
+			StartTime: referenceTime.Add(2 * time.Hour),
+			EndTime:   referenceTime.Add(3 * time.Hour),
+			Status:    StatusConfirmed,
+		}, nil).Once()
+		repo.On("UpdateStatus", mock.Anything, appointmentID, StatusAbsent, StatusConfirmed).Return(nil).Once()
+
+		require.NoError(t, svc.Cancel(context.Background(), appointmentID))
+		assert.Equal(t, 1, recorder.absent)
+		assert.Equal(t, 0, recorder.cancelled)
+		repo.AssertExpectations(t)
+	})
+
+	t.Run("attend success records attended", func(t *testing.T) {
+		t.Parallel()
+
+		repo := new(serviceRepoMock)
+		recorder := &serviceMetricsMock{}
+		svc, err := newServiceWithClock(repo, func() time.Time { return referenceTime }, recorder)
+		require.NoError(t, err)
+
+		repo.On("GetWindow", mock.Anything, appointmentID).Return(Window{
+			StartTime: referenceTime.Add(-30 * time.Minute),
+			EndTime:   referenceTime.Add(30 * time.Minute),
+			Status:    StatusConfirmed,
+		}, nil).Once()
+		repo.On("UpdateStatus", mock.Anything, appointmentID, StatusAttended, StatusConfirmed).Return(nil).Once()
+
+		require.NoError(t, svc.Attend(context.Background(), appointmentID))
+		assert.Equal(t, 1, recorder.attended)
+		repo.AssertExpectations(t)
+	})
+
+	t.Run("attend failure records nothing", func(t *testing.T) {
+		t.Parallel()
+
+		repo := new(serviceRepoMock)
+		recorder := &serviceMetricsMock{}
+		svc, err := newServiceWithClock(repo, func() time.Time { return referenceTime }, recorder)
+		require.NoError(t, err)
+
+		repo.On("GetWindow", mock.Anything, appointmentID).Return(Window{
+			StartTime: referenceTime.Add(-30 * time.Minute),
+			EndTime:   referenceTime.Add(30 * time.Minute),
+			Status:    StatusConfirmed,
+		}, nil).Once()
+		repo.On("UpdateStatus", mock.Anything, appointmentID, StatusAttended, StatusConfirmed).Return(errors.New(serviceBoomError)).Once()
+
+		require.Error(t, svc.Attend(context.Background(), appointmentID))
+		assert.Equal(t, 0, recorder.attended)
 		repo.AssertExpectations(t)
 	})
 }

@@ -34,6 +34,9 @@ COPY --from=builder /out/ /
 
 USER appuser
 
+# 8080: application HTTP; 9090: Prometheus /metrics (separate listener, see METRICS_ADDR).
+EXPOSE 8080 9090
+
 HEALTHCHECK --interval=10s --timeout=2s --start-period=20s --retries=3 \
     CMD ["/healthcheck", "-url", "http://127.0.0.1:8080/readyz", "-timeout", "2s"]
 

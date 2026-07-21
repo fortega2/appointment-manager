@@ -27,9 +27,20 @@ type repository interface {
 	UpdateStatus(ctx context.Context, appointmentID uuid.UUID, newStatus, expectedStatus Status) error
 }
 
+// Metrics records appointment business events. It is satisfied by
+// *metrics.Metrics; a nil value passed to the constructor is replaced by a
+// no-op implementation so metrics stay an optional dependency.
+type Metrics interface {
+	RecordAppointmentCreated()
+	RecordAppointmentAttended()
+	RecordAppointmentCancelled()
+	RecordAppointmentAbsent()
+}
+
 type Service struct {
-	repo repository
-	now  func() time.Time
+	repo    repository
+	now     func() time.Time
+	metrics Metrics
 }
 
 type ListInput struct {
@@ -58,21 +69,25 @@ type Window struct {
 	Status    Status
 }
 
-func NewService(repo repository) (*Service, error) {
-	return newServiceWithClock(repo, time.Now)
+func NewService(repo repository, appointmentMetrics Metrics) (*Service, error) {
+	return newServiceWithClock(repo, time.Now, appointmentMetrics)
 }
 
-func newServiceWithClock(repo repository, now func() time.Time) (*Service, error) {
+func newServiceWithClock(repo repository, now func() time.Time, appointmentMetrics Metrics) (*Service, error) {
 	if repo == nil {
 		return nil, ErrNilRepository
 	}
 	if now == nil {
 		now = time.Now
 	}
+	if appointmentMetrics == nil {
+		appointmentMetrics = noopMetrics{}
+	}
 
 	return &Service{
-		repo: repo,
-		now:  now,
+		repo:    repo,
+		now:     now,
+		metrics: appointmentMetrics,
 	}, nil
 }
 
@@ -106,7 +121,14 @@ func (s *Service) Create(ctx context.Context, input CreateInput) (uuid.UUID, err
 		return uuid.Nil, err
 	}
 
-	return s.repo.Create(ctx, *NewAppointment(slotID, patientID, professionalID, assistantID, input.Notes))
+	appointmentID, err := s.repo.Create(ctx, *NewAppointment(slotID, patientID, professionalID, assistantID, input.Notes))
+	if err != nil {
+		return uuid.Nil, err
+	}
+
+	s.metrics.RecordAppointmentCreated()
+
+	return appointmentID, nil
 }
 
 func (s *Service) Cancel(ctx context.Context, appointmentID uuid.UUID) error {
@@ -129,7 +151,17 @@ func (s *Service) Cancel(ctx context.Context, appointmentID uuid.UUID) error {
 		finalStatus = StatusAbsent
 	}
 
-	return s.repo.UpdateStatus(ctx, appointmentID, finalStatus, StatusConfirmed)
+	if err := s.repo.UpdateStatus(ctx, appointmentID, finalStatus, StatusConfirmed); err != nil {
+		return err
+	}
+
+	if finalStatus == StatusAbsent {
+		s.metrics.RecordAppointmentAbsent()
+	} else {
+		s.metrics.RecordAppointmentCancelled()
+	}
+
+	return nil
 }
 
 func (s *Service) Attend(ctx context.Context, appointmentID uuid.UUID) error {
@@ -151,7 +183,13 @@ func (s *Service) Attend(ctx context.Context, appointmentID uuid.UUID) error {
 		return ErrAppointmentCannotAttendNow
 	}
 
-	return s.repo.UpdateStatus(ctx, appointmentID, StatusAttended, StatusConfirmed)
+	if err := s.repo.UpdateStatus(ctx, appointmentID, StatusAttended, StatusConfirmed); err != nil {
+		return err
+	}
+
+	s.metrics.RecordAppointmentAttended()
+
+	return nil
 }
 
 func parseListInput(input ListInput) (ListFilter, error) {
@@ -209,3 +247,12 @@ func parseRequiredID(raw string, requiredErr, invalidErr error) (uuid.UUID, erro
 
 	return parsedID, nil
 }
+
+// noopMetrics is the default Metrics used when the service is built without a
+// recorder, so business instrumentation is optional and tests need not wire it.
+type noopMetrics struct{}
+
+func (noopMetrics) RecordAppointmentCreated()   {}
+func (noopMetrics) RecordAppointmentAttended()  {}
+func (noopMetrics) RecordAppointmentCancelled() {}
+func (noopMetrics) RecordAppointmentAbsent()    {}

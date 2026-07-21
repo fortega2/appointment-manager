@@ -5,6 +5,7 @@ import (
 	"appointment-manager/internal/assistant"
 	"appointment-manager/internal/health"
 	"appointment-manager/internal/healthinsurance"
+	"appointment-manager/internal/metrics"
 	"appointment-manager/internal/password"
 	"appointment-manager/internal/patient"
 	"appointment-manager/internal/prescription"
@@ -45,7 +46,7 @@ type dependencies struct {
 // newDependencies builds every shared collaborator from the pool. Each
 // constructor here fails only when the pool is nil, so an error means the
 // process cannot serve anything and must not start.
-func newDependencies(pool *pgxpool.Pool) (*dependencies, error) {
+func newDependencies(pool *pgxpool.Pool, appointmentMetrics *metrics.Metrics) (*dependencies, error) {
 	appointmentRepo, err := appointment.NewPostgresRepository(pool)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create appointment postgres repository: %w", err)
@@ -54,7 +55,7 @@ func newDependencies(pool *pgxpool.Pool) (*dependencies, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to create appointment query: %w", err)
 	}
-	appointmentService, err := appointment.NewService(appointmentRepo)
+	appointmentService, err := appointment.NewService(appointmentRepo, appointmentMetrics)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create appointment service: %w", err)
 	}

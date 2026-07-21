@@ -1,6 +1,7 @@
 package main
 
 import (
+	"appointment-manager/internal/metrics"
 	"appointment-manager/internal/middleware"
 	"appointment-manager/internal/session"
 	"appointment-manager/internal/storage"
@@ -12,7 +13,7 @@ import (
 // initializeServerHandlers builds every handler and wires it to a mux. Errors
 // are returned wrapped rather than logged here: run logs them once, so the
 // context of the failure is carried by the error chain itself.
-func initializeServerHandlers(logger *slog.Logger, sessionStore *session.Store, deps *dependencies, storageClient *storage.Client, isDev bool) (http.Handler, error) {
+func initializeServerHandlers(logger *slog.Logger, sessionStore *session.Store, deps *dependencies, storageClient *storage.Client, isDev bool, m *metrics.Metrics) (http.Handler, error) {
 	authHandler, err := initializeAuthHandler(logger, sessionStore, deps, isDev)
 	if err != nil {
 		return nil, err
@@ -97,6 +98,7 @@ func initializeServerHandlers(logger *slog.Logger, sessionStore *session.Store, 
 		middleware.Gzip(middleware.DefaultGzipConfig()),
 		middleware.RequestID(),
 		middleware.RequestLogger(logger),
+		middleware.Metrics(m),
 	)
 	return handler, nil
 }

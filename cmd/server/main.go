@@ -2,6 +2,7 @@ package main
 
 import (
 	"appointment-manager/internal/db"
+	"appointment-manager/internal/metrics"
 	"appointment-manager/internal/server"
 	"appointment-manager/internal/session"
 	"context"
@@ -45,6 +46,8 @@ func run() error {
 	}))
 	logger.Info("starting server")
 
+	appMetrics := metrics.New()
+
 	if err := godotenv.Load(); err != nil {
 		if !os.IsNotExist(err) {
 			logger.Error("failed to load .env file", slog.Any("error", err))
@@ -59,7 +62,7 @@ func run() error {
 		return fmt.Errorf("%s is required", databaseURLEnv)
 	}
 
-	pool, err := db.NewPostgresPool(context.Background(), databaseURL)
+	pool, err := db.NewPostgresPool(context.Background(), databaseURL, db.WithQueryTracer(appMetrics.DBTracer()))
 	if err != nil {
 		logger.Error("failed to initialize postgres pool", slog.Any("error", err))
 		return err
@@ -69,12 +72,14 @@ func run() error {
 		logger.Info("postgres pool closed")
 	}(logger)
 
+	appMetrics.RegisterDBPool(pool)
+
 	storageClient, err := initializeStorageClient(context.Background(), logger)
 	if err != nil {
 		return err
 	}
 
-	deps, err := newDependencies(pool)
+	deps, err := newDependencies(pool, appMetrics)
 	if err != nil {
 		logger.Error("failed to initialize dependencies", slog.Any("error", err))
 		return err
@@ -84,7 +89,7 @@ func run() error {
 	isDev := env == "" || strings.EqualFold(env, environmentDevelopment)
 
 	sessionStore := session.NewStore()
-	handler, err := initializeServerHandlers(logger, sessionStore, deps, storageClient, isDev)
+	handler, err := initializeServerHandlers(logger, sessionStore, deps, storageClient, isDev, appMetrics)
 	if err != nil {
 		logger.Error("failed to initialize server handlers", slog.Any("error", err))
 		return err
@@ -93,7 +98,10 @@ func run() error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	stopWorker, err := startOverdueWorker(ctx, logger, deps)
+	stopMetricsServer := startMetricsServer(ctx, logger, appMetrics, parseMetricsAddr(os.Getenv(metricsAddrEnv)))
+	defer stopMetricsServer()
+
+	stopWorker, err := startOverdueWorker(ctx, logger, deps, appMetrics)
 	if err != nil {
 		logger.ErrorContext(ctx, "failed to start overdue appointment worker", slog.Any("error", err))
 		return err

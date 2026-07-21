@@ -605,7 +605,7 @@ func newIntegrationMux(t *testing.T, pool *pgxpool.Pool) *http.ServeMux {
 	repo, err := appointment.NewPostgresRepository(pool)
 	require.NoError(t, err)
 
-	service, err := appointment.NewService(repo)
+	service, err := appointment.NewService(repo, nil)
 	require.NoError(t, err)
 
 	h, err := appointment.NewHandler(newIntegrationLogger(), service)

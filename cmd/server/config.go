@@ -14,6 +14,8 @@ const (
 	logLevelEnv                 = "LOG_LEVEL"
 	workerIntervalEnv           = "WORKER_TICKER_INTERVAL"
 	defaultWorkerTickerInterval = 30 * time.Minute
+	metricsAddrEnv              = "METRICS_ADDR"
+	defaultMetricsAddr          = ":9090"
 )
 
 // parseLogLevel reads LOG_LEVEL ("debug", "info", "warn", "error", case
@@ -51,4 +53,15 @@ func parseWorkerInterval(raw string) (time.Duration, error) {
 	}
 
 	return interval, nil
+}
+
+// parseMetricsAddr reads METRICS_ADDR (the listen address for the Prometheus
+// metrics server, e.g. ":9090"). When unset it falls back to defaultMetricsAddr.
+func parseMetricsAddr(raw string) string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return defaultMetricsAddr
+	}
+
+	return raw
 }

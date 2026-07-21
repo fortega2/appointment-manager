@@ -114,6 +114,46 @@ over the `.env` file.
 | `STORAGE_BUCKET` | with storage | Bucket where prescription documents are stored (created if missing). |
 | `STORAGE_REGION` | no | Optional region for the object store. |
 | `STORAGE_USE_SSL` | no | `true` (default) uses HTTPS; set `false` for a plain-HTTP store. |
+| `METRICS_ADDR` | no | Listen address for the Prometheus metrics server (default `:9090`). Served on a separate listener from the app. |
+
+## Monitoring & Observability
+
+The service exposes Prometheus metrics on a **separate listener** (default `:9090`, configurable
+via `METRICS_ADDR`) at `GET /metrics`. Keeping it off the main `:8080` app port means metric
+scrapes bypass the CSRF/Gzip/auth middleware chain and are not exposed through the public reverse
+proxy.
+
+What is exported (all under the `appt_` namespace, plus the standard `go_*` / `process_*` runtime
+and process collectors):
+
+- **HTTP RED** — `appt_http_requests_total{method,route,status_class}`,
+  `appt_http_request_duration_seconds{method,route}`, `appt_http_requests_in_flight`.
+  The `route` label is the low-cardinality route **template** (e.g. `/api/v1/appointments/{id}`),
+  never the raw path.
+- **Database** — `appt_db_query_duration_seconds{operation}`,
+  `appt_db_query_errors_total{operation}` (via a pgx query tracer), and live pool gauges
+  `appt_db_pool_connections{state}`.
+- **Business** — `appt_appointments_created_total` and
+  `appt_appointments_finalized_total{outcome}` where `outcome` is one of
+  `attended` / `cancelled` / `absent` / `expired`.
+
+Each metric declaration in `internal/metrics/metrics.go` documents its dashboard and alert PromQL
+inline.
+
+### Scraping from an external Prometheus
+
+The app container is attached to the `caddy_network` (a shared, non-`internal` network), so a
+Prometheus running in a separate stack can scrape it **once its own container is also attached to
+`caddy_network`**. Add a scrape job:
+
+```yaml
+scrape_configs:
+  - job_name: appointment-manager
+    static_configs:
+      - targets: ["appointment-manager:9090"]
+```
+
+Local development runs the metrics server on `http://localhost:9090/metrics`.
 
 ## Highlights for Developers
 
