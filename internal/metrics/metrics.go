@@ -6,6 +6,7 @@
 package metrics
 
 import (
+	"context"
 	"net/http"
 	"time"
 
@@ -168,10 +169,11 @@ func (m *Metrics) Handler() http.Handler {
 
 // ObserveRequest records the count and duration of a completed HTTP request.
 // The status class ("2xx".."5xx") labels the counter only; the duration
-// histogram is kept status-free to bound cardinality.
-func (m *Metrics) ObserveRequest(method, route, statusClass string, duration time.Duration) {
+// histogram is kept status-free to bound cardinality and carries a trace_id
+// exemplar when ctx holds a sampled span.
+func (m *Metrics) ObserveRequest(ctx context.Context, method, route, statusClass string, duration time.Duration) {
 	m.httpRequests.WithLabelValues(method, route, statusClass).Inc()
-	m.httpDuration.WithLabelValues(method, route).Observe(duration.Seconds())
+	observeWithExemplar(ctx, m.httpDuration.WithLabelValues(method, route), duration.Seconds())
 }
 
 // IncInFlight increments the in-flight HTTP requests gauge.

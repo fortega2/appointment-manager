@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
 
 // initializeServerHandlers builds every handler and wires it to a mux. Errors
@@ -99,6 +101,21 @@ func initializeServerHandlers(logger *slog.Logger, sessionStore *session.Store, 
 		middleware.RequestID(),
 		middleware.RequestLogger(logger),
 		middleware.Metrics(m),
+		otelHandler(),
 	)
 	return handler, nil
+}
+
+// otelHandler wraps the whole chain in an OpenTelemetry server span so every
+// request is traced from the outermost layer, making the span the parent of the
+// logger, metrics and downstream service spans. Span names are kept to the HTTP
+// method to bound trace cardinality; the route template lives on the metrics.
+func otelHandler() func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return otelhttp.NewHandler(next, "http.server",
+			otelhttp.WithSpanNameFormatter(func(_ string, r *http.Request) string {
+				return "HTTP " + r.Method
+			}),
+		)
+	}
 }

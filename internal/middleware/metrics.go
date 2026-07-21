@@ -1,17 +1,19 @@
 package middleware
 
 import (
+	"context"
 	"net/http"
 	"time"
 )
 
 // HTTPMetrics records RED (rate, errors, duration) signals for HTTP requests.
 // It is implemented by *metrics.Metrics; defining the interface here keeps the
-// Prometheus client out of the middleware package.
+// Prometheus client out of the middleware package. The request context is passed
+// so the recorder can attach a trace exemplar to the duration observation.
 type HTTPMetrics interface {
 	IncInFlight()
 	DecInFlight()
-	ObserveRequest(method, route, statusClass string, duration time.Duration)
+	ObserveRequest(ctx context.Context, method, route, statusClass string, duration time.Duration)
 }
 
 const unmatchedRoute = "unmatched"
@@ -37,7 +39,7 @@ func Metrics(rec HTTPMetrics) func(http.Handler) http.Handler {
 
 			next.ServeHTTP(rw, r)
 
-			rec.ObserveRequest(r.Method, metricRoute(r), statusClass(rw.status), time.Since(start))
+			rec.ObserveRequest(r.Context(), r.Method, metricRoute(r), statusClass(rw.status), time.Since(start))
 		})
 	}
 }

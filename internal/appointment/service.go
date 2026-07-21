@@ -9,6 +9,9 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/trace"
 )
 
 const (
@@ -18,6 +21,8 @@ const (
 	queryParamsFormat = "%w: %q"
 
 	cancelToAbsentWindow = 24 * time.Hour
+
+	tracerName = "appointment-manager/internal/appointment"
 )
 
 type repository interface {
@@ -100,7 +105,10 @@ func (s *Service) List(ctx context.Context, input ListInput) ([]Appointment, err
 	return s.repo.List(ctx, filter)
 }
 
-func (s *Service) Create(ctx context.Context, input CreateInput) (uuid.UUID, error) {
+func (s *Service) Create(ctx context.Context, input CreateInput) (id uuid.UUID, err error) {
+	ctx, span := otel.Tracer(tracerName).Start(ctx, "appointment.Service.Create")
+	defer func() { endSpan(span, err) }()
+
 	slotID, err := parseRequiredID(input.SlotID, ErrSlotIDRequired, ErrInvalidSlotID)
 	if err != nil {
 		return uuid.Nil, err
@@ -131,7 +139,10 @@ func (s *Service) Create(ctx context.Context, input CreateInput) (uuid.UUID, err
 	return appointmentID, nil
 }
 
-func (s *Service) Cancel(ctx context.Context, appointmentID uuid.UUID) error {
+func (s *Service) Cancel(ctx context.Context, appointmentID uuid.UUID) (err error) {
+	ctx, span := otel.Tracer(tracerName).Start(ctx, "appointment.Service.Cancel")
+	defer func() { endSpan(span, err) }()
+
 	window, err := s.repo.GetWindow(ctx, appointmentID)
 	if err != nil {
 		return err
@@ -164,7 +175,10 @@ func (s *Service) Cancel(ctx context.Context, appointmentID uuid.UUID) error {
 	return nil
 }
 
-func (s *Service) Attend(ctx context.Context, appointmentID uuid.UUID) error {
+func (s *Service) Attend(ctx context.Context, appointmentID uuid.UUID) (err error) {
+	ctx, span := otel.Tracer(tracerName).Start(ctx, "appointment.Service.Attend")
+	defer func() { endSpan(span, err) }()
+
 	window, err := s.repo.GetWindow(ctx, appointmentID)
 	if err != nil {
 		return err
@@ -248,11 +262,34 @@ func parseRequiredID(raw string, requiredErr, invalidErr error) (uuid.UUID, erro
 	return parsedID, nil
 }
 
+// endSpan closes a span, recording err as the span's error and status when the
+// operation failed. It is deferred with a named return so every exit path,
+// including validation failures, is reflected in the trace.
+func endSpan(span trace.Span, err error) {
+	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+	}
+
+	span.End()
+}
+
 // noopMetrics is the default Metrics used when the service is built without a
 // recorder, so business instrumentation is optional and tests need not wire it.
 type noopMetrics struct{}
 
-func (noopMetrics) RecordAppointmentCreated()   {}
-func (noopMetrics) RecordAppointmentAttended()  {}
-func (noopMetrics) RecordAppointmentCancelled() {}
-func (noopMetrics) RecordAppointmentAbsent()    {}
+func (noopMetrics) RecordAppointmentCreated() {
+	// RecordAppointmentCreated is intentionally empty: no metrics recorder was configured.
+}
+
+func (noopMetrics) RecordAppointmentAttended() {
+	// RecordAppointmentAttended is intentionally empty: no metrics recorder was configured.
+}
+
+func (noopMetrics) RecordAppointmentCancelled() {
+	// RecordAppointmentCancelled is intentionally empty: no metrics recorder was configured.
+}
+
+func (noopMetrics) RecordAppointmentAbsent() {
+	// RecordAppointmentAbsent is intentionally empty: no metrics recorder was configured.
+}

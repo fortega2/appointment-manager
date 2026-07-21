@@ -1,6 +1,7 @@
 package middleware_test
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -39,7 +40,7 @@ func (s *stubHTTPMetrics) IncInFlight() {
 
 func (s *stubHTTPMetrics) DecInFlight() { s.inFlight-- }
 
-func (s *stubHTTPMetrics) ObserveRequest(method, route, statusClass string, duration time.Duration) {
+func (s *stubHTTPMetrics) ObserveRequest(_ context.Context, method, route, statusClass string, duration time.Duration) {
 	s.observations = append(s.observations, observation{
 		method:      method,
 		route:       route,

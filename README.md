@@ -115,6 +115,9 @@ over the `.env` file.
 | `STORAGE_REGION` | no | Optional region for the object store. |
 | `STORAGE_USE_SSL` | no | `true` (default) uses HTTPS; set `false` for a plain-HTTP store. |
 | `METRICS_ADDR` | no | Listen address for the Prometheus metrics server (default `:9090`). Served on a separate listener from the app. |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | no | OTLP/HTTP collector base URL for tracing (e.g. `http://tempo:4318`). When unset, tracing is disabled. |
+| `OTEL_TRACES_SAMPLE_RATIO` | no | Head-based trace sampling probability in `[0,1]` (default `1.0`). Child spans follow their parent's decision. |
+| `OTEL_SERVICE_VERSION` | no | Release identifier attached to spans as `service.version` (default `dev`). |
 
 ## Monitoring & Observability
 
@@ -154,6 +157,27 @@ scrape_configs:
 ```
 
 Local development runs the metrics server on `http://localhost:9090/metrics`.
+
+### Distributed tracing (Tempo)
+
+Set `OTEL_EXPORTER_OTLP_ENDPOINT` (e.g. `http://tempo:4318`) to export OpenTelemetry
+traces over OTLP/HTTP to Tempo. When the variable is unset, tracing stays fully disabled
+and every span is a no-op — no collector is required to run the service.
+
+- Each incoming request opens a server span (outermost middleware), which parents the
+  appointment service spans (`appointment.Service.Create` / `Cancel` / `Attend`) and a
+  client span per database query (`db.select`, `db.insert`, …).
+- **Logs ↔ traces**: structured logs emitted with a request context carry `trace_id` and
+  `span_id`, so you can pivot from a Loki log line to the matching trace in Tempo.
+- **Metrics ↔ traces**: the HTTP and DB duration histograms attach a `trace_id`
+  [exemplar](https://prometheus.io/docs/prometheus/latest/feature_flags/#exemplars-storage)
+  when a sampled span is active, letting you jump from a P99 latency spike straight to the
+  offending trace. This requires Prometheus to run with `--enable-feature=exemplar-storage`.
+- Sampling is head-based via `OTEL_TRACES_SAMPLE_RATIO` (default `1.0`, i.e. sample every
+  trace — suitable for this low-volume service; lower it if trace volume grows).
+
+Like the metrics scrape, the app reaches Tempo over `caddy_network`, so **Tempo's container
+must also be attached to `caddy_network`** for spans to be delivered.
 
 ## Highlights for Developers
 

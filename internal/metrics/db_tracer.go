@@ -8,16 +8,25 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/prometheus/client_golang/prometheus"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/trace"
 )
 
-const operationOther = "other"
+const (
+	operationOther = "other"
+	dbTracerName   = "appointment-manager/internal/db"
+	dbSystem       = "postgresql"
+)
 
-// dbTraceState carries the query start time and derived operation label from
-// TraceQueryStart to TraceQueryEnd, since the end callback does not receive the
-// SQL text.
+// dbTraceState carries the query start time, derived operation label and the
+// open span from TraceQueryStart to TraceQueryEnd, since the end callback does
+// not receive the SQL text.
 type dbTraceState struct {
 	start     time.Time
 	operation string
+	span      trace.Span
 }
 
 type dbTraceStateKey struct{}
@@ -30,27 +39,50 @@ type DBTracer struct {
 	errorsTotal *prometheus.CounterVec
 }
 
-// TraceQueryStart stores the start time and SQL operation in the returned
-// context for TraceQueryEnd to consume.
+// TraceQueryStart opens a client span for the query and stores the start time,
+// SQL operation and span in the returned context for TraceQueryEnd to consume.
+// When no TracerProvider is configured the span is a no-op, so tracing stays
+// zero-cost until enabled.
 func (t *DBTracer) TraceQueryStart(ctx context.Context, _ *pgx.Conn, data pgx.TraceQueryStartData) context.Context {
+	operation := sqlOperation(data.SQL)
+
+	ctx, span := otel.Tracer(dbTracerName).Start(ctx, "db."+operation,
+		trace.WithSpanKind(trace.SpanKindClient),
+		trace.WithAttributes(
+			attribute.String("db.system", dbSystem),
+			attribute.String("db.operation", operation),
+		),
+	)
+
 	return context.WithValue(ctx, dbTraceStateKey{}, dbTraceState{
 		start:     time.Now(),
-		operation: sqlOperation(data.SQL),
+		operation: operation,
+		span:      span,
 	})
 }
 
-// TraceQueryEnd observes the query duration and increments the error counter for
-// failures other than pgx.ErrNoRows (a no-row result is not an error here).
+// TraceQueryEnd observes the query duration (with a trace_id exemplar when
+// sampled), increments the error counter for failures other than pgx.ErrNoRows
+// (a no-row result is not an error here), and closes the query span.
 func (t *DBTracer) TraceQueryEnd(ctx context.Context, _ *pgx.Conn, data pgx.TraceQueryEndData) {
 	state, ok := ctx.Value(dbTraceStateKey{}).(dbTraceState)
 	if !ok {
 		return
 	}
 
-	t.duration.WithLabelValues(state.operation).Observe(time.Since(state.start).Seconds())
+	observeWithExemplar(ctx, t.duration.WithLabelValues(state.operation), time.Since(state.start).Seconds())
 
-	if data.Err != nil && !errors.Is(data.Err, pgx.ErrNoRows) {
+	failed := data.Err != nil && !errors.Is(data.Err, pgx.ErrNoRows)
+	if failed {
 		t.errorsTotal.WithLabelValues(state.operation).Inc()
+	}
+
+	if state.span != nil {
+		if failed {
+			state.span.RecordError(data.Err)
+			state.span.SetStatus(codes.Error, data.Err.Error())
+		}
+		state.span.End()
 	}
 }
 

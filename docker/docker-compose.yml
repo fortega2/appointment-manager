@@ -15,6 +15,11 @@ services:
       STORAGE_USE_SSL: ${STORAGE_USE_SSL}
       WORKER_TICKER_INTERVAL: ${WORKER_TICKER_INTERVAL}
       METRICS_ADDR: ":${METRICS_PORT:-9090}"
+      # OpenTelemetry tracing to Tempo (OTLP/HTTP). Leave the endpoint empty to
+      # disable tracing; Tempo must be reachable over caddy_network to receive spans.
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
+      OTEL_TRACES_SAMPLE_RATIO: ${OTEL_TRACES_SAMPLE_RATIO:-1.0}
+      OTEL_SERVICE_VERSION: ${OTEL_SERVICE_VERSION:-}
     networks:
       - caddy_network
       - backend_network

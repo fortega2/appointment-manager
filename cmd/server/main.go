@@ -5,6 +5,7 @@ import (
 	"appointment-manager/internal/metrics"
 	"appointment-manager/internal/server"
 	"appointment-manager/internal/session"
+	"appointment-manager/internal/tracing"
 	"context"
 	"fmt"
 	"log/slog"
@@ -41,9 +42,9 @@ func run() error {
 		return err
 	}
 
-	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
+	logger := slog.New(tracing.NewSlogHandler(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
 		Level: logLevel,
-	}))
+	})))
 	logger.Info("starting server")
 
 	appMetrics := metrics.New()
@@ -55,6 +56,13 @@ func run() error {
 		}
 		logger.Debug(".env file not found, using OS environment variables")
 	}
+
+	stopTracing, err := startTracing(context.Background(), logger)
+	if err != nil {
+		logger.Error("failed to initialize tracing", slog.Any("error", err))
+		return err
+	}
+	defer stopTracing()
 
 	databaseURL := strings.TrimSpace(os.Getenv(databaseURLEnv))
 	if databaseURL == "" {

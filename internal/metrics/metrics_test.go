@@ -13,7 +13,10 @@ import (
 	"github.com/prometheus/client_golang/prometheus/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 )
+
+const openMetricsAccept = "application/openmetrics-text; version=1.0.0"
 
 const (
 	opSelect        = "select"
@@ -67,10 +70,30 @@ func TestObserveRequestAndInFlight(t *testing.T) {
 	m.DecInFlight()
 	assert.InDelta(t, 0, testutil.ToFloat64(m.httpInFlight), 0)
 
-	m.ObserveRequest(http.MethodGet, "/appointments/{id}", "2xx", 100*time.Millisecond)
+	m.ObserveRequest(context.Background(), http.MethodGet, "/appointments/{id}", "2xx", 100*time.Millisecond)
 
 	assert.InDelta(t, 1, testutil.ToFloat64(m.httpRequests.WithLabelValues(http.MethodGet, "/appointments/{id}", "2xx")), 0)
 	assert.Equal(t, 1, testutil.CollectAndCount(m.httpDuration))
+}
+
+func TestObserveRequestAttachesTraceExemplar(t *testing.T) {
+	t.Parallel()
+
+	m := New()
+
+	tp := sdktrace.NewTracerProvider(sdktrace.WithSampler(sdktrace.AlwaysSample()))
+	ctx, span := tp.Tracer("test").Start(context.Background(), "op")
+	defer span.End()
+
+	m.ObserveRequest(ctx, http.MethodGet, "/appointments/{id}", "2xx", 100*time.Millisecond)
+
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, metricsEndpoint, nil)
+	req.Header.Set("Accept", openMetricsAccept)
+	rec := httptest.NewRecorder()
+	m.Handler().ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code)
+	assert.Contains(t, rec.Body.String(), `trace_id="`+span.SpanContext().TraceID().String()+`"`)
 }
 
 func TestDBTracerRecordsDurationAndErrors(t *testing.T) {
