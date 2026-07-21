@@ -4,6 +4,8 @@ import (
 	"context"
 	"net/http"
 	"time"
+
+	"go.opentelemetry.io/otel/trace"
 )
 
 // HTTPMetrics records RED (rate, errors, duration) signals for HTTP requests.
@@ -39,9 +41,26 @@ func Metrics(rec HTTPMetrics) func(http.Handler) http.Handler {
 
 			next.ServeHTTP(rw, r)
 
-			rec.ObserveRequest(r.Context(), r.Method, metricRoute(r), statusClass(rw.status), time.Since(start))
+			route := metricRoute(r)
+			renameActiveSpan(r.Context(), r.Method, route)
+			rec.ObserveRequest(r.Context(), r.Method, route, statusClass(rw.status), time.Since(start))
 		})
 	}
+}
+
+// renameActiveSpan renames the active OTel server span to "{method} {route}"
+// once routing has resolved the low-cardinality route template. The span (if
+// any) was created before routing ran and so only knew the HTTP method; this
+// reuses the same route template the request counter is labelled with instead
+// of computing it again. A no-op when no span is recording (tracing disabled,
+// or the request never reached an OTel-wrapped handler).
+func renameActiveSpan(ctx context.Context, method, route string) {
+	span := trace.SpanFromContext(ctx)
+	if !span.IsRecording() {
+		return
+	}
+
+	span.SetName(method + " " + route)
 }
 
 // metricRoute returns the matched route template as a bounded label value,

@@ -7,6 +7,7 @@ package tracing
 import (
 	"context"
 	"fmt"
+	"net/url"
 
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
@@ -43,6 +44,10 @@ func Init(ctx context.Context, cfg Config) (ShutdownFunc, error) {
 		return func(context.Context) error { return nil }, nil
 	}
 
+	if err := validateEndpoint(cfg.Endpoint); err != nil {
+		return nil, err
+	}
+
 	exporter, err := otlptracehttp.New(ctx, otlptracehttp.WithEndpointURL(cfg.Endpoint))
 	if err != nil {
 		return nil, fmt.Errorf("creating OTLP trace exporter: %w", err)
@@ -66,4 +71,21 @@ func Init(ctx context.Context, cfg Config) (ShutdownFunc, error) {
 	))
 
 	return tp.Shutdown, nil
+}
+
+// validateEndpoint rejects an OTLP endpoint with no URL scheme.
+// otlptracehttp.WithEndpointURL silently misparses a scheme-less value (e.g.
+// "tempo:4318" is parsed with "tempo" as the scheme and an empty host), so
+// spans would be dropped with no error at startup or export time.
+func validateEndpoint(endpoint string) error {
+	u, err := url.Parse(endpoint)
+	if err != nil {
+		return fmt.Errorf("invalid OTLP endpoint %q: %w", endpoint, err)
+	}
+
+	if u.Scheme != "http" && u.Scheme != "https" {
+		return fmt.Errorf("invalid OTLP endpoint %q: must include an http:// or https:// scheme", endpoint)
+	}
+
+	return nil
 }

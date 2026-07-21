@@ -9,6 +9,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
+	"go.opentelemetry.io/otel/trace"
 
 	"appointment-manager/internal/middleware"
 )
@@ -121,6 +123,49 @@ func TestMetricsUnmatchedRouteUsesConstantLabel(t *testing.T) {
 	require.Len(t, rec.observations, 1)
 	assert.Equal(t, "unmatched", rec.observations[0].route)
 	assert.Equal(t, "4xx", rec.observations[0].statusClass)
+}
+
+func TestMetricsRenamesActiveSpanToRouteTemplate(t *testing.T) {
+	t.Parallel()
+
+	// A local (non-global) SDK provider keeps this test independent of any
+	// other test or production code touching the process-wide TracerProvider.
+	tp := sdktrace.NewTracerProvider(sdktrace.WithSampler(sdktrace.AlwaysSample()))
+	ctx, span := tp.Tracer("test").Start(t.Context(), http.MethodGet)
+	readWriteSpan, ok := span.(sdktrace.ReadWriteSpan)
+	require.True(t, ok, "expected the SDK span to implement ReadWriteSpan")
+
+	rec := &stubHTTPMetrics{}
+	mux := newMux(patternAppointmentByID, func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+	handler := middleware.Metrics(rec)(mux)
+
+	req := httptest.NewRequestWithContext(ctx, http.MethodGet, "/appointments/42", nil)
+	handler.ServeHTTP(httptest.NewRecorder(), req)
+
+	assert.Equal(t, http.MethodGet+" "+routeAppointmentByID, readWriteSpan.Name())
+}
+
+func TestMetricsDoesNotRenameNonRecordingSpan(t *testing.T) {
+	t.Parallel()
+
+	// The default global no-op tracer never records, so trace.SpanFromContext
+	// returns a span whose IsRecording is false: renameActiveSpan must not
+	// panic or otherwise misbehave when there is nothing to rename.
+	ctx := trace.ContextWithSpan(t.Context(), trace.SpanFromContext(context.Background()))
+
+	rec := &stubHTTPMetrics{}
+	mux := newMux(patternAppointmentByID, func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+	handler := middleware.Metrics(rec)(mux)
+
+	req := httptest.NewRequestWithContext(ctx, http.MethodGet, "/appointments/42", nil)
+	assert.NotPanics(t, func() {
+		handler.ServeHTTP(httptest.NewRecorder(), req)
+	})
+	require.Len(t, rec.observations, 1)
 }
 
 func TestMetricsNilRecorderIsPassThrough(t *testing.T) {

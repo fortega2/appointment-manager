@@ -5,12 +5,13 @@ import (
 	"errors"
 	"strings"
 	"time"
+	"unicode"
+
+	"appointment-manager/internal/tracing"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/prometheus/client_golang/prometheus"
-	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
 )
 
@@ -33,10 +34,12 @@ type dbTraceStateKey struct{}
 
 // DBTracer implements pgx.QueryTracer to record duration and error metrics for
 // every database query, centralising dependency instrumentation instead of
-// wrapping each repository call.
+// wrapping each repository call. The tracer is resolved once so the query hot
+// path avoids a global-provider lookup per call.
 type DBTracer struct {
 	duration    *prometheus.HistogramVec
 	errorsTotal *prometheus.CounterVec
+	tracer      trace.Tracer
 }
 
 // TraceQueryStart opens a client span for the query and stores the start time,
@@ -46,7 +49,7 @@ type DBTracer struct {
 func (t *DBTracer) TraceQueryStart(ctx context.Context, _ *pgx.Conn, data pgx.TraceQueryStartData) context.Context {
 	operation := sqlOperation(data.SQL)
 
-	ctx, span := otel.Tracer(dbTracerName).Start(ctx, "db."+operation,
+	ctx, span := t.tracer.Start(ctx, "db."+operation,
 		trace.WithSpanKind(trace.SpanKindClient),
 		trace.WithAttributes(
 			attribute.String("db.system", dbSystem),
@@ -77,24 +80,31 @@ func (t *DBTracer) TraceQueryEnd(ctx context.Context, _ *pgx.Conn, data pgx.Trac
 		t.errorsTotal.WithLabelValues(state.operation).Inc()
 	}
 
-	if state.span != nil {
-		if failed {
-			state.span.RecordError(data.Err)
-			state.span.SetStatus(codes.Error, data.Err.Error())
-		}
-		state.span.End()
+	// A no-row result is not a query failure, so only a "failed" error is
+	// recorded on the span; nil leaves the span status unset.
+	var spanErr error
+	if failed {
+		spanErr = data.Err
 	}
+	tracing.EndSpan(state.span, spanErr)
 }
 
 // sqlOperation derives a low-cardinality operation label from the leading
-// keyword of a SQL statement, collapsing anything unrecognised to "other".
+// keyword of a SQL statement, collapsing anything unrecognised to "other". Only
+// the first token is inspected, so it avoids tokenising the whole statement on
+// every query.
 func sqlOperation(sql string) string {
-	fields := strings.Fields(sql)
-	if len(fields) == 0 {
+	sql = strings.TrimSpace(sql)
+	if sql == "" {
 		return operationOther
 	}
 
-	switch strings.ToLower(fields[0]) {
+	keyword := sql
+	if end := strings.IndexFunc(sql, unicode.IsSpace); end != -1 {
+		keyword = sql[:end]
+	}
+
+	switch strings.ToLower(keyword) {
 	case "select", "with":
 		return "select"
 	case "insert":

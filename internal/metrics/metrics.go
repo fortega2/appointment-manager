@@ -15,6 +15,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus/collectors"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"go.opentelemetry.io/otel"
 )
 
 const (
@@ -202,9 +203,14 @@ func (m *Metrics) RecordAppointmentsExpired(n int64) {
 }
 
 // DBTracer returns a pgx query tracer that records this Metrics' database
-// duration and error series for every query executed on the pool.
+// duration and error series for every query executed on the pool. The OTel
+// tracer is resolved here once and reused for every query.
 func (m *Metrics) DBTracer() *DBTracer {
-	return &DBTracer{duration: m.dbDuration, errorsTotal: m.dbErrors}
+	return &DBTracer{
+		duration:    m.dbDuration,
+		errorsTotal: m.dbErrors,
+		tracer:      otel.Tracer(dbTracerName),
+	}
 }
 
 // RegisterDBPool registers a collector that reports live pgx pool saturation

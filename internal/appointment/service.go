@@ -2,7 +2,9 @@ package appointment
 
 import (
 	"appointment-manager/internal/domain"
+	"appointment-manager/internal/tracing"
 	"context"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -10,8 +12,6 @@ import (
 
 	"github.com/google/uuid"
 	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/codes"
-	"go.opentelemetry.io/otel/trace"
 )
 
 const (
@@ -24,6 +24,49 @@ const (
 
 	tracerName = "appointment-manager/internal/appointment"
 )
+
+// tracer is resolved once; the global delegate forwards to the real provider
+// installed at start-up, so the three mutating methods share one lookup.
+var tracer = otel.Tracer(tracerName)
+
+// businessRuleErrors are the package's expected validation and business-rule
+// rejections: normal outcomes of Create, Cancel and Attend given bad input or
+// a disallowed state transition, not infrastructure failures. spanError keeps
+// spans for these Unset rather than marking them Error, so trace-based
+// error-rate alerts do not fire on ordinary rejections.
+var businessRuleErrors = []error{
+	ErrSlotIDRequired,
+	ErrInvalidSlotID,
+	ErrPatientIDRequired,
+	ErrInvalidPatientID,
+	ErrProfessionalIDRequired,
+	ErrInvalidProfessionalID,
+	ErrAssistantIDRequired,
+	ErrInvalidAssistantID,
+	ErrInvalidAppointmentReference,
+	ErrNoActivePrescription,
+	ErrNoRemainingSessions,
+	ErrSlotBlocked,
+	ErrSlotWithoutAvailability,
+	ErrMultipleActiveAppointmentsDetected,
+	ErrAppointmentStatusChanged,
+	ErrAppointmentCannotAttendNow,
+	ErrAppointmentCannotAttendWithStatus,
+	ErrAppointmentCannotCancelWithStatus,
+}
+
+// spanError returns err unchanged unless it matches one of businessRuleErrors,
+// in which case it returns nil so tracing.EndSpan leaves the span's default
+// Unset status instead of recording an expected rejection as a failure.
+func spanError(err error) error {
+	for _, sentinel := range businessRuleErrors {
+		if errors.Is(err, sentinel) {
+			return nil
+		}
+	}
+
+	return err
+}
 
 type repository interface {
 	List(ctx context.Context, filter ListFilter) ([]Appointment, error)
@@ -106,8 +149,8 @@ func (s *Service) List(ctx context.Context, input ListInput) ([]Appointment, err
 }
 
 func (s *Service) Create(ctx context.Context, input CreateInput) (id uuid.UUID, err error) {
-	ctx, span := otel.Tracer(tracerName).Start(ctx, "appointment.Service.Create")
-	defer func() { endSpan(span, err) }()
+	ctx, span := tracer.Start(ctx, "appointment.Service.Create")
+	defer func() { tracing.EndSpan(span, spanError(err)) }()
 
 	slotID, err := parseRequiredID(input.SlotID, ErrSlotIDRequired, ErrInvalidSlotID)
 	if err != nil {
@@ -140,8 +183,8 @@ func (s *Service) Create(ctx context.Context, input CreateInput) (id uuid.UUID, 
 }
 
 func (s *Service) Cancel(ctx context.Context, appointmentID uuid.UUID) (err error) {
-	ctx, span := otel.Tracer(tracerName).Start(ctx, "appointment.Service.Cancel")
-	defer func() { endSpan(span, err) }()
+	ctx, span := tracer.Start(ctx, "appointment.Service.Cancel")
+	defer func() { tracing.EndSpan(span, spanError(err)) }()
 
 	window, err := s.repo.GetWindow(ctx, appointmentID)
 	if err != nil {
@@ -176,8 +219,8 @@ func (s *Service) Cancel(ctx context.Context, appointmentID uuid.UUID) (err erro
 }
 
 func (s *Service) Attend(ctx context.Context, appointmentID uuid.UUID) (err error) {
-	ctx, span := otel.Tracer(tracerName).Start(ctx, "appointment.Service.Attend")
-	defer func() { endSpan(span, err) }()
+	ctx, span := tracer.Start(ctx, "appointment.Service.Attend")
+	defer func() { tracing.EndSpan(span, spanError(err)) }()
 
 	window, err := s.repo.GetWindow(ctx, appointmentID)
 	if err != nil {
@@ -260,18 +303,6 @@ func parseRequiredID(raw string, requiredErr, invalidErr error) (uuid.UUID, erro
 	}
 
 	return parsedID, nil
-}
-
-// endSpan closes a span, recording err as the span's error and status when the
-// operation failed. It is deferred with a named return so every exit path,
-// including validation failures, is reflected in the trace.
-func endSpan(span trace.Span, err error) {
-	if err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, err.Error())
-	}
-
-	span.End()
 }
 
 // noopMetrics is the default Metrics used when the service is built without a

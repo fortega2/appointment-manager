@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"log/slog"
+	"math"
 	"strconv"
 	"strings"
 	"time"
@@ -63,15 +64,20 @@ func parseWorkerInterval(raw string) (time.Duration, error) {
 	return interval, nil
 }
 
+// stringOrDefault trims raw and returns def when the result is empty, the shared
+// shape behind the env vars that only need a trimmed value or a fallback.
+func stringOrDefault(raw, def string) string {
+	if trimmed := strings.TrimSpace(raw); trimmed != "" {
+		return trimmed
+	}
+
+	return def
+}
+
 // parseMetricsAddr reads METRICS_ADDR (the listen address for the Prometheus
 // metrics server, e.g. ":9090"). When unset it falls back to defaultMetricsAddr.
 func parseMetricsAddr(raw string) string {
-	raw = strings.TrimSpace(raw)
-	if raw == "" {
-		return defaultMetricsAddr
-	}
-
-	return raw
+	return stringOrDefault(raw, defaultMetricsAddr)
 }
 
 // parseSampleRatio reads OTEL_TRACES_SAMPLE_RATIO as the head-based trace
@@ -88,7 +94,7 @@ func parseSampleRatio(raw string) (float64, error) {
 	if err != nil {
 		return 0, fmt.Errorf("invalid %s: %w", otelSampleRatioEnv, err)
 	}
-	if ratio < 0 || ratio > 1 {
+	if math.IsNaN(ratio) || ratio < 0 || ratio > 1 {
 		return 0, fmt.Errorf("invalid %s: must be within [0,1]", otelSampleRatioEnv)
 	}
 
@@ -98,10 +104,5 @@ func parseSampleRatio(raw string) (float64, error) {
 // parseServiceVersion reads OTEL_SERVICE_VERSION, the release identifier
 // attached to spans. When unset it falls back to defaultServiceVersion.
 func parseServiceVersion(raw string) string {
-	raw = strings.TrimSpace(raw)
-	if raw == "" {
-		return defaultServiceVersion
-	}
-
-	return raw
+	return stringOrDefault(raw, defaultServiceVersion)
 }

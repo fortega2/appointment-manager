@@ -3,6 +3,7 @@ package appointment
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -417,6 +418,39 @@ func TestServiceActionRepositoryError(t *testing.T) {
 		require.Error(t, err)
 		repo.AssertExpectations(t)
 	})
+}
+
+func TestSpanError(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		err     error
+		wantNil bool
+	}{
+		{name: "nil error stays nil", err: nil, wantNil: true},
+		{name: "wrapped validation rejection is filtered", err: fmt.Errorf("parse: %w", ErrSlotIDRequired), wantNil: true},
+		{name: "attend window rejection is filtered", err: ErrAppointmentCannotAttendNow, wantNil: true},
+		{name: "cancel status rejection is filtered", err: ErrAppointmentCannotCancelWithStatus, wantNil: true},
+		{name: "concurrent status change is filtered", err: ErrAppointmentStatusChanged, wantNil: true},
+		{name: "unexpected repository error is kept", err: fmt.Errorf("update appointment status: %w", errors.New(serviceBoomError)), wantNil: false},
+		{name: "generic unexpected error is kept", err: errors.New(serviceBoomError), wantNil: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			got := spanError(tt.err)
+
+			if tt.wantNil {
+				assert.NoError(t, got)
+				return
+			}
+
+			assert.Equal(t, tt.err, got)
+		})
+	}
 }
 
 type serviceMetricsMock struct {
