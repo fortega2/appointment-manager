@@ -110,6 +110,10 @@ func RequestLogger(logger *slog.Logger) func(http.Handler) http.Handler {
 
 			route := requestRoute(r)
 
+			if route == "/readyz" || route == "/healthz" {
+				return
+			}
+
 			level := slog.LevelInfo
 			switch {
 			case rw.status >= http.StatusInternalServerError:
