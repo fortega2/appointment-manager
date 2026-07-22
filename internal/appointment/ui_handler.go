@@ -132,12 +132,6 @@ func (h *UIHandler) showCreateFormUIHandler() http.HandlerFunc {
 			return
 		}
 
-		profOpts, err := h.loadProfessionalOptions(ctx, lg)
-		if err != nil {
-			h.showSnackbar(ctx, lg, components.SnackbarError, w, http.StatusInternalServerError, "Failed to load professionals")
-			return
-		}
-
 		asstOpts, err := h.loadAssistantOptions(ctx, lg)
 		if err != nil {
 			h.showSnackbar(ctx, lg, components.SnackbarError, w, http.StatusInternalServerError, "Failed to load assistants")
@@ -149,7 +143,6 @@ func (h *UIHandler) showCreateFormUIHandler() http.HandlerFunc {
 			"/appointments",
 			slotOpts,
 			patientOpts,
-			profOpts,
 			asstOpts,
 		).Render(ctx, w); err != nil {
 			lg.ErrorContext(ctx, "error rendering appointment create form", slog.Any("error", err))
@@ -167,8 +160,9 @@ func (h *UIHandler) loadAvailableSlotOptions(ctx context.Context, lg *slog.Logge
 	options := make([]SlotOptionDTO, len(slots))
 	for i, s := range slots {
 		options[i] = SlotOptionDTO{
-			ID:    s.ID,
-			Label: fmt.Sprintf("%s %s-%s · Dr. %s", s.Date, s.StartTime, s.EndTime, s.ProfessionalName),
+			ID:             s.ID,
+			Label:          fmt.Sprintf("%s %s-%s · Dr. %s", s.Date, s.StartTime, s.EndTime, s.ProfessionalName),
+			ProfessionalID: s.ProfessionalID,
 		}
 	}
 	return options, nil
@@ -187,23 +181,6 @@ func (h *UIHandler) loadPatientOptions(ctx context.Context, lg *slog.Logger) ([]
 			ID:                p.ID,
 			Label:             p.Label,
 			RemainingSessions: p.RemainingSessions,
-		}
-	}
-	return options, nil
-}
-
-func (h *UIHandler) loadProfessionalOptions(ctx context.Context, lg *slog.Logger) ([]ProfessionalOptionDTO, error) {
-	professionals, err := h.profRepo.List(ctx)
-	if err != nil {
-		lg.ErrorContext(ctx, "failed to list professionals for form", slog.Any("error", err))
-		return nil, err
-	}
-
-	options := make([]ProfessionalOptionDTO, len(professionals))
-	for i, p := range professionals {
-		options[i] = ProfessionalOptionDTO{
-			ID:    p.ID.String(),
-			Label: fmt.Sprintf("%s %s", p.FirstName, p.LastName),
 		}
 	}
 	return options, nil

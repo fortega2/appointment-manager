@@ -121,10 +121,9 @@ templ Form(
 	actionURL string,
 	slotOpts []SlotOptionDTO,
 	patientOpts []PatientOptionDTO,
-	profOpts []ProfessionalOptionDTO,
 	asstOpts []AssistantOptionDTO,
 ) {
-	<div x-data="{ remainingSessions: '' }">
+	<div x-data="{ remainingSessions: '', professionalId: '' }">
 		<h2 class="text-xl font-bold text-gray-900 mb-4">Create Appointment</h2>
 
 		<form
@@ -139,14 +138,24 @@ templ Form(
 					id="slot_id"
 					name="slot_id"
 					required
+					@change="
+						const opt = $event.target.selectedOptions[0];
+						professionalId = opt?.dataset.professionalId || '';
+					"
 					class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm bg-white"
 				>
 					<option value="" disabled selected?={ req.SlotID == "" }>Select a slot</option>
 					for _, s := range slotOpts {
-						<option value={ s.ID } selected?={ req.SlotID == s.ID }>{ s.Label }</option>
+						<option
+							value={ s.ID }
+							data-professional-id={ s.ProfessionalID }
+							selected?={ req.SlotID == s.ID }
+						>{ s.Label }</option>
 					}
 				</select>
 			</div>
+
+			<input type="hidden" name="professional_id" :value="professionalId">
 
 			<div>
 				<label for="patient_id" class="block text-sm font-medium text-gray-700">Patient</label>
@@ -165,21 +174,6 @@ templ Form(
 				<p x-show="remainingSessions !== ''" x-cloak class="mt-1 text-xs text-gray-500">
 					Remaining sessions: <span x-text="remainingSessions" class="font-medium"></span>
 				</p>
-			</div>
-
-			<div>
-				<label for="professional_id" class="block text-sm font-medium text-gray-700">Professional</label>
-				<select
-					id="professional_id"
-					name="professional_id"
-					required
-					class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm bg-white"
-				>
-					<option value="" disabled selected?={ req.ProfessionalID == "" }>Select a professional</option>
-					for _, p := range profOpts {
-						<option value={ p.ID } selected?={ req.ProfessionalID == p.ID }>{ p.Label }</option>
-					}
-				</select>
 			</div>
 
 			<div>
