@@ -9,9 +9,12 @@ type FormRequest struct {
 }
 
 type SlotOptionDTO struct {
-	ID             string
-	Label          string
-	ProfessionalID string
+	ID               string
+	FallbackLabel    string
+	StartTime        string
+	EndTime          string
+	ProfessionalName string
+	ProfessionalID   string
 }
 
 type PatientOptionDTO struct {

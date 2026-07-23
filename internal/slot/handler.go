@@ -157,11 +157,18 @@ func (h *Handler) showEditFormUIHandler() http.HandlerFunc {
 
 type formRequest struct {
 	professionalID uuid.UUID
-	date           time.Time
 	startTime      time.Time
 	endTime        time.Time
 	maxCapacity    int16
 	blocked        bool
+}
+
+// date returns the slot's calendar date, derived from startTime's UTC day
+// rather than a separately submitted field, so it is always consistent with
+// startTime regardless of the visitor's timezone.
+func (f *formRequest) date() time.Time {
+	y, m, d := f.startTime.Date()
+	return time.Date(y, m, d, 0, 0, 0, 0, f.startTime.Location())
 }
 
 func (h *Handler) parseForm(r *http.Request, w http.ResponseWriter) (*formRequest, error) {
@@ -177,26 +184,12 @@ func (h *Handler) parseForm(r *http.Request, w http.ResponseWriter) (*formReques
 		return nil, fmt.Errorf("invalid professional_id: %w", err)
 	}
 
-	dateStr := r.FormValue("date")
-	startTimeStr := r.FormValue("start_time")
-	endTimeStr := r.FormValue("end_time")
-
-	loc, err := time.LoadLocation("America/Argentina/Buenos_Aires")
-	if err != nil {
-		return nil, fmt.Errorf("load location: %w", err)
-	}
-
-	date, err := time.ParseInLocation("2006-01-02", dateStr, loc)
-	if err != nil {
-		return nil, fmt.Errorf("invalid date format: %w", err)
-	}
-
-	startTime, err := time.ParseInLocation("2006-01-02 15:04", fmt.Sprintf("%s %s", dateStr, startTimeStr), loc)
+	startTime, err := time.Parse(time.RFC3339, r.FormValue("start_time"))
 	if err != nil {
 		return nil, fmt.Errorf("invalid start_time format: %w", err)
 	}
 
-	endTime, err := time.ParseInLocation("2006-01-02 15:04", fmt.Sprintf("%s %s", dateStr, endTimeStr), loc)
+	endTime, err := time.Parse(time.RFC3339, r.FormValue("end_time"))
 	if err != nil {
 		return nil, fmt.Errorf("invalid end_time format: %w", err)
 	}
@@ -211,9 +204,8 @@ func (h *Handler) parseForm(r *http.Request, w http.ResponseWriter) (*formReques
 
 	return &formRequest{
 		professionalID: profID,
-		date:           date,
-		startTime:      startTime,
-		endTime:        endTime,
+		startTime:      startTime.UTC(),
+		endTime:        endTime.UTC(),
 		maxCapacity:    int16(maxCapInt),
 		blocked:        blocked,
 	}, nil
@@ -229,7 +221,7 @@ func (h *Handler) createUIHandler() http.HandlerFunc {
 			return
 		}
 
-		s, err := NewSlot(req.professionalID, req.date, req.startTime, req.endTime, req.maxCapacity)
+		s, err := NewSlot(req.professionalID, req.date(), req.startTime, req.endTime, req.maxCapacity)
 		if err != nil {
 			h.logger.ErrorContext(ctx, "error creating slot from form data", slog.Any("error", err))
 			h.createSnackbarError(ctx, w, http.StatusUnprocessableEntity, err.Error(), "NewSlot")
@@ -275,7 +267,7 @@ func (h *Handler) updateUIHandler() http.HandlerFunc {
 			return
 		}
 
-		if err := s.Update(req.professionalID, req.date, req.startTime, req.endTime, req.maxCapacity, req.blocked); err != nil {
+		if err := s.Update(req.professionalID, req.date(), req.startTime, req.endTime, req.maxCapacity, req.blocked); err != nil {
 			h.logger.ErrorContext(ctx, "failed to validate slot update", slog.Any("error", err), slog.String("id", idStr))
 			h.createSnackbarError(ctx, w, http.StatusUnprocessableEntity, err.Error(), "Slot.Update")
 			return

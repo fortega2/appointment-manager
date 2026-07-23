@@ -14,7 +14,6 @@ import (
 	"strings"
 	"syscall"
 	"time"
-	_ "time/tzdata"
 
 	"github.com/joho/godotenv"
 )

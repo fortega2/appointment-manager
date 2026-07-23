@@ -22,7 +22,7 @@ Guidance for coding agents working in `appointment-manager`.
 
 ## 1) Repository Snapshot
 
-- Language: Go (`go 1.26.4` in `go.mod`).
+- Language: Go (`go 1.26.5` in `go.mod`).
 - Module: `appointment-manager`.
 - Main entrypoint: `cmd/server/main.go`.
 - Core packages:
@@ -46,8 +46,6 @@ Guidance for coding agents working in `appointment-manager`.
   - `internal/server`
   - `internal/health`
   - `internal/ui` (templ views + static assets)
-- Planned:
-  - `internal/shared`
 - Lint config: `.golangci.yml` (strict, many linters enabled).
 - Testing libs: `stretchr/testify`.
 
@@ -105,9 +103,6 @@ Notes:
   - `go test ./... -race`
 - Run tests for one package:
   - `go test ./internal/appointment`
-  - `go test ./internal/assistant`
-  - `go test ./internal/password`
-  - `go test ./internal/web`
 - Run one specific test:
   - `go test ./internal/assistant -run '^TestCreateEndpoint$' -v`
 - Run one subtest:
@@ -157,7 +152,7 @@ Follow existing project conventions first.
 
 - Return errors; do not panic for expected failures.
 - Wrap underlying errors with context using `%w` when propagating.
-- Use `errors.Is` / `errors.As` for branching on error types.
+- Use `errors.Is` / `errors.AsType` for branching on error types.
 - Keep error messages lowercase, concise, and actionable.
 
 ### Concurrency and Safety
@@ -238,14 +233,3 @@ Agents are encouraged to use available MCP integrations and skills proactively.
 - [ ] No unnecessary `nolint`; every suppression has a reason.
 - [ ] If a string repeat it'self more than three times create a constant for it
 - [ ] Always start a code-review when all the TODO's list are done
-
-## 10) Incremental Delivery Roadmap
-
-Use this order unless the user requests a different priority:
-
-1. Domain entities + shared enum package (`shared`, `professional`, `patient`, `slot`, `appointment`).
-2. Service layer with business rules RN1/RN2/RN3 and unit tests.
-3. PostgreSQL schema + migrations under `internal/db/migrations`.
-4. `pgx` repositories and transaction boundaries.
-5. HTTP handlers for all aggregates and auth middleware.
-6. Hardening pass (`golangci-lint`, `go test -race`, coverage check).

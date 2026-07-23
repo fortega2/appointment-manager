@@ -1,12 +1,13 @@
 package slot
 
+import "time"
+
 type ListDTO struct {
 	ID               string
 	ProfessionalID   string
 	ProfessionalName string
-	Date             string
-	StartTime        string
-	EndTime          string
+	StartTime        time.Time
+	EndTime          time.Time
 	MaxCapacity      int16
 	Blocked          bool
 }

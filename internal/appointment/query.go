@@ -3,6 +3,7 @@ package appointment
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -11,8 +12,8 @@ const (
 	listAppointmentsGridQuery string = `
 		SELECT
 			a.id,
-			TO_CHAR(s.start_time AT TIME ZONE 'America/Argentina/Buenos_Aires', 'YYYY-MM-DD HH24:MI') AS start_time,
-			TO_CHAR(s.end_time AT TIME ZONE 'America/Argentina/Buenos_Aires', 'HH24:MI') AS end_time,
+			s.start_time,
+			s.end_time,
 			p.first_name || ' ' || p.last_name AS patient_full_name,
 			pr.first_name || ' ' || pr.last_name AS professional_full_name,
 			a.status,
@@ -34,8 +35,8 @@ const (
 
 type List struct {
 	ID                   string
-	StartTime            string
-	EndTime              string
+	StartTime            time.Time
+	EndTime              time.Time
 	PatientFullName      string
 	ProfessionalFullName string
 	StatusName           string

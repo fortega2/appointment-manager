@@ -56,6 +56,11 @@ func NewPostgresPool(ctx context.Context, databaseURL string, opts ...Option) (*
 		return nil, fmt.Errorf("parse pgx pool config: %w", err)
 	}
 
+	if poolConfig.ConnConfig.RuntimeParams == nil {
+		poolConfig.ConnConfig.RuntimeParams = make(map[string]string)
+	}
+	poolConfig.ConnConfig.RuntimeParams["timezone"] = "UTC"
+
 	poolConfig.MaxConns = 20
 	poolConfig.MinConns = 2
 	poolConfig.MaxConnLifetime = time.Hour

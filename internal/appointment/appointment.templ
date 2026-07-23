@@ -3,6 +3,7 @@ package appointment
 import (
 	"fmt"
 	"strconv"
+	"time"
 	"appointment-manager/internal/ui/layout"
 )
 
@@ -69,10 +70,14 @@ templ Table(appointments []List) {
 			</thead>
 			<tbody class="divide-y divide-gray-200">
 				for _, a := range appointments {
-					<tr class="bg-white hover:bg-gray-50 transition-colors">
+					<tr
+						class="bg-white hover:bg-gray-50 transition-colors"
+						data-utc-start={ a.StartTime.UTC().Format(time.RFC3339) }
+						data-utc-end={ a.EndTime.UTC().Format(time.RFC3339) }
+					>
 						<td class="px-4 py-3 text-gray-800">
-							<div>{ a.StartTime }</div>
-							<div class="text-xs text-gray-500">to { a.EndTime }</div>
+							<div data-role="datetime">{ a.StartTime.UTC().Format("2006-01-02 15:04") }</div>
+							<div class="text-xs text-gray-500">to <span data-role="end-time">{ a.EndTime.UTC().Format("15:04") }</span></div>
 						</td>
 						<td class="px-4 py-3 text-gray-800">{ a.PatientFullName }</td>
 						<td class="px-4 py-3 text-gray-500">{ a.ProfessionalFullName }</td>
@@ -149,8 +154,11 @@ templ Form(
 						<option
 							value={ s.ID }
 							data-professional-id={ s.ProfessionalID }
+							data-utc-start={ s.StartTime }
+							data-utc-end={ s.EndTime }
+							data-prof-name={ s.ProfessionalName }
 							selected?={ req.SlotID == s.ID }
-						>{ s.Label }</option>
+						>{ s.FallbackLabel }</option>
 					}
 				</select>
 			</div>

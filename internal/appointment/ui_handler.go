@@ -12,6 +12,7 @@ import (
 	"log/slog"
 	"net/http"
 	"strings"
+	"time"
 )
 
 const (
@@ -160,9 +161,13 @@ func (h *UIHandler) loadAvailableSlotOptions(ctx context.Context, lg *slog.Logge
 	options := make([]SlotOptionDTO, len(slots))
 	for i, s := range slots {
 		options[i] = SlotOptionDTO{
-			ID:             s.ID,
-			Label:          fmt.Sprintf("%s %s-%s · Dr. %s", s.Date, s.StartTime, s.EndTime, s.ProfessionalName),
-			ProfessionalID: s.ProfessionalID,
+			ID: s.ID,
+			FallbackLabel: fmt.Sprintf("%s %s-%s · Dr. %s",
+				s.StartTime.UTC().Format("2006-01-02"), s.StartTime.UTC().Format("15:04"), s.EndTime.UTC().Format("15:04"), s.ProfessionalName),
+			StartTime:        s.StartTime.UTC().Format(time.RFC3339),
+			EndTime:          s.EndTime.UTC().Format(time.RFC3339),
+			ProfessionalName: s.ProfessionalName,
+			ProfessionalID:   s.ProfessionalID,
 		}
 	}
 	return options, nil
