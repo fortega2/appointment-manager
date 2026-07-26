@@ -109,10 +109,16 @@ func initializeServerHandlers(logger *slog.Logger, sessionStore *session.Store, 
 // otelHandler wraps the whole chain in an OpenTelemetry server span so every
 // request is traced from the outermost layer, making the span the parent of the
 // logger, metrics and downstream service spans. otelhttp calls the formatter
-// once before routing (method only, r.Pattern is still empty) and again after
-// next.ServeHTTP returns once r.Pattern is populated, renaming the span to the
-// low-cardinality route template — the same one middleware.Metrics labels its
-// request counter with.
+// once before routing (method only, r.URL.Path is not yet meaningful to name a
+// span with) and again after next.ServeHTTP returns, renaming the span to
+// "{method} {path}". The raw path is used rather than middleware.RouteTemplate
+// because several UI routes share a single "/" mux pattern (see routes.go's
+// catch-all UI handler), which middleware.Metrics deliberately collapses to one
+// bounded Prometheus label but which would make every such span indistinguishable
+// by name. A span name carries no cardinality cost the way a metric label does —
+// each span already has a unique trace ID — and the raw path is already logged
+// unredacted (internal/middleware/logger.go's "path" field), so this adds no new
+// exposure.
 func otelHandler() func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return otelhttp.NewHandler(next, "http.server",
@@ -120,7 +126,7 @@ func otelHandler() func(http.Handler) http.Handler {
 				if r.Pattern == "" {
 					return r.Method
 				}
-				return r.Method + " " + middleware.RouteTemplate(r)
+				return r.Method + " " + r.URL.Path
 			}),
 		)
 	}
