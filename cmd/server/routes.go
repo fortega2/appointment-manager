@@ -108,15 +108,19 @@ func initializeServerHandlers(logger *slog.Logger, sessionStore *session.Store, 
 
 // otelHandler wraps the whole chain in an OpenTelemetry server span so every
 // request is traced from the outermost layer, making the span the parent of the
-// logger, metrics and downstream service spans. The span is created here before
-// routing runs, so only the HTTP method is known yet; middleware.Metrics renames
-// it to "{method} {route}" once the mux has resolved the low-cardinality route
-// template, the same one the request counter is labelled with.
+// logger, metrics and downstream service spans. otelhttp calls the formatter
+// once before routing (method only, r.Pattern is still empty) and again after
+// next.ServeHTTP returns once r.Pattern is populated, renaming the span to the
+// low-cardinality route template — the same one middleware.Metrics labels its
+// request counter with.
 func otelHandler() func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return otelhttp.NewHandler(next, "http.server",
 			otelhttp.WithSpanNameFormatter(func(_ string, r *http.Request) string {
-				return r.Method
+				if r.Pattern == "" {
+					return r.Method
+				}
+				return r.Method + " " + middleware.RouteTemplate(r)
 			}),
 		)
 	}
