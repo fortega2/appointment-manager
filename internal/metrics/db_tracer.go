@@ -11,14 +11,13 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/prometheus/client_golang/prometheus"
-	"go.opentelemetry.io/otel/attribute"
+	semconv "go.opentelemetry.io/otel/semconv/v1.40.0"
 	"go.opentelemetry.io/otel/trace"
 )
 
 const (
 	operationOther = "other"
 	dbTracerName   = "appointment-manager/internal/db"
-	dbSystem       = "postgresql"
 )
 
 // dbTraceState carries the query start time, derived operation label and the
@@ -52,8 +51,9 @@ func (t *DBTracer) TraceQueryStart(ctx context.Context, _ *pgx.Conn, data pgx.Tr
 	ctx, span := t.tracer.Start(ctx, "db."+operation,
 		trace.WithSpanKind(trace.SpanKindClient),
 		trace.WithAttributes(
-			attribute.String("db.system", dbSystem),
-			attribute.String("db.operation", operation),
+			semconv.DBSystemNamePostgreSQL,
+			semconv.DBOperationName(operation),
+			semconv.DBQueryText(data.SQL),
 		),
 	)
 

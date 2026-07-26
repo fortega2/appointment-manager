@@ -13,7 +13,10 @@ import (
 	"github.com/prometheus/client_golang/prometheus/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.opentelemetry.io/otel/attribute"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
+	"go.opentelemetry.io/otel/sdk/trace/tracetest"
+	"go.opentelemetry.io/otel/trace"
 )
 
 const openMetricsAccept = "application/openmetrics-text; version=1.0.0"
@@ -114,6 +117,53 @@ func TestDBTracerRecordsDurationAndErrors(t *testing.T) {
 	ctx = tracer.TraceQueryStart(context.Background(), nil, pgx.TraceQueryStartData{SQL: "SELECT 2"})
 	tracer.TraceQueryEnd(ctx, nil, pgx.TraceQueryEndData{Err: pgx.ErrNoRows})
 	assert.InDelta(t, 0, testutil.ToFloat64(m.dbErrors.WithLabelValues(opSelect)), 0)
+}
+
+func TestDBTracerRecordsSpanAttributes(t *testing.T) {
+	t.Parallel()
+
+	const (
+		query         = "SELECT id FROM appointments WHERE patient_id = $1"
+		sensitiveArg  = "6f1b2c3d-patient-uuid"
+		attrSystem    = "db.system.name"
+		attrOperation = "db.operation.name"
+		attrQueryText = "db.query.text"
+	)
+
+	recorder := tracetest.NewSpanRecorder()
+	tp := sdktrace.NewTracerProvider(sdktrace.WithSpanProcessor(recorder))
+
+	m := New()
+	tracer := m.DBTracer()
+	tracer.tracer = tp.Tracer("test")
+
+	ctx := tracer.TraceQueryStart(context.Background(), nil, pgx.TraceQueryStartData{
+		SQL:  query,
+		Args: []any{sensitiveArg},
+	})
+	tracer.TraceQueryEnd(ctx, nil, pgx.TraceQueryEndData{})
+
+	ended := recorder.Ended()
+	require.Len(t, ended, 1)
+
+	span := ended[0]
+	assert.Equal(t, "db."+opSelect, span.Name())
+	assert.Equal(t, trace.SpanKindClient, span.SpanKind())
+
+	attrs := make(map[attribute.Key]string, len(span.Attributes()))
+	for _, kv := range span.Attributes() {
+		attrs[kv.Key] = kv.Value.String()
+	}
+
+	assert.Equal(t, "postgresql", attrs[attrSystem])
+	assert.Equal(t, opSelect, attrs[attrOperation])
+	assert.Equal(t, query, attrs[attrQueryText])
+
+	// Query arguments must never reach the trace backend: the parameterised SQL
+	// is safe to record, the bound values are not.
+	for key, value := range attrs {
+		assert.NotContains(t, value, sensitiveArg, "argument value leaked into attribute %q", key)
+	}
 }
 
 func TestDBTracerEndWithoutStartIsNoop(t *testing.T) {
