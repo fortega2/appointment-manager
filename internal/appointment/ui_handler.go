@@ -1,9 +1,9 @@
 package appointment
 
 import (
-	"appointment-manager/internal/assistant"
 	"appointment-manager/internal/prescription"
 	"appointment-manager/internal/professional"
+	"appointment-manager/internal/session"
 	"appointment-manager/internal/slot"
 	"appointment-manager/internal/ui/components"
 	"context"
@@ -25,7 +25,6 @@ type UIHandler struct {
 	query             *Query
 	prescriptionQuery *prescription.Query
 	profRepo          *professional.Repository
-	asstRepo          *assistant.PostgresRepository
 	slotQuery         *slot.Query
 }
 
@@ -35,7 +34,6 @@ func NewUIHandler(
 	query *Query,
 	prescriptionQuery *prescription.Query,
 	profRepo *professional.Repository,
-	asstRepo *assistant.PostgresRepository,
 	slotQuery *slot.Query,
 ) (*UIHandler, error) {
 	if logger == nil {
@@ -58,10 +56,6 @@ func NewUIHandler(
 		return nil, ErrNilProfessionalRepo
 	}
 
-	if asstRepo == nil {
-		return nil, ErrNilAssistantRepository
-	}
-
 	if slotQuery == nil {
 		return nil, ErrNilSlotQuery
 	}
@@ -74,7 +68,6 @@ func NewUIHandler(
 		query,
 		prescriptionQuery,
 		profRepo,
-		asstRepo,
 		slotQuery,
 	}, nil
 }
@@ -133,18 +126,11 @@ func (h *UIHandler) showCreateFormUIHandler() http.HandlerFunc {
 			return
 		}
 
-		asstOpts, err := h.loadAssistantOptions(ctx, lg)
-		if err != nil {
-			h.showSnackbar(ctx, lg, components.SnackbarError, w, http.StatusInternalServerError, "Failed to load assistants")
-			return
-		}
-
 		if err := Form(
 			FormRequest{},
 			"/appointments",
 			slotOpts,
 			patientOpts,
-			asstOpts,
 		).Render(ctx, w); err != nil {
 			lg.ErrorContext(ctx, "error rendering appointment create form", slog.Any("error", err))
 		}
@@ -191,23 +177,6 @@ func (h *UIHandler) loadPatientOptions(ctx context.Context, lg *slog.Logger) ([]
 	return options, nil
 }
 
-func (h *UIHandler) loadAssistantOptions(ctx context.Context, lg *slog.Logger) ([]AssistantOptionDTO, error) {
-	assistants, err := h.asstRepo.List(ctx)
-	if err != nil {
-		lg.ErrorContext(ctx, "failed to list assistants for form", slog.Any("error", err))
-		return nil, err
-	}
-
-	options := make([]AssistantOptionDTO, len(assistants))
-	for i, a := range assistants {
-		options[i] = AssistantOptionDTO{
-			ID:    a.ID.String(),
-			Label: fmt.Sprintf("%s %s", a.FirstName, a.LastName),
-		}
-	}
-	return options, nil
-}
-
 type uiRequest struct {
 	SlotID         string
 	PatientID      string
@@ -233,6 +202,17 @@ func (h *UIHandler) createUIHandler() http.HandlerFunc {
 			h.showSnackbar(ctx, lg, components.SnackbarError, w, http.StatusBadRequest, "Invalid form data")
 			return
 		}
+
+		s, err := session.FromContext(ctx)
+		if err != nil {
+			lg.ErrorContext(ctx, "failed to retrieve session", slog.Any("error", err))
+			if renderErr := h.renderUpdatedAppointmentsTable(ctx, w); renderErr != nil {
+				lg.ErrorContext(ctx, "error rendering appointments table after session error", slog.Any("error", renderErr))
+			}
+			h.showSnackbar(ctx, lg, components.SnackbarError, w, http.StatusInternalServerError, "Failed to retrieve session")
+			return
+		}
+		req.AssistantID = s.UserID
 
 		id, err := h.service.Create(ctx, CreateInput(*req))
 		if err != nil {
@@ -268,7 +248,6 @@ func (h *UIHandler) parseForm(r *http.Request, w http.ResponseWriter) (*uiReques
 	slotID := r.FormValue("slot_id")
 	patientID := r.FormValue("patient_id")
 	professionalID := r.FormValue("professional_id")
-	assistantID := r.FormValue("assistant_id")
 	notes := r.FormValue("notes")
 	if notes != "" {
 		notes = strings.TrimSpace(notes)
@@ -278,7 +257,6 @@ func (h *UIHandler) parseForm(r *http.Request, w http.ResponseWriter) (*uiReques
 		SlotID:         slotID,
 		PatientID:      patientID,
 		ProfessionalID: professionalID,
-		AssistantID:    assistantID,
 		Notes:          &notes,
 	}, nil
 }

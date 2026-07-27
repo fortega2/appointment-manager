@@ -25,7 +25,6 @@ func initializeUIAppointmentHandler(logger *slog.Logger, deps *dependencies) (*a
 		deps.appointmentQuery,
 		deps.prescriptionQuery,
 		deps.professionalRepo,
-		deps.assistantRepo,
 		deps.slotQuery,
 	)
 	if err != nil {

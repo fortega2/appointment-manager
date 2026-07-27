@@ -4,7 +4,6 @@ type FormRequest struct {
 	SlotID         string
 	PatientID      string
 	ProfessionalID string
-	AssistantID    string
 	Notes          string
 }
 
@@ -24,11 +23,6 @@ type PatientOptionDTO struct {
 }
 
 type ProfessionalOptionDTO struct {
-	ID    string
-	Label string
-}
-
-type AssistantOptionDTO struct {
 	ID    string
 	Label string
 }

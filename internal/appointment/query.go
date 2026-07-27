@@ -28,6 +28,9 @@ const (
 			public.professional AS pr ON pr.id = a.professional_id
 		INNER JOIN
 			public.appointment_status AS ast ON ast.id = a.status
+		WHERE
+			a.status = 1
+			AND s.end_time >= NOW()
 		ORDER BY
 			a.created_at DESC
 	`
