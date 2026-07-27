@@ -157,20 +157,26 @@ func TestLogoutEndpointIdempotent(t *testing.T) {
 	}
 }
 
-func newAuthDecodeTestMux(t *testing.T) *http.ServeMux {
+func newTestHandler(t *testing.T, hasher *password.Argon2) *Handler {
 	t.Helper()
 
 	h, err := NewHandler(
 		slog.New(slog.DiscardHandler),
 		session.NewStore(),
 		&assistant.PostgresRepository{},
-		password.NewArgon2(),
+		hasher,
 		true,
 	)
 	require.NoError(t, err)
 
+	return h
+}
+
+func newAuthDecodeTestMux(t *testing.T) *http.ServeMux {
+	t.Helper()
+
 	mux := http.NewServeMux()
-	h.RegisterHandlers(mux)
+	newTestHandler(t, password.NewArgon2()).RegisterHandlers(mux)
 
 	return mux
 }

@@ -30,6 +30,15 @@ const (
 	maxParallelism   = 8
 	maxHashLenBytes  = 128
 	minimumParamsVal = 1
+
+	// maxConcurrentHashes bounds how many Hash/Compare calls may run at once,
+	// since each one costs defaultMemoryKiB of working memory regardless of
+	// caller. 2 * defaultMemoryKiB = 128MiB peak; keep this proportional to
+	// the container's memory limit (see docker/docker-compose.yml) rather
+	// than raising it for throughput — Argon2id already uses
+	// defaultParallelism internally, so beyond ~2 concurrent hashes on a
+	// single-core budget you get queueing, not more throughput.
+	maxConcurrentHashes = 2
 )
 
 type Argon2 struct {
@@ -38,6 +47,7 @@ type Argon2 struct {
 	parallelism uint8
 	saltLen     uint32
 	keyLen      uint32
+	sem         chan struct{}
 }
 
 func NewArgon2() *Argon2 {
@@ -47,6 +57,7 @@ func NewArgon2() *Argon2 {
 		parallelism: defaultParallelism,
 		saltLen:     defaultSaltLenBytes,
 		keyLen:      defaultKeyLenBytes,
+		sem:         make(chan struct{}, maxConcurrentHashes),
 	}
 }
 
@@ -55,6 +66,11 @@ func (a *Argon2) Hash(password string) (string, error) {
 	if _, err := rand.Read(salt); err != nil {
 		return "", fmt.Errorf("generate salt: %w", err)
 	}
+
+	if err := a.acquire(); err != nil {
+		return "", err
+	}
+	defer a.release()
 
 	hash := argon2.IDKey(
 		[]byte(password),
@@ -98,6 +114,11 @@ func (a *Argon2) Compare(encodedHash, plainPassword string) (bool, error) {
 		return false, fmt.Errorf("hash length exceeds maximum: %d > %d", hashLen, maxHashLenBytes)
 	}
 
+	if err := a.acquire(); err != nil {
+		return false, err
+	}
+	defer a.release()
+
 	calculatedHash := argon2.IDKey(
 		[]byte(plainPassword),
 		parsed.salt,
@@ -108,6 +129,21 @@ func (a *Argon2) Compare(encodedHash, plainPassword string) (bool, error) {
 	)
 
 	return subtle.ConstantTimeCompare(parsed.hash, calculatedHash) == 1, nil
+}
+
+// acquire reserves one of the concurrent-hash slots, or reports
+// ErrTooManyConcurrentHashes immediately rather than making the caller wait.
+func (a *Argon2) acquire() error {
+	select {
+	case a.sem <- struct{}{}:
+		return nil
+	default:
+		return ErrTooManyConcurrentHashes
+	}
+}
+
+func (a *Argon2) release() {
+	<-a.sem
 }
 
 func parsePHCEncodedHash(encodedHash string) (*parsedPHC, error) {

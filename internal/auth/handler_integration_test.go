@@ -10,6 +10,9 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
+	"strings"
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -25,13 +28,16 @@ const (
 	authContentTypeJSON          = "application/json"
 	authContentTypeProblem       = "application/problem+json"
 	authBodyValidLogin           = `{"email":"assistant@email.com","password":"123456"}`
-	authBodyWrongPassword        = `{"email":"assistant@email.com","password":"wrong"}`
+	authBodyWrongPassword        = `{"email":"assistant@email.com","password":"wrong"}` //nolint:gosec // G101 false positive: test fixture for a wrong-password case, not a real credential
 	authBodyUnknownEmail         = `{"email":"unknown@email.com","password":"123456"}`
 	authEmail                    = "assistant@email.com"
 	authPassword                 = "123456"
 	authCookieSecureDirective    = "Secure"
 	authCookieHTTPOnlyDirective  = "HttpOnly"
 	authCookieSameSiteStrictPart = "SameSite=Strict"
+	authPathUILogin              = "/login"
+	authHeaderHXRedirect         = "HX-Redirect"
+	authFormContentType          = "application/x-www-form-urlencoded"
 )
 
 func TestLoginEndpointSuccessSetsCookieAndCreatesSession(t *testing.T) {
@@ -147,6 +153,102 @@ func TestLoginEndpointSetsSecureCookieOutsideDevelopment(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, rec.Code)
 	assert.Contains(t, rec.Header().Get(authHeaderSetCookie), authCookieSecureDirective)
+}
+
+func TestLoginEndpointRejectsWhenTooManyConcurrentPasswordChecks(t *testing.T) {
+	testcontainers.SkipIfProviderIsNotHealthy(t)
+	ctx := context.Background()
+
+	pool := newAuthIntegrationPool(ctx, t)
+	repo := newAuthIntegrationRepository(t, pool)
+	mux := newAuthIntegrationMux(t, repo, session.NewStore(), true)
+
+	seedAssistantForAuth(ctx, t, repo, authEmail, authPassword)
+
+	const concurrentLogins = 20 // well above the shared Argon2 concurrent-hash cap
+
+	var wg sync.WaitGroup
+	start := make(chan struct{})
+	codes := make([]int, concurrentLogins)
+
+	for i := range concurrentLogins {
+		wg.Go(func() {
+			<-start
+
+			req := newAuthRequest(ctx, http.MethodPost, authPathLogin, authBodyValidLogin)
+			rec := httptest.NewRecorder()
+			mux.ServeHTTP(rec, req)
+			codes[i] = rec.Code
+		})
+	}
+	close(start)
+	wg.Wait()
+
+	var busyCount int
+	for _, code := range codes {
+		assert.Contains(t, []int{http.StatusOK, http.StatusServiceUnavailable}, code)
+		if code == http.StatusServiceUnavailable {
+			busyCount++
+		}
+	}
+
+	assert.Positive(t, busyCount, "expected at least one request to be rejected as busy under concurrent load")
+}
+
+func TestProcessLoginUIHandlerSuccessSetsCookieAndRedirects(t *testing.T) {
+	testcontainers.SkipIfProviderIsNotHealthy(t)
+	ctx := context.Background()
+
+	pool := newAuthIntegrationPool(ctx, t)
+	repo := newAuthIntegrationRepository(t, pool)
+	store := session.NewStore()
+	mux := newAuthIntegrationMux(t, repo, store, true)
+
+	seedAssistantForAuth(ctx, t, repo, authEmail, authPassword)
+
+	req := newAuthFormRequest(ctx, authEmail, authPassword)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.Equal(t, "/", rec.Header().Get(authHeaderHXRedirect))
+
+	setCookie := rec.Header().Get(authHeaderSetCookie)
+	require.NotEmpty(t, setCookie)
+	assert.Contains(t, setCookie, session.CookieName+"=")
+
+	cookie := extractSessionCookie(t, rec)
+	sessionValue, err := store.Get(cookie.Value)
+	require.NoError(t, err)
+	assert.Equal(t, authEmail, sessionValue.Email)
+}
+
+func TestProcessLoginUIHandlerRendersErrorForWrongPassword(t *testing.T) {
+	testcontainers.SkipIfProviderIsNotHealthy(t)
+	ctx := context.Background()
+
+	pool := newAuthIntegrationPool(ctx, t)
+	repo := newAuthIntegrationRepository(t, pool)
+	mux := newAuthIntegrationMux(t, repo, session.NewStore(), true)
+
+	seedAssistantForAuth(ctx, t, repo, authEmail, authPassword)
+
+	req := newAuthFormRequest(ctx, authEmail, "wrong-password")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.Empty(t, rec.Header().Get(authHeaderHXRedirect))
+	assert.Empty(t, rec.Header().Get(authHeaderSetCookie))
+	assert.Contains(t, rec.Body.String(), "Incorrect email or password")
+}
+
+func newAuthFormRequest(ctx context.Context, email, plainPassword string) *http.Request {
+	form := url.Values{"email": {email}, "password": {plainPassword}}
+	req := httptest.NewRequestWithContext(ctx, http.MethodPost, authPathUILogin, strings.NewReader(form.Encode()))
+	req.Header.Set(authHeaderContentType, authFormContentType)
+
+	return req
 }
 
 func newAuthRequest(ctx context.Context, method, path, body string) *http.Request {

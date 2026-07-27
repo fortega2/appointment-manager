@@ -6,7 +6,9 @@ import (
 	"appointment-manager/internal/session"
 	"appointment-manager/internal/ui/auth"
 	"appointment-manager/internal/web"
+	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"time"
@@ -17,6 +19,13 @@ const (
 	renderLoginErroMsg        string = "error rendering login error"
 	failedGetAssistByEmailMsg string = "failed to get assistant by email"
 	failedCreateSessionMsg    string = "failed to create session"
+	serverBusyMsg             string = "Server is busy, please try again"
+	incorrectCredentialsMsg   string = "Incorrect email or password"
+
+	// dummyHash is compared against when an email is unknown, so that
+	// path costs the same as a real verification and cannot be used to probe
+	// which accounts exist.
+	dummyHash string = "$argon2id$v=19$m=65536,t=3,p=2$P+GDBz2vGj467VpP0f5zWg$N/J6HjG8M1nJ8Jt3Vb4N/D1T1V7G7Q6H2C8P9W1L9Q"
 )
 
 type Handler struct {
@@ -73,46 +82,9 @@ func (h *Handler) loginAPIHandler() http.HandlerFunc {
 			return
 		}
 
-		a, err := h.repo.GetByEmail(r.Context(), req.Email)
+		a, err := h.verifyCredentials(r.Context(), req.Email, req.Password)
 		if err != nil {
-			if errors.Is(err, assistant.ErrAssistantNotFound) {
-				web.WriteProblem(w, web.NewProblem(
-					http.StatusUnauthorized,
-					web.ProblemTypeUnauthorized,
-					"email or password is incorrect",
-					r.URL.Path,
-				))
-			} else {
-				h.logger.ErrorContext(
-					r.Context(),
-					failedGetAssistByEmailMsg,
-					slog.String("email", req.Email),
-					slog.Any("error", err))
-				web.WriteProblem(w, web.NewInternalServerProblem(failedGetAssistByEmailMsg, r.URL.Path))
-			}
-			const dummyHash = "$argon2id$v=19$m=65536,t=3,p=2$P+GDBz2vGj467VpP0f5zWg$N/J6HjG8M1nJ8Jt3Vb4N/D1T1V7G7Q6H2C8P9W1L9Q"
-			_, _ = h.pass.Compare(dummyHash, req.Password) // Compare with a dummy hash to mitigate timing attacks.
-			return
-		}
-
-		ok, err := h.pass.Compare(a.PasswordHash, req.Password)
-		if err != nil {
-			h.logger.ErrorContext(
-				r.Context(),
-				"failed to compare password hash",
-				slog.String("assistant_id", a.ID.String()),
-				slog.String("email", a.Email),
-				slog.Any("error", err))
-			web.WriteProblem(w, web.NewInternalServerProblem("failed to process the password", r.URL.Path))
-			return
-		}
-		if !ok {
-			web.WriteProblem(w, web.NewProblem(
-				http.StatusUnauthorized,
-				web.ProblemTypeUnauthorized,
-				"email or password is incorrect",
-				r.URL.Path,
-			))
+			web.WriteProblem(w, loginProblem(err, r.URL.Path))
 			return
 		}
 
@@ -170,6 +142,48 @@ func (h *Handler) showLoginUIHandler() http.HandlerFunc {
 	}
 }
 
+// verifyCredentials looks up the assistant by email and compares the provided
+// password against the stored hash. An unknown email still costs one Argon2id
+// comparison against a dummy hash, so a caller cannot tell the two cases apart
+// by timing. Errors are one of password.ErrTooManyConcurrentHashes,
+// errInvalidCredentials, errCredentialLookupFailed or errPasswordCheckFailed.
+func (h *Handler) verifyCredentials(ctx context.Context, email, plainPassword string) (*assistant.Assistant, error) {
+	a, err := h.repo.GetByEmail(ctx, email)
+	if err != nil {
+		if !errors.Is(err, assistant.ErrAssistantNotFound) {
+			h.logger.ErrorContext(ctx, failedGetAssistByEmailMsg, slog.String("email", email), slog.Any("error", err))
+			// An infrastructure failure carries no account-existence signal to
+			// mask, so skip the dummy hash instead of burning a hash slot.
+			return nil, fmt.Errorf("%w: %w", errCredentialLookupFailed, err)
+		}
+		if _, cmpErr := h.pass.Compare(dummyHash, plainPassword); errors.Is(cmpErr, password.ErrTooManyConcurrentHashes) {
+			return nil, cmpErr
+		}
+
+		return nil, errInvalidCredentials
+	}
+
+	ok, err := h.pass.Compare(a.PasswordHash, plainPassword)
+	if err != nil {
+		if errors.Is(err, password.ErrTooManyConcurrentHashes) {
+			return nil, err
+		}
+		h.logger.ErrorContext(
+			ctx,
+			"failed to compare password hash",
+			slog.String("assistant_id", a.ID.String()),
+			slog.String("email", a.Email),
+			slog.Any("error", err))
+
+		return nil, fmt.Errorf("%w: %w", errPasswordCheckFailed, err)
+	}
+	if !ok {
+		return nil, errInvalidCredentials
+	}
+
+	return a, nil
+}
+
 func (h *Handler) processLoginUIHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		email, pass, err := h.parseLoginForm(r, w)
@@ -179,33 +193,16 @@ func (h *Handler) processLoginUIHandler() http.HandlerFunc {
 			return
 		}
 
-		a, err := h.repo.GetByEmail(r.Context(), email)
+		a, err := h.verifyCredentials(r.Context(), email, pass)
 		if err != nil {
-			if !errors.Is(err, assistant.ErrAssistantNotFound) {
-				h.logger.ErrorContext(
-					r.Context(),
-					failedGetAssistByEmailMsg,
-					slog.String("email", email),
-					slog.Any("error", err))
+			switch {
+			case errors.Is(err, password.ErrTooManyConcurrentHashes):
+				h.renderError(w, r, serverBusyMsg)
+			case errors.Is(err, errPasswordCheckFailed):
+				h.renderError(w, r, "Error verifying password")
+			default:
+				h.renderError(w, r, incorrectCredentialsMsg)
 			}
-			const dummyHash = "$argon2id$v=19$m=65536,t=3,p=2$P+GDBz2vGj467VpP0f5zWg$N/J6HjG8M1nJ8Jt3Vb4N/D1T1V7G7Q6H2C8P9W1L9Q"
-			_, _ = h.pass.Compare(dummyHash, pass) // Compare with a dummy hash to mitigate timing attacks.
-			h.renderError(w, r, "Incorrect email or password")
-			return
-		}
-		ok, err := h.pass.Compare(a.PasswordHash, pass)
-		if err != nil {
-			h.logger.ErrorContext(
-				r.Context(),
-				"failed to compare password hash",
-				slog.String("assistant_id", a.ID.String()),
-				slog.String("email", a.Email),
-				slog.Any("error", err))
-			h.renderError(w, r, "Error verifying password")
-			return
-		}
-		if !ok {
-			h.renderError(w, r, "Incorrect email or password")
 			return
 		}
 
