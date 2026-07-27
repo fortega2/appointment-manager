@@ -196,20 +196,20 @@ func (h *UIHandler) createUIHandler() http.HandlerFunc {
 
 		req, err := h.parseForm(r, w)
 		if err != nil {
+			h.showSnackbar(ctx, lg, components.SnackbarError, w, http.StatusBadRequest, "Invalid form data")
 			if renderErr := h.renderUpdatedAppointmentsTable(ctx, w); renderErr != nil {
 				lg.ErrorContext(ctx, "error rendering appointments table after parse error", slog.Any("error", renderErr))
 			}
-			h.showSnackbar(ctx, lg, components.SnackbarError, w, http.StatusBadRequest, "Invalid form data")
 			return
 		}
 
 		s, err := session.FromContext(ctx)
 		if err != nil {
 			lg.ErrorContext(ctx, "failed to retrieve session", slog.Any("error", err))
+			h.showSnackbar(ctx, lg, components.SnackbarError, w, http.StatusInternalServerError, "Failed to retrieve session")
 			if renderErr := h.renderUpdatedAppointmentsTable(ctx, w); renderErr != nil {
 				lg.ErrorContext(ctx, "error rendering appointments table after session error", slog.Any("error", renderErr))
 			}
-			h.showSnackbar(ctx, lg, components.SnackbarError, w, http.StatusInternalServerError, "Failed to retrieve session")
 			return
 		}
 		req.AssistantID = s.UserID
@@ -220,10 +220,10 @@ func (h *UIHandler) createUIHandler() http.HandlerFunc {
 			if status == http.StatusInternalServerError {
 				lg.ErrorContext(ctx, "failed to create appointment", slog.Any("error", err))
 			}
+			h.showSnackbar(ctx, lg, components.SnackbarError, w, status, msg)
 			if renderErr := h.renderUpdatedAppointmentsTable(ctx, w); renderErr != nil {
 				lg.ErrorContext(ctx, "error rendering appointments table after failed create", slog.Any("error", renderErr))
 			}
-			h.showSnackbar(ctx, lg, components.SnackbarError, w, status, msg)
 			return
 		}
 
@@ -282,10 +282,10 @@ func (h *UIHandler) attendUIAppointment() http.HandlerFunc {
 				lg.ErrorContext(ctx, "failed to mark appointment as attended", slog.String("appointment_id", ID.String()), slog.Any("error", err))
 				msg = "Failed to mark appointment as attended"
 			}
+			h.showSnackbar(ctx, lg, components.SnackbarError, w, status, msg)
 			if err := h.renderUpdatedAppointmentsTable(ctx, w); err != nil {
 				lg.ErrorContext(ctx, "error rendering appointments table after attend operation", slog.Any("error", err))
 			}
-			h.showSnackbar(ctx, lg, components.SnackbarError, w, status, msg)
 			return
 		}
 
@@ -317,10 +317,10 @@ func (h *UIHandler) cancelUIAppointment() http.HandlerFunc {
 				lg.ErrorContext(ctx, "failed to cancel appointment", slog.String("appointment_id", ID.String()), slog.Any("error", err))
 				msg = "Failed to cancel appointment"
 			}
+			h.showSnackbar(ctx, lg, components.SnackbarError, w, status, msg)
 			if err := h.renderUpdatedAppointmentsTable(ctx, w); err != nil {
 				lg.ErrorContext(ctx, "error rendering appointments table after cancel operation", slog.Any("error", err))
 			}
-			h.showSnackbar(ctx, lg, components.SnackbarError, w, status, msg)
 			return
 		}
 

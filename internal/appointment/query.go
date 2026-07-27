@@ -29,8 +29,7 @@ const (
 		INNER JOIN
 			public.appointment_status AS ast ON ast.id = a.status
 		WHERE
-			a.status = 1
-			AND s.end_time >= NOW()
+			s.end_time > NOW()
 		ORDER BY
 			a.created_at DESC
 	`
