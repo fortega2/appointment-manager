@@ -195,6 +195,46 @@ func TestLoginEndpointRejectsWhenTooManyConcurrentPasswordChecks(t *testing.T) {
 	assert.Positive(t, busyCount, "expected at least one request to be rejected as busy under concurrent load")
 }
 
+func TestProcessLoginUIHandlerRejectsWhenTooManyConcurrentPasswordChecks(t *testing.T) {
+	testcontainers.SkipIfProviderIsNotHealthy(t)
+	ctx := context.Background()
+
+	pool := newAuthIntegrationPool(ctx, t)
+	repo := newAuthIntegrationRepository(t, pool)
+	mux := newAuthIntegrationMux(t, repo, session.NewStore(), true)
+
+	seedAssistantForAuth(ctx, t, repo, authEmail, authPassword)
+
+	const concurrentLogins = 20 // well above the shared Argon2 concurrent-hash cap
+
+	var wg sync.WaitGroup
+	start := make(chan struct{})
+	codes := make([]int, concurrentLogins)
+
+	for i := range concurrentLogins {
+		wg.Go(func() {
+			<-start
+
+			req := newAuthFormRequest(ctx, authEmail, authPassword)
+			rec := httptest.NewRecorder()
+			mux.ServeHTTP(rec, req)
+			codes[i] = rec.Code
+		})
+	}
+	close(start)
+	wg.Wait()
+
+	var busyCount int
+	for _, code := range codes {
+		assert.Contains(t, []int{http.StatusOK, http.StatusServiceUnavailable}, code)
+		if code == http.StatusServiceUnavailable {
+			busyCount++
+		}
+	}
+
+	assert.Positive(t, busyCount, "expected at least one request to be rejected as busy under concurrent load")
+}
+
 func TestProcessLoginUIHandlerSuccessSetsCookieAndRedirects(t *testing.T) {
 	testcontainers.SkipIfProviderIsNotHealthy(t)
 	ctx := context.Background()
@@ -237,7 +277,7 @@ func TestProcessLoginUIHandlerRendersErrorForWrongPassword(t *testing.T) {
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
 
-	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.Equal(t, http.StatusUnauthorized, rec.Code)
 	assert.Empty(t, rec.Header().Get(authHeaderHXRedirect))
 	assert.Empty(t, rec.Header().Get(authHeaderSetCookie))
 	assert.Contains(t, rec.Body.String(), "Incorrect email or password")

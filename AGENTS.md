@@ -13,12 +13,12 @@ Guidance for coding agents working in `appointment-manager`.
 - Migration files path: `internal/db/migrations`.
 - Assistant model: single assistant for now.
 - Initial assistant creation: manual by product owner; do not add bootstrap/seed/signup flows unless explicitly requested.
-- Always use the available SKILLS.md and MCP for the required task.
+- Always use the available skills (project skills under `.claude/skills/`, plus any loaded plugin skills) and MCP integrations for the required task.
 - Appointment transition rules:
   - cancel: if now is before start-24h -> `cancelled`; otherwise -> `absent`.
   - attend: only allowed when now is within [start, end].
 - Appointment status updates must be concurrency-safe (atomic update with expected current status, or equivalent locking).
-- Frontend assets (Tailwind CSS, htmx, Alpine.js) are self-hosted and pinned — no CDN `<script src="https://...">` tags in `.templ` files. Pinned versions: Tailwind CSS v4.3.2, htmx v2.0.10, Alpine.js v3.15.12. See "Frontend Assets" below.
+- Frontend assets (Tailwind CSS, htmx, Alpine.js) are self-hosted and pinned — no CDN `<script src="https://...">` tags in `.templ` files. Pinned versions: Tailwind CSS v4.3.2, htmx v2.0.10, Alpine.js v3.15.12. Regenerating/bumping these is covered by the `frontend-asset-update` skill.
 
 ## 1) Repository Snapshot
 
@@ -45,6 +45,9 @@ Guidance for coding agents working in `appointment-manager`.
   - `internal/storage` (S3-compatible client; needs `STORAGE_*` env vars, see README)
   - `internal/server`
   - `internal/health`
+  - `internal/metrics` (Prometheus metrics)
+  - `internal/tracing` (OTel tracing)
+  - `internal/worker`
   - `internal/ui` (templ views + static assets)
 - Lint config: `.golangci.yml` (strict, many linters enabled).
 - Testing libs: `stretchr/testify`.
@@ -58,21 +61,14 @@ Guidance for coding agents working in `appointment-manager`.
 
 ### Frontend Assets
 
-- Tailwind CSS, htmx, and Alpine.js are self-hosted under `internal/ui/static/{css,vendor}/` — never reintroduce CDN `<script>`/`<link>` tags in `.templ` files.
-- Tailwind source lives at `internal/ui/css/input.css`; generated output at `internal/ui/static/css/app.css` is **committed to git**, same convention as `_templ.go`.
-- Regenerate CSS with `make css` whenever you add/remove Tailwind utility classes in any `.templ` file, then `git add internal/ui/static/css/app.css` before committing.
-- `lefthook` pre-commit runs `make check-css` automatically when a commit touches `.templ` files, and fails if `app.css` is stale — run `make css` and re-stage if it does.
-- `htmx.min.js` / `alpine.min.js` are pinned, vendored, committed files. Bump versions via `make vendor-js HTMX_VERSION=... ALPINE_VERSION=...` (update the version variables in the `Makefile` first), then review the diff of the downloaded files before committing.
-- Fresh clone requires **no** extra setup step — `app.css` and the vendored JS are already committed, so `go run ./cmd/server` serves working CSS/JS immediately. `make css` is only needed when actively changing Tailwind classes.
+- Tailwind CSS, htmx, and Alpine.js are self-hosted under `internal/ui/static/{css,vendor}/`, pinned and committed — never reintroduce CDN `<script>`/`<link>` tags in `.templ` files.
+- Fresh clone requires **no** extra setup step — `app.css` and the vendored JS are already committed, so `go run ./cmd/server` serves working CSS/JS immediately.
+- For regenerating CSS after Tailwind class changes, or bumping the pinned htmx/Alpine versions, use the `frontend-asset-update` skill.
 
-### Database migration commands (`migrate`)
+### Database migrations (`golang-migrate`)
 
-- Create migration file pair:
-  - `migrate create -ext sql -dir internal/db/migrations -seq <migration_name>`
-- Apply all pending migrations:
-  - `migrate -path internal/db/migrations -database "$DATABASE_URL" up`
-- Roll back one migration:
-  - `migrate -path internal/db/migrations -database "$DATABASE_URL" down 1`
+- Migration files live under `internal/db/migrations` as sequential up/down pairs.
+- For creating, applying, or rolling back migrations, use the `db-migration` skill.
 
 ## 3) Lint / Format Commands
 
@@ -113,10 +109,7 @@ Notes:
 ### Coverage (team convention)
 
 - Internal-packages coverage gate target: `>= 90%`.
-- Preferred command:
-  - `go test ./... -race -covermode=atomic -coverpkg=./internal/... -coverprofile=coverage.out`
-  - `go tool cover -func=coverage.out`
-- Read the `total:` line from `go tool cover -func` as source of truth.
+- For the coverage command and the full pre-finish verification sequence, use the `pre-pr-check` skill.
 
 Important:
 - `cmd/server/main.go` is intentionally excluded from strict unit-coverage goals unless explicitly requested.
@@ -141,26 +134,16 @@ Follow existing project conventions first.
 - Preserve API contracts in JSON tags.
 - If a JSON field name is security-sensitive (e.g., `json:"password"`), keep contract and justify any lint suppression.
 
-### Naming
+### Naming, Error Handling, Concurrency
 
-- Use Go naming conventions (MixedCaps, no snake_case for identifiers).
-- Error vars follow `ErrXxx` pattern.
-- Tests use descriptive names with table-driven style when practical.
-- In test files, constants must be local to that file and should NOT use the `test` prefix.
+Follow standard idiomatic Go practice here (see the `golang-naming`,
+`golang-error-handling`, and `golang-concurrency`/`golang-safety` skills for
+the general guidance). Project-specific deviations:
 
-### Error Handling
-
-- Return errors; do not panic for expected failures.
-- Wrap underlying errors with context using `%w` when propagating.
-- Use `errors.Is` / `errors.AsType` for branching on error types.
-- Keep error messages lowercase, concise, and actionable.
-
-### Concurrency and Safety
-
-- Protect shared maps/slices with mutexes (`sync.RWMutex` as appropriate).
-- For in-memory repositories, avoid exposing mutable internals:
-  - return defensive copies where needed.
-- Ensure code passes `-race` before considering work done.
+- In test files, constants must be local to that file and should NOT use the
+  `test` prefix (see also the Sonar/Duplication guidance in §6).
+- In-memory repositories must not expose mutable internals — return
+  defensive copies of shared maps/slices rather than references to them.
 
 ### HTTP Handlers
 
@@ -208,28 +191,14 @@ Follow existing project conventions first.
 - Run lint + tests after changes:
   - minimum: `go test ./...`
   - preferred: `golangci-lint run ./...` and `go test ./... -race`
-
-Before finishing substantial changes, run:
-
-1. `golangci-lint run ./...`
-2. `go test ./... -race`
-3. coverage command for internal packages when tests changed
+- Before finishing substantial changes (all TODOs for the task done), run the
+  `pre-pr-check` skill: lint, race tests, vulnerability scan, coverage when
+  tests changed, the pre-PR checklist, and starting a code review.
 
 ## 8) MCP and SKILLS Usage
 
 Agents are encouraged to use available MCP integrations and skills proactively.
 
 - Use Context7 MCP when you need up-to-date library/framework docs.
-- Use loaded SKILLS for domain-specific guidance (especially Go lint/testing/concurrency/security).
+- Use loaded skills for domain-specific guidance (especially Go lint/testing/concurrency/security) and for project-specific workflows under `.claude/skills/` (`frontend-asset-update`, `db-migration`, `pre-pr-check`).
 - Validate externally sourced guidance against current repo conventions before applying.
-
-## 9) Quick Pre-PR Checklists
-
-- [ ] Code formatted (`gofmt`).
-- [ ] Lint clean (`golangci-lint run ./...`).
-- [ ] Tests pass (`go test ./... -race`).
-- [ ] Internal coverage remains `>= 90%` when relevant.
-- [ ] New tests follow `*_test` package style and per-file constants rule.
-- [ ] No unnecessary `nolint`; every suppression has a reason.
-- [ ] If a string repeat it'self more than three times create a constant for it
-- [ ] Always start a code-review when all the TODO's list are done

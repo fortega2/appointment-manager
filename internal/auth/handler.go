@@ -189,7 +189,7 @@ func (h *Handler) processLoginUIHandler() http.HandlerFunc {
 		email, pass, err := h.parseLoginForm(r, w)
 		if err != nil {
 			h.logger.ErrorContext(r.Context(), "error parsing login form", slog.Any("error", err))
-			h.renderError(w, r, "Error al procesar el formulario")
+			h.renderError(w, r, http.StatusBadRequest, "Error al procesar el formulario")
 			return
 		}
 
@@ -197,11 +197,11 @@ func (h *Handler) processLoginUIHandler() http.HandlerFunc {
 		if err != nil {
 			switch {
 			case errors.Is(err, password.ErrTooManyConcurrentHashes):
-				h.renderError(w, r, serverBusyMsg)
-			case errors.Is(err, errPasswordCheckFailed):
-				h.renderError(w, r, "Error verifying password")
+				h.renderError(w, r, http.StatusServiceUnavailable, serverBusyMsg)
+			case errors.Is(err, errInvalidCredentials):
+				h.renderError(w, r, http.StatusUnauthorized, incorrectCredentialsMsg)
 			default:
-				h.renderError(w, r, incorrectCredentialsMsg)
+				h.renderError(w, r, http.StatusInternalServerError, "Error verifying password")
 			}
 			return
 		}
@@ -214,7 +214,7 @@ func (h *Handler) processLoginUIHandler() http.HandlerFunc {
 				slog.String("assistant_id", a.ID.String()),
 				slog.String("email", a.Email),
 				slog.Any("error", err))
-			h.renderError(w, r, "Error interno al crear sesión")
+			h.renderError(w, r, http.StatusInternalServerError, "Error interno al crear sesión")
 			return
 		}
 		//nolint:gosec // G124 false positive: Secure is dynamically !h.isDevelopment (true in prod, false only for local HTTP dev); HttpOnly/SameSite are already set.
@@ -246,7 +246,8 @@ func (h *Handler) parseLoginForm(r *http.Request, w http.ResponseWriter) (string
 	return email, pass, nil
 }
 
-func (h *Handler) renderError(w http.ResponseWriter, r *http.Request, msg string) {
+func (h *Handler) renderError(w http.ResponseWriter, r *http.Request, status int, msg string) {
+	w.WriteHeader(status)
 	if err := auth.LoginError(msg).Render(r.Context(), w); err != nil {
 		h.logger.ErrorContext(r.Context(), renderLoginErroMsg, slog.Any("error", err))
 	}
