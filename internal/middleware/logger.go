@@ -10,6 +10,8 @@ import (
 	"time"
 )
 
+const realIPHeader = "X-Real-Ip"
+
 type responseRecorder struct {
 	http.ResponseWriter
 
@@ -130,7 +132,7 @@ func RequestLogger(logger *slog.Logger) func(http.Handler) http.Handler {
 				slog.Int64("duration_ms", time.Since(start).Milliseconds()),
 				slog.Int64("response_bytes", rw.bytes),
 				slog.Int64("request_content_length", r.ContentLength),
-				slog.String("client_ip", remoteIP(r.RemoteAddr)),
+				slog.String("client_ip", remoteIP(r)),
 				slog.String("user_agent", r.UserAgent()),
 			}
 
@@ -144,10 +146,20 @@ func RequestLogger(logger *slog.Logger) func(http.Handler) http.Handler {
 	}
 }
 
-func remoteIP(remoteAddr string) string {
-	host, _, err := net.SplitHostPort(remoteAddr)
+// remoteIP prefers the X-Real-IP header over the TCP peer address. The app is
+// only reachable through Caddy (see docker/docker-compose.yml: the container
+// has no published host ports), and the Caddyfile overwrites this header with
+// the proxy's own view of the peer via `header_up X-Real-IP {remote_host}`, so
+// it can't be spoofed by a client and is always the real client IP rather than
+// Caddy's container address.
+func remoteIP(r *http.Request) string {
+	if realIP := strings.TrimSpace(r.Header.Get(realIPHeader)); realIP != "" {
+		return realIP
+	}
+
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
 	if err != nil {
-		return remoteAddr
+		return r.RemoteAddr
 	}
 
 	return host

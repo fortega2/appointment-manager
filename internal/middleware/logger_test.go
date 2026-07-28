@@ -22,6 +22,7 @@ const (
 	requestIDField            = "request_id"
 	responseBytesField        = "response_bytes"
 	requestContentLengthField = "request_content_length"
+	realIPHeader              = "X-Real-Ip"
 )
 
 func TestRequestLoggerLogsRequestWithLevelByStatusCode(t *testing.T) {
@@ -72,6 +73,25 @@ func TestRequestLoggerLogsRequestWithLevelByStatusCode(t *testing.T) {
 			assert.Equal(t, testRequestID, entry[requestIDField])
 		})
 	}
+}
+
+func TestRequestLoggerPrefersRealIPHeaderOverRemoteAddr(t *testing.T) {
+	t.Parallel()
+
+	logger, logs := newBufferedLogger()
+	handler := middleware.RequestLogger(logger)(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, requestURL, nil)
+	req.RemoteAddr = "172.21.0.5:54321"
+	req.Header.Set(realIPHeader, "177.10.20.30")
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	entry := decodeLastLogEntry(t, logs)
+	assert.Equal(t, "177.10.20.30", entry["client_ip"])
 }
 
 func TestRequestLoggerOmitsRequestIDWhenHeaderIsMissing(t *testing.T) {
