@@ -47,7 +47,7 @@ const (
 		WHERE
 			NOT EXISTS (
 				SELECT 1 FROM public.prescription pr
-				WHERE pr.patient_id = p.id AND pr.status = 1
+				WHERE pr.patient_id = p.id AND pr.status = $1
 			)
 		ORDER BY
 			p.first_name, p.last_name
@@ -141,11 +141,11 @@ func (q *Query) EligiblePatients(ctx context.Context) ([]EligiblePatient, error)
 }
 
 func (q *Query) AvailablePatients(ctx context.Context) ([]PatientOption, error) {
-	return q.listPatientOptions(ctx, listAvailablePatientsQuery, "available patients")
+	return q.listPatientOptions(ctx, listAvailablePatientsQuery, "available patients", StatusActive)
 }
 
-func (q *Query) listPatientOptions(ctx context.Context, query, operation string) ([]PatientOption, error) {
-	rows, err := q.pool.Query(ctx, query)
+func (q *Query) listPatientOptions(ctx context.Context, query, operation string, status Status) ([]PatientOption, error) {
+	rows, err := q.pool.Query(ctx, query, status)
 	if err != nil {
 		return nil, fmt.Errorf("list %s: query: %w", operation, err)
 	}

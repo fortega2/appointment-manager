@@ -29,7 +29,8 @@ const (
 		INNER JOIN
 			public.appointment_status AS ast ON ast.id = a.status
 		WHERE
-			s.end_time > NOW()
+			a.status = $1
+			AND s.end_time > NOW()
 		ORDER BY
 			a.created_at DESC
 	`
@@ -58,7 +59,7 @@ func NewQuery(pool *pgxpool.Pool) (*Query, error) {
 }
 
 func (q *Query) List(ctx context.Context) ([]List, error) {
-	rows, err := q.pool.Query(ctx, listAppointmentsGridQuery)
+	rows, err := q.pool.Query(ctx, listAppointmentsGridQuery, StatusConfirmed)
 	if err != nil {
 		return nil, fmt.Errorf("list: query appointments: %w", err)
 	}
