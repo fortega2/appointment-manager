@@ -389,8 +389,7 @@ func (h *Handler) renderUpdatedPatientsTable(ctx context.Context, w http.Respons
 }
 
 func (h *Handler) createSnackbarError(ctx context.Context, w http.ResponseWriter, statusCode int, message, operation string) {
-	w.WriteHeader(statusCode)
-	if err := components.Snackbar(message, components.SnackbarError).Render(ctx, w); err != nil {
+	if err := components.ShowSnackbarOnly(ctx, components.SnackbarError, w, statusCode, message); err != nil {
 		h.logger.ErrorContext(ctx, "error rendering snackbar", slog.Any("error", err), slog.String("package", "patient"), slog.String("operation", operation))
 	}
 }

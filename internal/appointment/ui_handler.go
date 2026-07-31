@@ -117,13 +117,13 @@ func (h *UIHandler) showCreateFormUIHandler() http.HandlerFunc {
 
 		slotOpts, err := h.loadAvailableSlotOptions(ctx, lg)
 		if err != nil {
-			h.showSnackbar(ctx, lg, components.SnackbarError, w, http.StatusInternalServerError, "Failed to load available slots")
+			h.showSnackbarOnly(ctx, lg, components.SnackbarError, w, http.StatusInternalServerError, "Failed to load available slots")
 			return
 		}
 
 		patientOpts, err := h.loadPatientOptions(ctx, lg)
 		if err != nil {
-			h.showSnackbar(ctx, lg, components.SnackbarError, w, http.StatusInternalServerError, "Failed to load patients")
+			h.showSnackbarOnly(ctx, lg, components.SnackbarError, w, http.StatusInternalServerError, "Failed to load patients")
 			return
 		}
 
@@ -272,7 +272,7 @@ func (h *UIHandler) attendUIAppointment() http.HandlerFunc {
 
 		ID, err := parseAppointmentID(r)
 		if err != nil {
-			h.showSnackbar(ctx, lg, components.SnackbarError, w, http.StatusBadRequest, "Invalid appointment ID")
+			h.showSnackbarOnly(ctx, lg, components.SnackbarError, w, http.StatusBadRequest, "Invalid appointment ID")
 			return
 		}
 
@@ -301,7 +301,7 @@ func (h *UIHandler) cancelUIAppointment() http.HandlerFunc {
 
 		ID, err := parseAppointmentID(r)
 		if err != nil {
-			h.showSnackbar(ctx, lg, components.SnackbarError, w, http.StatusBadRequest, "Invalid appointment ID")
+			h.showSnackbarOnly(ctx, lg, components.SnackbarError, w, http.StatusBadRequest, "Invalid appointment ID")
 			return
 		}
 
@@ -322,6 +322,14 @@ func (h *UIHandler) cancelUIAppointment() http.HandlerFunc {
 func (h *UIHandler) showSnackbar(ctx context.Context, lg *slog.Logger, kind components.SnackbarType, w http.ResponseWriter, status int, msg string) {
 	if err := components.ShowSnackbar(ctx, kind, w, status, msg); err != nil {
 		lg.ErrorContext(ctx, renderSnackbarErrMsg, slog.Any("error", err), slog.String("operation", "ShowSnackbar"))
+	}
+}
+
+// showSnackbarOnly reports a failure that produces no replacement content for
+// the target, so htmx must be told to leave the target alone.
+func (h *UIHandler) showSnackbarOnly(ctx context.Context, lg *slog.Logger, kind components.SnackbarType, w http.ResponseWriter, status int, msg string) {
+	if err := components.ShowSnackbarOnly(ctx, kind, w, status, msg); err != nil {
+		lg.ErrorContext(ctx, renderSnackbarErrMsg, slog.Any("error", err), slog.String("operation", "ShowSnackbarOnly"))
 	}
 }
 

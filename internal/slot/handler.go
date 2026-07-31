@@ -83,9 +83,8 @@ func (h *Handler) showDashboardUIHandler() http.HandlerFunc {
 }
 
 func (h *Handler) createSnackbarError(ctx context.Context, w http.ResponseWriter, statusCode int, message, operation string) {
-	w.WriteHeader(statusCode)
-	if err := components.Snackbar(message, components.SnackbarError).Render(ctx, w); err != nil {
-		h.logger.ErrorContext(ctx, "error rendering snackbar", slog.Any("error", err), slog.String("package", "patient"), slog.String("operation", operation))
+	if err := components.ShowSnackbarOnly(ctx, components.SnackbarError, w, statusCode, message); err != nil {
+		h.logger.ErrorContext(ctx, "error rendering snackbar", slog.Any("error", err), slog.String("package", "slot"), slog.String("operation", operation))
 	}
 }
 
