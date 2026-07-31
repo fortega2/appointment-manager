@@ -38,6 +38,14 @@ func (w *Worker) Run(ctx context.Context) {
 	ticker := time.NewTicker(w.tickerInterval)
 	defer ticker.Stop()
 
+	select {
+	case <-ctx.Done():
+		w.logger.InfoContext(ctx, "worker stopped")
+		return
+	default:
+		w.processExpiredAppointments(ctx)
+	}
+
 	for {
 		select {
 		case <-ticker.C:

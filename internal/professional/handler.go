@@ -44,12 +44,12 @@ func NewHandler(logger *slog.Logger, repo *Repository) (*Handler, error) {
 	}, nil
 }
 
-func (h *Handler) RegisterHandlers(mux *http.ServeMux) {
+func (h *Handler) RegisterHandlers(mux web.Mux) {
 	mux.Handle("POST /api/v1/professionals", h.createHandler())
 	mux.Handle("GET /api/v1/professionals", h.listHandler())
 }
 
-func (h *Handler) RegisterUIHandlers(mux *http.ServeMux) {
+func (h *Handler) RegisterUIHandlers(mux web.Mux) {
 	mux.Handle("GET /professionals", h.showDashboardUIHandler())
 	mux.Handle("GET /professionals/new", h.showCreateFormUIHandler())
 	mux.Handle("PUT /professionals/{id}", h.updateUIHandler())

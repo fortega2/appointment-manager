@@ -13,6 +13,7 @@ import (
 
 	"appointment-manager/internal/domain"
 	"appointment-manager/internal/ui/components"
+	"appointment-manager/internal/web"
 
 	"github.com/google/uuid"
 )
@@ -54,7 +55,7 @@ func NewUIHandler(logger *slog.Logger, svc service, query *Query) (*UIHandler, e
 	}, nil
 }
 
-func (h *UIHandler) RegisterUIHandlers(mux *http.ServeMux) {
+func (h *UIHandler) RegisterUIHandlers(mux web.Mux) {
 	mux.Handle("GET /prescriptions", h.showDashboardUIHandler())
 	mux.Handle("GET /prescriptions/new", h.showCreateFormUIHandler())
 	mux.Handle("POST /prescriptions", h.createUIHandler())

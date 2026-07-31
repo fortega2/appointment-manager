@@ -49,11 +49,11 @@ func NewHandler(logger *slog.Logger, repo *Repository, hiRepo *healthinsurance.R
 	}, nil
 }
 
-func (h *Handler) RegisterHandlers(mux *http.ServeMux) {
+func (h *Handler) RegisterHandlers(mux web.Mux) {
 	mux.Handle("POST /api/v1/patients", h.createHandler())
 }
 
-func (h *Handler) RegisterUIHandlers(mux *http.ServeMux) {
+func (h *Handler) RegisterUIHandlers(mux web.Mux) {
 	mux.Handle("GET /patients", h.showDashboardUIHandler())
 	mux.Handle("GET /patients/new", h.showCreateFormUIHandler())
 	mux.Handle("PUT /patients/{id}", h.updateUIHandler())

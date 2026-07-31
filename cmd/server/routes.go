@@ -59,36 +59,43 @@ func initializeServerHandlers(logger *slog.Logger, sessionStore *session.Store, 
 
 	mux.Handle("GET /static/", http.StripPrefix("/static/", http.FileServer(http.Dir("internal/ui/static"))))
 
-	apiProtectedMux := http.NewServeMux()
-	assistantHandler.RegisterHandlers(apiProtectedMux)
-	appointmentHandler.RegisterHandlers(apiProtectedMux)
-	professionalHandler.RegisterHandlers(apiProtectedMux)
-	patientHandler.RegisterHandlers(apiProtectedMux)
-
-	uiProtectedMux := http.NewServeMux()
-	uiHomeHandler.RegisterHandlers(uiProtectedMux)
-	professionalHandler.RegisterUIHandlers(uiProtectedMux)
-	patientHandler.RegisterUIHandlers(uiProtectedMux)
-	slotHandler.RegisterUIHandlers(uiProtectedMux)
-	uiAppointmentHandler.RegisterUIHandlers(uiProtectedMux)
+	// Protected routes are registered on mux itself through a guard rather than
+	// on a nested mux, so the pattern the observability middlewares observe is
+	// the specific route and not the catch-all (see middleware.Guard).
+	apiProtected := middleware.Guard(mux, middleware.Session(sessionStore, isDev))
+	assistantHandler.RegisterHandlers(apiProtected)
+	appointmentHandler.RegisterHandlers(apiProtected)
+	professionalHandler.RegisterHandlers(apiProtected)
+	patientHandler.RegisterHandlers(apiProtected)
 
 	prescriptionsEnabled := storageClient != nil
+	uiProtected := middleware.Guard(
+		mux,
+		middleware.Prescriptions(prescriptionsEnabled),
+		middleware.UISession(sessionStore, isDev),
+	)
+	uiHomeHandler.RegisterHandlers(uiProtected)
+	professionalHandler.RegisterUIHandlers(uiProtected)
+	patientHandler.RegisterUIHandlers(uiProtected)
+	slotHandler.RegisterUIHandlers(uiProtected)
+	uiAppointmentHandler.RegisterUIHandlers(uiProtected)
+
 	if prescriptionsEnabled {
 		uiPrescriptionHandler, err := initializeUIPrescriptionHandler(logger, deps, storageClient)
 		if err != nil {
 			return nil, err
 		}
-		uiPrescriptionHandler.RegisterUIHandlers(uiProtectedMux)
+		uiPrescriptionHandler.RegisterUIHandlers(uiProtected)
 	} else {
 		logger.Warn("storage client disabled, prescription UI routes are not registered")
 	}
 
-	mux.Handle("/api/v1/", middleware.Session(sessionStore, isDev)(apiProtectedMux))
-	mux.Handle("/", middleware.Chain(
-		uiProtectedMux,
-		middleware.Prescriptions(prescriptionsEnabled),
-		middleware.UISession(sessionStore, isDev),
-	))
+	// Catch-alls for unmatched paths, keeping the pre-guard behaviour: an
+	// unauthenticated request is rejected (API) or redirected to the login page
+	// (UI) before it can learn whether the route exists, and an authenticated
+	// one gets the mux's own 404 or 405.
+	apiProtected.HandleFallback("/api/")
+	uiProtected.HandleFallback("/")
 
 	csrfMiddleware, err := middleware.CSRF(logger, isDev, serverAddr)
 	if err != nil {
@@ -112,13 +119,10 @@ func initializeServerHandlers(logger *slog.Logger, sessionStore *session.Store, 
 // once before routing (method only, r.URL.Path is not yet meaningful to name a
 // span with) and again after next.ServeHTTP returns, renaming the span to
 // "{method} {path}". The raw path is used rather than middleware.RouteTemplate
-// because several UI routes share a single "/" mux pattern (see routes.go's
-// catch-all UI handler), which middleware.Metrics deliberately collapses to one
-// bounded Prometheus label but which would make every such span indistinguishable
-// by name. A span name carries no cardinality cost the way a metric label does —
-// each span already has a unique trace ID — and the raw path is already logged
-// unredacted (internal/middleware/logger.go's "path" field), so this adds no new
-// exposure.
+// so a span identifies the exact resource the request touched: a span name
+// carries no cardinality cost the way a metric label does — each span already
+// has a unique trace ID — and the raw path is already logged unredacted
+// (internal/middleware/logger.go's "path" field), so this adds no new exposure.
 func otelHandler() func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return otelhttp.NewHandler(next, "http.server",

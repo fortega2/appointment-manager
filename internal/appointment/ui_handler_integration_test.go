@@ -180,7 +180,7 @@ func TestCreateUIHandlerUsesSessionAssistantID(t *testing.T) {
 	mux := newIntegrationUIMux(t, pool)
 	rec := performUICreateRequest(ctx, mux, assistantID, slotID, patientID, professionalID)
 
-	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.Equal(t, http.StatusCreated, rec.Code)
 	assert.Equal(t, assistantID, fetchAppointmentAssistantID(ctx, t, pool, slotID, patientID))
 }
 

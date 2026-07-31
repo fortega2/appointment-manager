@@ -61,7 +61,7 @@ func isNilService(s service) bool {
 	}
 }
 
-func (h *Handler) RegisterHandlers(mux *http.ServeMux) {
+func (h *Handler) RegisterHandlers(mux web.Mux) {
 	mux.Handle("GET /api/v1/appointments", h.listAppointments())
 	mux.Handle("POST /api/v1/appointments", h.createAppointment())
 	mux.Handle("POST /api/v1/appointments/{id}/cancel", h.cancelAppointment())

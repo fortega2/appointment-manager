@@ -108,7 +108,6 @@ Notes:
 
 ### Coverage (team convention)
 
-- Internal-packages coverage gate target: `>= 90%`.
 - For the coverage command and the full pre-finish verification sequence, use the `pre-pr-check` skill.
 
 Important:

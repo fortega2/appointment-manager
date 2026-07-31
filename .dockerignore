@@ -12,3 +12,14 @@ bin/
 .env.*
 **/.env
 docker-compose*.yml
+**/*_test.go
+testdata/
+.claude
+.forgejo
+docs
+README.md
+LICENSE
+Makefile
+lefthook.yml
+.DS_Store
+*.swp

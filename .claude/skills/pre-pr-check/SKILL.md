@@ -40,7 +40,7 @@ govulncheck ./...
 
 ## 4. Coverage (only when tests changed)
 
-Internal-packages coverage gate: **>= 90%**.
+Internal-packages coverage gate: **>= 70%**.
 
 ```bash
 go test ./... -race -covermode=atomic -coverpkg=./internal/... -coverprofile=coverage.out

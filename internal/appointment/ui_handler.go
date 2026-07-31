@@ -6,6 +6,7 @@ import (
 	"appointment-manager/internal/session"
 	"appointment-manager/internal/slot"
 	"appointment-manager/internal/ui/components"
+	"appointment-manager/internal/web"
 	"context"
 	"errors"
 	"fmt"
@@ -72,7 +73,7 @@ func NewUIHandler(
 	}, nil
 }
 
-func (h *UIHandler) RegisterUIHandlers(mux *http.ServeMux) {
+func (h *UIHandler) RegisterUIHandlers(mux web.Mux) {
 	mux.Handle("GET /appointments", h.showDashboard())
 	mux.Handle("GET /appointments/new", h.showCreateFormUIHandler())
 	mux.Handle("POST /appointments", h.createUIHandler())
@@ -221,6 +222,7 @@ func (h *UIHandler) createUIHandler() http.HandlerFunc {
 		lg.InfoContext(ctx, "appointment created", slog.String("appointment_id", id.String()))
 
 		w.Header().Set("HX-Trigger", "close-modal")
+		w.WriteHeader(http.StatusCreated)
 		if err := components.Snackbar("Appointment created successfully", components.SnackbarSuccess).Render(ctx, w); err != nil {
 			lg.ErrorContext(ctx, renderSnackbarErrMsg, slog.Any("error", err))
 		}

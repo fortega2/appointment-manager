@@ -4,6 +4,7 @@ import (
 	"appointment-manager/internal/professional"
 	"appointment-manager/internal/ui/components"
 	"appointment-manager/internal/ui/form"
+	"appointment-manager/internal/web"
 	"context"
 	"errors"
 	"fmt"
@@ -43,7 +44,7 @@ func NewHandler(logger *slog.Logger, repo *Repository, query *Query, pRepo *prof
 	}, nil
 }
 
-func (h *Handler) RegisterUIHandlers(mux *http.ServeMux) {
+func (h *Handler) RegisterUIHandlers(mux web.Mux) {
 	mux.Handle("GET /slots", h.showDashboardUIHandler())
 	mux.Handle("GET /slots/new", h.showCreateFormUIHandler())
 	mux.Handle("GET /slots/{id}/edit", h.showEditFormUIHandler())

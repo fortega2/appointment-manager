@@ -1,6 +1,7 @@
 package home
 
 import (
+	"appointment-manager/internal/web"
 	"errors"
 	"log/slog"
 	"net/http"
@@ -22,7 +23,7 @@ func NewHandler(logger *slog.Logger) (*Handler, error) {
 	}, nil
 }
 
-func (h *Handler) RegisterHandlers(mux *http.ServeMux) {
+func (h *Handler) RegisterHandlers(mux web.Mux) {
 	mux.Handle("GET /{$}", h.showHomeHandler())
 }
 
