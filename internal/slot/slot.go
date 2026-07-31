@@ -34,19 +34,6 @@ func NewSlot(professionalID uuid.UUID, date time.Time, startTime time.Time, endT
 	}, nil
 }
 
-func (s *Slot) Update(professionalID uuid.UUID, date time.Time, startTime time.Time, endTime time.Time, maxCapacity int16, blocked bool) error {
-	if err := validateSlot(professionalID, date, startTime, endTime, maxCapacity); err != nil {
-		return fmt.Errorf("validate slot: %w", err)
-	}
-	s.ProfessionalID = professionalID
-	s.Date = date
-	s.StartTime = startTime
-	s.EndTime = endTime
-	s.MaxCapacity = maxCapacity
-	s.Blocked = blocked
-	return nil
-}
-
 func validateSlot(professionalID uuid.UUID, date time.Time, startTime time.Time, endTime time.Time, maxCapacity int16) error {
 	if professionalID == uuid.Nil {
 		return ErrInvalidProfessionalID

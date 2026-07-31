@@ -13,7 +13,6 @@ import (
 
 const (
 	createSlotErrorMsg               = "create slot: %w"
-	updateSlotErrorMsg               = "update slot: %w"
 	cancelSlotErrorMsg               = "cancel slot: %w"
 	constraintFkSlotProfessional     = "fk_slot_professional"
 	constraintChkSlotTimes           = "chk_slot_times"
@@ -95,41 +94,6 @@ func (r *Repository) GetByID(ctx context.Context, id uuid.UUID) (*Slot, error) {
 	}
 
 	return &s, nil
-}
-
-func (r *Repository) Update(ctx context.Context, s *Slot) error {
-	if s == nil {
-		return ErrNilSlot
-	}
-	const query string = `
-		UPDATE public.slot
-		SET
-			professional_id = $2,
-			date = $3,
-			start_time = $4,
-			end_time = $5,
-			max_capacity = $6,
-			blocked = $7,
-			updated_at = CURRENT_TIMESTAMP
-		WHERE
-			id = $1
-	`
-
-	if _, err := r.pool.Exec(
-		ctx,
-		query,
-		s.ID,
-		s.ProfessionalID,
-		s.Date,
-		s.StartTime,
-		s.EndTime,
-		s.MaxCapacity,
-		s.Blocked,
-	); err != nil {
-		return r.mapPgxError(updateSlotErrorMsg, err)
-	}
-
-	return nil
 }
 
 func (r *Repository) Cancel(ctx context.Context, id uuid.UUID) error {

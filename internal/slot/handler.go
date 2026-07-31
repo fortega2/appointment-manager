@@ -3,7 +3,6 @@ package slot
 import (
 	"appointment-manager/internal/professional"
 	"appointment-manager/internal/ui/components"
-	"appointment-manager/internal/ui/form"
 	"appointment-manager/internal/web"
 	"context"
 	"errors"
@@ -47,9 +46,7 @@ func NewHandler(logger *slog.Logger, repo *Repository, query *Query, pRepo *prof
 func (h *Handler) RegisterUIHandlers(mux web.Mux) {
 	mux.Handle("GET /slots", h.showDashboardUIHandler())
 	mux.Handle("GET /slots/new", h.showCreateFormUIHandler())
-	mux.Handle("GET /slots/{id}/edit", h.showEditFormUIHandler())
 	mux.Handle("POST /slots", h.createUIHandler())
-	mux.Handle("PUT /slots/{id}", h.updateUIHandler())
 	mux.Handle("DELETE /slots/{id}", h.cancelUIHandler())
 }
 
@@ -112,47 +109,8 @@ func (h *Handler) showCreateFormUIHandler() http.HandlerFunc {
 			}
 		}
 
-		if err := Form(ListDTO{}, form.MethodPost, "/slots", pDTO).Render(ctx, w); err != nil {
+		if err := Form(ListDTO{}, "/slots", pDTO).Render(ctx, w); err != nil {
 			h.logger.ErrorContext(ctx, "error rendering slot create form", slog.Any("error", err))
-		}
-	}
-}
-
-func (h *Handler) showEditFormUIHandler() http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		ctx := r.Context()
-
-		idStr := r.PathValue("id")
-		id, err := uuid.Parse(idStr)
-		if err != nil {
-			h.createSnackbarError(ctx, w, http.StatusBadRequest, "Invalid slot ID", "uuid.Parse")
-			return
-		}
-
-		dto, err := h.query.GetByID(ctx, id)
-		if err != nil {
-			h.logger.ErrorContext(ctx, "failed to get slot by id", slog.Any("error", err), slog.String("id", idStr))
-			h.createSnackbarError(ctx, w, http.StatusInternalServerError, "Failed to load slot", "query.GetByID")
-			return
-		}
-
-		professionals, err := h.pRepo.List(ctx)
-		if err != nil {
-			h.logger.ErrorContext(ctx, "failed to list professionals for edit form", slog.Any("error", err))
-			professionals = []professional.Professional{}
-		}
-
-		pDTO := make([]ProfessionalDTO, len(professionals))
-		for i, p := range professionals {
-			pDTO[i] = ProfessionalDTO{
-				ID:        p.ID.String(),
-				FirstName: p.FirstName,
-				LastName:  p.LastName,
-			}
-		}
-
-		if err := Form(dto, form.MethodPut, "/slots/"+idStr, pDTO).Render(ctx, w); err != nil {
-			h.logger.ErrorContext(ctx, "error rendering slot edit form", slog.Any("error", err))
 		}
 	}
 }
@@ -162,7 +120,6 @@ type formRequest struct {
 	startTime      time.Time
 	endTime        time.Time
 	maxCapacity    int16
-	blocked        bool
 }
 
 // date returns the slot's calendar date, derived from startTime's UTC day
@@ -202,14 +159,11 @@ func (h *Handler) parseForm(r *http.Request, w http.ResponseWriter) (*formReques
 		return nil, fmt.Errorf("invalid max_capacity: %w", err)
 	}
 
-	blocked := r.FormValue("blocked") == "true" || r.FormValue("blocked") == "on"
-
 	return &formRequest{
 		professionalID: profID,
 		startTime:      startTime.UTC(),
 		endTime:        endTime.UTC(),
 		maxCapacity:    int16(maxCapInt),
-		blocked:        blocked,
 	}, nil
 }
 
@@ -241,47 +195,6 @@ func (h *Handler) createUIHandler() http.HandlerFunc {
 		}
 
 		h.renderUpdatedSlotsTable(ctx, w, "Slot created successfully")
-	}
-}
-
-func (h *Handler) updateUIHandler() http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		ctx := r.Context()
-
-		idStr := r.PathValue("id")
-		id, err := uuid.Parse(idStr)
-		if err != nil {
-			h.createSnackbarError(ctx, w, http.StatusBadRequest, "Invalid slot ID", "uuid.Parse")
-			return
-		}
-
-		req, err := h.parseForm(r, w)
-		if err != nil {
-			h.logger.ErrorContext(ctx, "error parsing slot update form", slog.Any("error", err))
-			h.createSnackbarError(ctx, w, http.StatusBadRequest, "Failed to parse form data", "parseForm")
-			return
-		}
-
-		s, err := h.repo.GetByID(ctx, id)
-		if err != nil {
-			h.logger.ErrorContext(ctx, "failed to get slot by id for update", slog.Any("error", err), slog.String("id", idStr))
-			h.createSnackbarError(ctx, w, http.StatusInternalServerError, "Failed to load slot data", "repo.GetByID")
-			return
-		}
-
-		if err := s.Update(req.professionalID, req.date(), req.startTime, req.endTime, req.maxCapacity, req.blocked); err != nil {
-			h.logger.ErrorContext(ctx, "failed to validate slot update", slog.Any("error", err), slog.String("id", idStr))
-			h.createSnackbarError(ctx, w, http.StatusUnprocessableEntity, err.Error(), "Slot.Update")
-			return
-		}
-
-		if err := h.repo.Update(ctx, s); err != nil {
-			h.logger.ErrorContext(ctx, "failed to update slot", slog.Any("error", err), slog.String("id", idStr))
-			h.createSnackbarError(ctx, w, http.StatusInternalServerError, "Failed to update slot", "repo.Update")
-			return
-		}
-
-		h.renderUpdatedSlotsTable(ctx, w, "Slot updated successfully")
 	}
 }
 

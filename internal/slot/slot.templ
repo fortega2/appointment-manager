@@ -2,7 +2,6 @@ package slot
 
 import (
 	"appointment-manager/internal/ui/layout"
-	"appointment-manager/internal/ui/form"
 	"fmt"
 	"time"
 )
@@ -146,19 +145,7 @@ templ Table(dto []ListDTO) {
                                 <span class="bg-red-100 text-red-600 text-xs font-medium px-2 py-1 rounded-full">Blocked</span>
                             }
                         </td>
-                        <td class="px-4 py-3 text-center align-middle">
-                            <button 
-                                type="button"
-                                title="Edit"
-                                aria-label="Edit Slot"
-                                hx-get={ string(templ.URL(fmt.Sprintf("/slots/%s/edit", s.ID))) } 
-                                hx-target="#modal-content" 
-                                @click="modalOpen = true"
-                                class="text-indigo-600 hover:text-indigo-900"
-                            >
-                                ✏️
-                            </button>
-                        </td>
+                        <td class="px-4 py-3 text-center align-middle"></td>
                     </tr>
                 }
             </tbody>
@@ -173,22 +160,14 @@ func formatUTCValue(t time.Time) string {
 	return t.UTC().Format(time.RFC3339)
 }
 
-templ Form(s ListDTO, method form.Method, actionURL string, pDTO []ProfessionalDTO) {
+templ Form(s ListDTO, actionURL string, pDTO []ProfessionalDTO) {
     <div>
         <h2 class="text-xl font-bold text-gray-900 mb-4">
-            if method == form.MethodPost {
-                Create Slot
-            } else {
-                Edit Slot
-            }
+            Create Slot
         </h2>
-        
+
         <form
-            if method == form.MethodPost {
-                hx-post={ actionURL }
-            } else {
-                hx-put={ actionURL }
-            }
+            hx-post={ actionURL }
             hx-target="#dto-table"
             hx-swap="outerHTML"
             data-slot-form
@@ -251,20 +230,6 @@ templ Form(s ListDTO, method form.Method, actionURL string, pDTO []ProfessionalD
                     class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm" 
                 />
             </div>
-
-            if method == form.MethodPut {
-                <div class="flex items-center space-x-3">
-                    <input 
-                        type="checkbox" 
-                        id="blocked" 
-                        name="blocked" 
-                        value="true" 
-                        checked?={ s.Blocked }
-                        class="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
-                    />
-                    <label for="blocked" class="text-sm text-gray-700">Blocked</label>
-                </div>
-            }
 
             <div class="mt-6 flex justify-end space-x-3">
                 <button 
