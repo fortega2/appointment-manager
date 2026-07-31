@@ -68,7 +68,7 @@ func TestRepositoryMapCreateError(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			err := repo.mapCreateError(&pgconn.PgError{ConstraintName: tt.constraint})
+			err := repo.mapPgxError(createSlotErrorMsg, &pgconn.PgError{ConstraintName: tt.constraint})
 
 			require.Error(t, err)
 			assert.ErrorIs(t, err, tt.expected)
@@ -79,7 +79,7 @@ func TestRepositoryMapCreateError(t *testing.T) {
 		t.Parallel()
 
 		original := &pgconn.PgError{ConstraintName: "other_constraint"}
-		err := repo.mapCreateError(original)
+		err := repo.mapPgxError(createSlotErrorMsg, original)
 
 		require.Error(t, err)
 		assert.ErrorIs(t, err, original)
@@ -89,7 +89,7 @@ func TestRepositoryMapCreateError(t *testing.T) {
 		t.Parallel()
 
 		original := errors.New(repositoryBoomErr)
-		err := repo.mapCreateError(original)
+		err := repo.mapPgxError(createSlotErrorMsg, original)
 
 		require.Error(t, err)
 		assert.ErrorIs(t, err, original)

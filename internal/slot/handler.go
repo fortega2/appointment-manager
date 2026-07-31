@@ -50,6 +50,7 @@ func (h *Handler) RegisterUIHandlers(mux web.Mux) {
 	mux.Handle("GET /slots/{id}/edit", h.showEditFormUIHandler())
 	mux.Handle("POST /slots", h.createUIHandler())
 	mux.Handle("PUT /slots/{id}", h.updateUIHandler())
+	mux.Handle("DELETE /slots/{id}", h.cancelUIHandler())
 }
 
 func (h *Handler) showDashboardUIHandler() http.HandlerFunc {
@@ -281,6 +282,37 @@ func (h *Handler) updateUIHandler() http.HandlerFunc {
 		}
 
 		h.renderUpdatedSlotsTable(ctx, w, "Slot updated successfully")
+	}
+}
+
+func (h *Handler) cancelUIHandler() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		ctx := r.Context()
+
+		idStr := r.PathValue("id")
+		id, err := uuid.Parse(idStr)
+		if err != nil {
+			h.createSnackbarError(ctx, w, http.StatusBadRequest, "Invalid slot ID", "uuid.Parse")
+			return
+		}
+
+		const cancelOperation = "repo.Cancel"
+		if err := h.repo.Cancel(ctx, id); err != nil {
+			h.logger.ErrorContext(ctx, "failed to cancel slot", slog.Any("error", err), slog.String("id", idStr))
+			switch {
+			case errors.Is(err, ErrSlotNotFound):
+				h.createSnackbarError(ctx, w, http.StatusNotFound, "Slot not found", cancelOperation)
+			case errors.Is(err, ErrSlotAlreadyCancelled):
+				h.createSnackbarError(ctx, w, http.StatusConflict, "This slot has already been cancelled.", cancelOperation)
+			default:
+				h.createSnackbarError(ctx, w, http.StatusInternalServerError, "Failed to cancel slot", cancelOperation)
+			}
+			return
+		}
+
+		// TODO: Cancel all appointments associated with this slot, if any. Then, send notifications to the affected patients and professionals. This will require a new service that handles appointment cancellations and notifications.
+
+		h.renderUpdatedSlotsTable(ctx, w, "Slot canceled successfully")
 	}
 }
 

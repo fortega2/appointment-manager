@@ -10,6 +10,8 @@ var (
 	ErrDateTimeInconsistency = errors.New("date must match the date part of start time")
 	ErrNilSlot               = errors.New("slot cannot be nil")
 	ErrSlotOverlaps          = errors.New("the slot overlaps with an existing one")
+	ErrSlotNotFound          = errors.New("slot not found")
+	ErrSlotAlreadyCancelled  = errors.New("slot is already cancelled")
 
 	ErrNilPgxPool = errors.New("pgx pool cannot be nil")
 

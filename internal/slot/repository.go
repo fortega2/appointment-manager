@@ -6,12 +6,15 @@ import (
 	"fmt"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 const (
 	createSlotErrorMsg               = "create slot: %w"
+	updateSlotErrorMsg               = "update slot: %w"
+	cancelSlotErrorMsg               = "cancel slot: %w"
 	constraintFkSlotProfessional     = "fk_slot_professional"
 	constraintChkSlotTimes           = "chk_slot_times"
 	constraintChkSlotCapacity        = "chk_slot_capacity"
@@ -57,7 +60,7 @@ func (r *Repository) Create(ctx context.Context, s *Slot) error {
 		s.EndTime,
 		s.MaxCapacity,
 	); err != nil {
-		return r.mapCreateError(err)
+		return r.mapPgxError(createSlotErrorMsg, err)
 	}
 
 	return nil
@@ -123,30 +126,75 @@ func (r *Repository) Update(ctx context.Context, s *Slot) error {
 		s.MaxCapacity,
 		s.Blocked,
 	); err != nil {
-		return r.mapCreateError(err)
+		return r.mapPgxError(updateSlotErrorMsg, err)
 	}
 
 	return nil
 }
 
-func (r *Repository) mapCreateError(err error) error {
+func (r *Repository) Cancel(ctx context.Context, id uuid.UUID) error {
+	const query string = `
+		UPDATE public.slot
+		SET
+			blocked = TRUE,
+			updated_at = CURRENT_TIMESTAMP
+		WHERE
+			id = $1 AND blocked = FALSE
+	`
+
+	tag, err := r.pool.Exec(ctx, query, id)
+	if err != nil {
+		return r.mapPgxError(cancelSlotErrorMsg, err)
+	}
+
+	if tag.RowsAffected() == 0 {
+		if err := r.slotExists(ctx, id); err != nil {
+			return fmt.Errorf(cancelSlotErrorMsg, err)
+		}
+
+		return fmt.Errorf(cancelSlotErrorMsg, ErrSlotAlreadyCancelled)
+	}
+
+	return nil
+}
+
+// slotExists reports whether a slot row with the given id exists, returning
+// ErrSlotNotFound if not. It is used to disambiguate a zero-rows-affected
+// conditional update between "no such slot" and "the condition didn't match
+// because the slot's state already changed" (e.g. a concurrent cancel).
+func (r *Repository) slotExists(ctx context.Context, id uuid.UUID) error {
+	const query string = `SELECT 1 FROM public.slot WHERE id = $1`
+
+	var exists int
+	if err := r.pool.QueryRow(ctx, query, id).Scan(&exists); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return ErrSlotNotFound
+		}
+
+		return fmt.Errorf("check slot existence: %w", err)
+	}
+
+	return nil
+}
+
+func (r *Repository) mapPgxError(errMsg string, err error) error {
 	pgErr, ok := errors.AsType[*pgconn.PgError](err)
 	if !ok {
-		return fmt.Errorf(createSlotErrorMsg, err)
+		return fmt.Errorf(errMsg, err)
 	}
 
 	switch pgErr.ConstraintName {
 	case constraintFkSlotProfessional:
-		return fmt.Errorf(createSlotErrorMsg, ErrInvalidProfessionalID)
+		return fmt.Errorf(errMsg, ErrInvalidProfessionalID)
 	case constraintChkSlotTimes:
-		return fmt.Errorf(createSlotErrorMsg, ErrInvalidTimeRange)
+		return fmt.Errorf(errMsg, ErrInvalidTimeRange)
 	case constraintChkSlotCapacity:
-		return fmt.Errorf(createSlotErrorMsg, ErrInvalidMaxCapacity)
+		return fmt.Errorf(errMsg, ErrInvalidMaxCapacity)
 	case constraintChkSlotDateConsistency:
-		return fmt.Errorf(createSlotErrorMsg, ErrDateTimeInconsistency)
+		return fmt.Errorf(errMsg, ErrDateTimeInconsistency)
 	case constraintChkNoOverlappingSlots:
-		return fmt.Errorf(createSlotErrorMsg, ErrSlotOverlaps)
+		return fmt.Errorf(errMsg, ErrSlotOverlaps)
 	default:
-		return fmt.Errorf(createSlotErrorMsg, err)
+		return fmt.Errorf(errMsg, err)
 	}
 }

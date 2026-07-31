@@ -66,6 +66,65 @@ func TestRepositoryCreateReturnsErrorWhenProfessionalNotFound(t *testing.T) {
 	assert.ErrorIs(t, err, slot.ErrInvalidProfessionalID)
 }
 
+func TestRepositoryCancelBlocksSlot(t *testing.T) {
+	testcontainers.SkipIfProviderIsNotHealthy(t)
+	ctx := context.Background()
+
+	pool := newSlotIntegrationPool(ctx, t)
+	repo := newSlotIntegrationRepository(t, pool)
+
+	professionalID := uuid.Must(uuid.NewV7())
+	insertProfessionalForSlot(ctx, t, pool, professionalID)
+
+	startTime := mustParseTime(repositoryStartTime)
+	endTime := mustParseTime(repositoryEndTime)
+
+	newRecord, err := slot.NewSlot(professionalID, integrationDate, startTime, endTime, repositoryProfessionalMax)
+	require.NoError(t, err)
+	require.NoError(t, repo.Create(ctx, newRecord))
+
+	err = repo.Cancel(ctx, newRecord.ID)
+	require.NoError(t, err)
+
+	persisted := fetchSlotRecord(ctx, t, pool, newRecord.ID)
+	assert.True(t, persisted.Blocked)
+}
+
+func TestRepositoryCancelReturnsErrorWhenAlreadyCancelled(t *testing.T) {
+	testcontainers.SkipIfProviderIsNotHealthy(t)
+	ctx := context.Background()
+
+	pool := newSlotIntegrationPool(ctx, t)
+	repo := newSlotIntegrationRepository(t, pool)
+
+	professionalID := uuid.Must(uuid.NewV7())
+	insertProfessionalForSlot(ctx, t, pool, professionalID)
+
+	startTime := mustParseTime(repositoryStartTime)
+	endTime := mustParseTime(repositoryEndTime)
+
+	newRecord, err := slot.NewSlot(professionalID, integrationDate, startTime, endTime, repositoryProfessionalMax)
+	require.NoError(t, err)
+	require.NoError(t, repo.Create(ctx, newRecord))
+	require.NoError(t, repo.Cancel(ctx, newRecord.ID))
+
+	err = repo.Cancel(ctx, newRecord.ID)
+	require.Error(t, err)
+	assert.ErrorIs(t, err, slot.ErrSlotAlreadyCancelled)
+}
+
+func TestRepositoryCancelReturnsErrorWhenNotFound(t *testing.T) {
+	testcontainers.SkipIfProviderIsNotHealthy(t)
+	ctx := context.Background()
+
+	pool := newSlotIntegrationPool(ctx, t)
+	repo := newSlotIntegrationRepository(t, pool)
+
+	err := repo.Cancel(ctx, uuid.Must(uuid.NewV7()))
+	require.Error(t, err)
+	assert.ErrorIs(t, err, slot.ErrSlotNotFound)
+}
+
 func TestRepositoryCreateReturnsErrorWhenDatabaseUnavailable(t *testing.T) {
 	testcontainers.SkipIfProviderIsNotHealthy(t)
 	ctx := context.Background()
