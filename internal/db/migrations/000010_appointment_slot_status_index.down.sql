@@ -1,0 +1,1 @@
+DROP INDEX IF EXISTS idx_appointment_slot_confirmed;
