@@ -9,14 +9,17 @@ import (
 	"time"
 )
 
-const expireOverdueJobName = "expire-overdue-appointments"
+const (
+	expireOverdueJobName    = "expire-overdue-appointments"
+	reconcileCancelsJobName = "cancel-appointments-on-blocked-slots"
+)
 
 // startBackgroundWorkers runs the periodic appointment sweeps in the background
 // until the returned stop func is called. stop cancels every worker and blocks
 // until their goroutines have exited, so callers can defer it to keep shutdown
 // ordered ahead of the pool being closed.
 //
-// Every job is a service method: the sweeps carry business rules and business
+// Both jobs are service methods: the sweeps carry business rules and business
 // metrics, so they stay behind the service rather than being assembled here.
 func startBackgroundWorkers(ctx context.Context, logger *slog.Logger, deps *dependencies) (func(), error) {
 	workerInterval, err := parseWorkerInterval(os.Getenv(workerIntervalEnv))
@@ -24,13 +27,15 @@ func startBackgroundWorkers(ctx context.Context, logger *slog.Logger, deps *depe
 		return nil, err
 	}
 
-	// Each sweep is an independent job: one lagging or failing must not hold up
-	// the others, so each gets its own ticker.
+	// Sweeping overdue appointments to absent, and cancelling appointments
+	// stranded on an already-blocked slot, are independent jobs: one lagging or
+	// failing must not hold up the other, so each gets its own ticker.
 	jobs := []struct {
 		name string
 		run  worker.JobFunc
 	}{
 		{name: expireOverdueJobName, run: deps.appointmentService.ExpireOverdue},
+		{name: reconcileCancelsJobName, run: deps.appointmentService.CancelOnBlockedSlots},
 	}
 
 	stops := make([]func(), 0, len(jobs))

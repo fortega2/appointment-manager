@@ -4,8 +4,11 @@ package slot_test
 
 import (
 	"appointment-manager/internal/db"
+	"appointment-manager/internal/professional"
 	"appointment-manager/internal/slot"
 	"context"
+	"log/slog"
+	"net/http"
 	"testing"
 	"time"
 
@@ -26,6 +29,11 @@ const (
 	integrationProfessionalFirstName = "Laura"
 	integrationProfessionalLastName  = "Gomez"
 	integrationProfessionalPhone     = "1133334444"
+
+	integrationCancelMaxCapacity = int16(5)
+	integrationCancelStartTime   = "2026-05-25T15:00:00Z"
+	integrationCancelEndTime     = "2026-05-25T16:00:00Z"
+	integrationSlotsPath         = "/slots/"
 )
 
 var integrationDate = time.Date(2026, 5, 25, 0, 0, 0, 0, time.UTC)
@@ -62,6 +70,53 @@ func newSlotIntegrationRepository(t *testing.T, pool *pgxpool.Pool) *slot.Reposi
 	require.NoError(t, err)
 
 	return repo
+}
+
+// newSlotIntegrationMux wires a slot handler backed by the real pool, with the
+// two cross-package collaborators replaced by calls, so the tests observe what
+// the handler asked for without depending on the appointment package.
+func newSlotIntegrationMux(t *testing.T, pool *pgxpool.Pool, calls *recordedCalls) *http.ServeMux {
+	t.Helper()
+
+	query, err := slot.NewQuery(pool)
+	require.NoError(t, err)
+
+	pRepo, err := professional.NewRepository(pool)
+	require.NoError(t, err)
+
+	h, err := slot.NewHandler(
+		slog.New(slog.DiscardHandler),
+		newSlotIntegrationRepository(t, pool),
+		query,
+		pRepo,
+		calls.cancelAppointments,
+		calls.sendNotification,
+	)
+	require.NoError(t, err)
+
+	mux := http.NewServeMux()
+	h.RegisterUIHandlers(mux)
+
+	return mux
+}
+
+func seedCancellableSlot(ctx context.Context, t *testing.T, pool *pgxpool.Pool) uuid.UUID {
+	t.Helper()
+
+	professionalID := uuid.Must(uuid.NewV7())
+	insertProfessionalForSlot(ctx, t, pool, professionalID)
+
+	newRecord, err := slot.NewSlot(
+		professionalID,
+		integrationDate,
+		mustParseTime(integrationCancelStartTime),
+		mustParseTime(integrationCancelEndTime),
+		integrationCancelMaxCapacity,
+	)
+	require.NoError(t, err)
+	require.NoError(t, newSlotIntegrationRepository(t, pool).Create(ctx, newRecord))
+
+	return newRecord.ID
 }
 
 func insertProfessionalForSlot(ctx context.Context, t *testing.T, pool *pgxpool.Pool, professionalID uuid.UUID) {

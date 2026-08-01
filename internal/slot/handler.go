@@ -15,14 +15,36 @@ import (
 	"github.com/google/uuid"
 )
 
+// cancelAppointmentsFunc cancels every confirmed appointment booked on a slot.
+// It is a function rather than a package dependency because internal/appointment
+// already imports internal/slot, so importing it back would be a cycle; the real
+// implementation is bound in cmd/server.
+type cancelAppointmentsFunc func(ctx context.Context, slotID uuid.UUID) error
+
+// sendNotificationFunc announces that a slot was cancelled. It is declared here,
+// in the consumer, so the notification transport (email, SMS, push) can change
+// without this package knowing. It is called on the request goroutine, so
+// implementations must not block: they are expected to hand the work off and
+// return, keeping delivery and its lifetime entirely on their own side.
+type sendNotificationFunc func(ctx context.Context, slotID uuid.UUID)
+
 type Handler struct {
-	logger *slog.Logger
-	repo   *Repository
-	query  *Query
-	pRepo  *professional.Repository
+	logger             *slog.Logger
+	repo               *Repository
+	query              *Query
+	pRepo              *professional.Repository
+	cancelAppointments cancelAppointmentsFunc
+	sendNotification   sendNotificationFunc
 }
 
-func NewHandler(logger *slog.Logger, repo *Repository, query *Query, pRepo *professional.Repository) (*Handler, error) {
+func NewHandler(
+	logger *slog.Logger,
+	repo *Repository,
+	query *Query,
+	pRepo *professional.Repository,
+	cancelAppointments cancelAppointmentsFunc,
+	sendNotification sendNotificationFunc,
+) (*Handler, error) {
 	if logger == nil {
 		return nil, ErrNilLogger
 	}
@@ -35,11 +57,25 @@ func NewHandler(logger *slog.Logger, repo *Repository, query *Query, pRepo *prof
 		return nil, ErrNilQuery
 	}
 
+	if pRepo == nil {
+		return nil, ErrNilProfessionalRepo
+	}
+
+	if cancelAppointments == nil {
+		return nil, ErrNilCancelAppointments
+	}
+
+	if sendNotification == nil {
+		return nil, ErrNilSendNotification
+	}
+
 	return &Handler{
-		logger: logger,
-		repo:   repo,
-		query:  query,
-		pRepo:  pRepo,
+		logger:             logger,
+		repo:               repo,
+		query:              query,
+		pRepo:              pRepo,
+		cancelAppointments: cancelAppointments,
+		sendNotification:   sendNotification,
 	}, nil
 }
 
@@ -222,8 +258,20 @@ func (h *Handler) cancelUIHandler() http.HandlerFunc {
 			return
 		}
 
-		// TODO: Cancel all appointments associated with this slot, if any. Then, send notifications to the affected patients and professionals. This will require a new service that handles appointment cancellations and notifications.
+		// Only infrastructure errors reach this point: the update underneath is a
+		// bulk one, so cancelling zero appointments is an ordinary result. The
+		// slot is already blocked here, leaving the pair inconsistent until the
+		// reconciliation sweep runs. That sweep exists as
+		// appointment.PostgresRepository.CancelOnBlockedSlots but is not yet
+		// scheduled, so for now the inconsistency persists until a retry.
+		if err := h.cancelAppointments(ctx, id); err != nil {
+			h.logger.ErrorContext(ctx, "failed to cancel appointments for slot", slog.Any("error", err), slog.String("slot_id", idStr))
+			h.createSnackbarError(ctx, w, http.StatusInternalServerError, "Failed to cancel associated appointments", "cancelAppointments")
 
+			return
+		}
+
+		h.sendNotification(ctx, id)
 		h.renderUpdatedSlotsTable(ctx, w, "Slot canceled successfully")
 	}
 }

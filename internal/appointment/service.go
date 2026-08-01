@@ -73,6 +73,8 @@ type repository interface {
 	Create(ctx context.Context, appoint Appointment) (uuid.UUID, error)
 	GetWindow(ctx context.Context, appointmentID uuid.UUID) (Window, error)
 	UpdateStatus(ctx context.Context, appointmentID uuid.UUID, newStatus, expectedStatus Status) error
+	CancelBySlot(ctx context.Context, slotID uuid.UUID) (int64, error)
+	CancelOnBlockedSlots(ctx context.Context) (int64, error)
 	ExpireOverdue(ctx context.Context) (int64, error)
 }
 
@@ -223,10 +225,54 @@ func (s *Service) Cancel(ctx context.Context, appointmentID uuid.UUID) (err erro
 	return nil
 }
 
+// CancelBySlot cancels every confirmed appointment booked on a cancelled slot.
+// Unlike Cancel it never marks anyone absent: the 24h window penalises a late
+// patient cancellation, and here the clinic withdrew the slot. Cancelling
+// nothing is a valid outcome, so a slot with no bookings is not an error.
+func (s *Service) CancelBySlot(ctx context.Context, slotID uuid.UUID) (err error) {
+	ctx, span := tracer.Start(ctx, "appointment.Service.CancelBySlot")
+	defer func() { tracing.EndSpan(span, spanError(err)) }()
+
+	cancelled, err := s.repo.CancelBySlot(ctx, slotID)
+	if err != nil {
+		return err
+	}
+
+	if cancelled > 0 {
+		s.metrics.RecordAppointmentsCancelled(cancelled)
+	}
+
+	return nil
+}
+
+// CancelOnBlockedSlots cancels appointments left confirmed on a slot that is
+// already blocked, and reports how many it converged. Cancelling a slot blocks
+// it and cancels its appointments in two separate statements, so a failure
+// between them strands the appointments: the slot can no longer be cancelled
+// again, which makes a retry impossible and leaves patients holding an
+// appointment nobody will honour. Running this periodically is what closes that
+// window. Finding nothing to do is the normal case, not an error.
+func (s *Service) CancelOnBlockedSlots(ctx context.Context) (reconciled int64, err error) {
+	ctx, span := tracer.Start(ctx, "appointment.Service.CancelOnBlockedSlots")
+	defer func() { tracing.EndSpan(span, spanError(err)) }()
+
+	reconciled, err = s.repo.CancelOnBlockedSlots(ctx)
+	if err != nil {
+		return 0, err
+	}
+
+	if reconciled > 0 {
+		s.metrics.RecordAppointmentsCancelled(reconciled)
+	}
+
+	return reconciled, nil
+}
+
 // ExpireOverdue marks every confirmed appointment whose slot has already ended
 // as absent, and reports how many it swept. The patient neither attended nor
-// cancelled in time, so the no-show penalty is the correct outcome here.
-// Sweeping nothing is the normal case, not an error.
+// cancelled in time, so the no-show penalty is the correct outcome here --
+// unlike CancelOnBlockedSlots, which repairs a clinic-side failure and never
+// blames the patient. Sweeping nothing is the normal case, not an error.
 func (s *Service) ExpireOverdue(ctx context.Context) (expired int64, err error) {
 	ctx, span := tracer.Start(ctx, "appointment.Service.ExpireOverdue")
 	defer func() { tracing.EndSpan(span, spanError(err)) }()

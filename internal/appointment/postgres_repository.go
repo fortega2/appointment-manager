@@ -176,6 +176,13 @@ const (
 			AND a.status = $2
 			AND s.end_time < CURRENT_TIMESTAMP
 	`
+	// The CONFIRMED predicate is written as the literal 1 rather than a
+	// placeholder so it provably implies idx_appointment_slot_confirmed's own
+	// WHERE status = 1. Postgres can only match a partial index when it can
+	// prove that implication, which a parameter hides from a generic plan --
+	// with $n these statements fall back to a sequential scan once the planner
+	// stops re-planning them. The value is pinned by the appointment_status
+	// lookup table and mirrored by StatusConfirmed.
 	cancelAppointmentsBySlotQuery = `
 		UPDATE
 			appointment
@@ -184,7 +191,7 @@ const (
 			updated_at = CURRENT_TIMESTAMP
 		WHERE
 			slot_id = $2
-			AND status = $3
+			AND status = 1
 	`
 	cancelAppointmentsOnBlockedSlotsQuery = `
 		UPDATE
@@ -196,7 +203,7 @@ const (
 			slot AS s
 		WHERE
 			s.id = a.slot_id
-			AND a.status = $2
+			AND a.status = 1
 			AND s.blocked = TRUE
 	`
 )
@@ -362,7 +369,7 @@ func (r *PostgresRepository) ExpireOverdue(ctx context.Context) (int64, error) {
 // row concurrently attended or cancelled no longer matches and is skipped.
 // Zero rows is a valid, non-error result (a slot with no bookings).
 func (r *PostgresRepository) CancelBySlot(ctx context.Context, slotID uuid.UUID) (int64, error) {
-	cmd, err := r.pool.Exec(ctx, cancelAppointmentsBySlotQuery, StatusCancelled, slotID, StatusConfirmed)
+	cmd, err := r.pool.Exec(ctx, cancelAppointmentsBySlotQuery, StatusCancelled, slotID)
 	if err != nil {
 		return 0, fmt.Errorf("cancel appointments by slot: %w", err)
 	}
@@ -377,7 +384,7 @@ func (r *PostgresRepository) CancelBySlot(ctx context.Context, slotID uuid.UUID)
 // state on the next worker tick. It is idempotent — once no CONFIRMED
 // appointment sits on a blocked slot, it updates nothing and returns zero.
 func (r *PostgresRepository) CancelOnBlockedSlots(ctx context.Context) (int64, error) {
-	cmd, err := r.pool.Exec(ctx, cancelAppointmentsOnBlockedSlotsQuery, StatusCancelled, StatusConfirmed)
+	cmd, err := r.pool.Exec(ctx, cancelAppointmentsOnBlockedSlotsQuery, StatusCancelled)
 	if err != nil {
 		return 0, fmt.Errorf("cancel appointments on blocked slots: %w", err)
 	}

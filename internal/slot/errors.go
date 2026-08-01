@@ -15,7 +15,10 @@ var (
 
 	ErrNilPgxPool = errors.New("pgx pool cannot be nil")
 
-	ErrNilLogger     = errors.New("logger cannot be nil")
-	ErrNilRepository = errors.New("repository cannot be nil")
-	ErrNilQuery      = errors.New("query cannot be nil")
+	ErrNilLogger             = errors.New("logger cannot be nil")
+	ErrNilRepository         = errors.New("repository cannot be nil")
+	ErrNilQuery              = errors.New("query cannot be nil")
+	ErrNilProfessionalRepo   = errors.New("professional repository cannot be nil")
+	ErrNilCancelAppointments = errors.New("cancel appointments function cannot be nil")
+	ErrNilSendNotification   = errors.New("send notification function cannot be nil")
 )

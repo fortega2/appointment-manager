@@ -9,9 +9,12 @@ import (
 	"appointment-manager/internal/professional"
 	"appointment-manager/internal/session"
 	"appointment-manager/internal/slot"
+	"context"
 	"fmt"
 	"log/slog"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 const readinessTimeout = 300 * time.Millisecond
@@ -66,12 +69,26 @@ func initializePatientHandler(logger *slog.Logger, deps *dependencies) (*patient
 }
 
 func initializeSlotHandler(logger *slog.Logger, deps *dependencies) (*slot.Handler, error) {
-	slotHandler, err := slot.NewHandler(logger, deps.slotRepo, deps.slotQuery, deps.professionalRepo)
+	slotHandler, err := slot.NewHandler(
+		logger,
+		deps.slotRepo,
+		deps.slotQuery,
+		deps.professionalRepo,
+		deps.appointmentService.CancelBySlot,
+		noopSendNotification,
+	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create slot handler: %w", err)
 	}
 
 	return slotHandler, nil
+}
+
+// noopSendNotification is a placeholder notifier used until the notification
+// service exists. It satisfies the slot handler's non-nil dependency check
+// without pretending anything was delivered.
+func noopSendNotification(_ context.Context, _ uuid.UUID) {
+	// Intentionally empty: no notification transport is wired yet.
 }
 
 func initializeHealthHandler(logger *slog.Logger, deps *dependencies) (*health.Handler, error) {

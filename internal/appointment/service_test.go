@@ -51,6 +51,16 @@ func (m *serviceRepoMock) UpdateStatus(ctx context.Context, appointmentID uuid.U
 	return args.Error(0)
 }
 
+func (m *serviceRepoMock) CancelBySlot(ctx context.Context, slotID uuid.UUID) (int64, error) {
+	args := m.Called(ctx, slotID)
+	return args.Get(0).(int64), args.Error(1)
+}
+
+func (m *serviceRepoMock) CancelOnBlockedSlots(ctx context.Context) (int64, error) {
+	args := m.Called(ctx)
+	return args.Get(0).(int64), args.Error(1)
+}
+
 func (m *serviceRepoMock) ExpireOverdue(ctx context.Context) (int64, error) {
 	args := m.Called(ctx)
 	return args.Get(0).(int64), args.Error(1)
@@ -519,6 +529,98 @@ func TestServiceRecordsBusinessMetrics(t *testing.T) {
 
 		require.Error(t, err)
 		assert.Equal(t, 0, recorder.created)
+		repo.AssertExpectations(t)
+	})
+
+	t.Run("cancel by slot records every cancelled appointment", func(t *testing.T) {
+		t.Parallel()
+
+		slotID := uuid.Must(uuid.NewV7())
+		repo := new(serviceRepoMock)
+		recorder := &serviceMetricsMock{}
+		svc, err := NewService(repo, recorder)
+		require.NoError(t, err)
+
+		repo.On("CancelBySlot", mock.Anything, slotID).Return(int64(3), nil).Once()
+
+		require.NoError(t, svc.CancelBySlot(context.Background(), slotID))
+		assert.Equal(t, int64(3), recorder.cancelled, "the whole batch must be counted, not one event")
+		assert.Equal(t, 0, recorder.absent, "a clinic-cancelled slot never marks anyone absent")
+		repo.AssertExpectations(t)
+	})
+
+	// A slot with no bookings is an ordinary outcome, so it must not emit a
+	// zero-valued sample that would read as a cancellation event.
+	t.Run("cancel by slot without bookings records nothing", func(t *testing.T) {
+		t.Parallel()
+
+		slotID := uuid.Must(uuid.NewV7())
+		repo := new(serviceRepoMock)
+		recorder := &serviceMetricsMock{}
+		svc, err := NewService(repo, recorder)
+		require.NoError(t, err)
+
+		repo.On("CancelBySlot", mock.Anything, slotID).Return(int64(0), nil).Once()
+
+		require.NoError(t, svc.CancelBySlot(context.Background(), slotID))
+		assert.Equal(t, int64(0), recorder.cancelled)
+		repo.AssertExpectations(t)
+	})
+
+	t.Run("cancel by slot failure propagates and records nothing", func(t *testing.T) {
+		t.Parallel()
+
+		slotID := uuid.Must(uuid.NewV7())
+		repo := new(serviceRepoMock)
+		recorder := &serviceMetricsMock{}
+		svc, err := NewService(repo, recorder)
+		require.NoError(t, err)
+
+		repo.On("CancelBySlot", mock.Anything, slotID).Return(int64(0), errors.New(serviceBoomError)).Once()
+
+		err = svc.CancelBySlot(context.Background(), slotID)
+
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), serviceBoomError)
+		assert.Equal(t, int64(0), recorder.cancelled)
+		repo.AssertExpectations(t)
+	})
+
+	t.Run("reconciling blocked slots records what it converged", func(t *testing.T) {
+		t.Parallel()
+
+		repo := new(serviceRepoMock)
+		recorder := &serviceMetricsMock{}
+		svc, err := NewService(repo, recorder)
+		require.NoError(t, err)
+
+		repo.On("CancelOnBlockedSlots", mock.Anything).Return(int64(2), nil).Once()
+
+		reconciled, err := svc.CancelOnBlockedSlots(context.Background())
+
+		require.NoError(t, err)
+		assert.Equal(t, int64(2), reconciled)
+		assert.Equal(t, int64(2), recorder.cancelled)
+		repo.AssertExpectations(t)
+	})
+
+	// The sweep runs on every tick and finds nothing almost every time, so the
+	// quiet case must stay free of metric samples.
+	t.Run("reconciling nothing records nothing", func(t *testing.T) {
+		t.Parallel()
+
+		repo := new(serviceRepoMock)
+		recorder := &serviceMetricsMock{}
+		svc, err := NewService(repo, recorder)
+		require.NoError(t, err)
+
+		repo.On("CancelOnBlockedSlots", mock.Anything).Return(int64(0), nil).Once()
+
+		reconciled, err := svc.CancelOnBlockedSlots(context.Background())
+
+		require.NoError(t, err)
+		assert.Equal(t, int64(0), reconciled)
+		assert.Equal(t, int64(0), recorder.cancelled)
 		repo.AssertExpectations(t)
 	})
 
