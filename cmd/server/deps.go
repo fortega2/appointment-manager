@@ -24,7 +24,6 @@ type dependencies struct {
 	passwordHasher *password.Argon2
 	readinessCheck health.CheckReady
 
-	appointmentRepo    *appointment.PostgresRepository
 	appointmentQuery   *appointment.Query
 	appointmentService *appointment.Service
 
@@ -106,7 +105,6 @@ func newDependencies(pool *pgxpool.Pool, appointmentMetrics *metrics.Metrics) (*
 	return &dependencies{
 		passwordHasher:      password.NewArgon2(),
 		readinessCheck:      readinessCheck,
-		appointmentRepo:     appointmentRepo,
 		appointmentQuery:    appointmentQuery,
 		appointmentService:  appointmentService,
 		assistantRepo:       assistantRepo,

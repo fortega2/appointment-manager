@@ -73,6 +73,7 @@ type repository interface {
 	Create(ctx context.Context, appoint Appointment) (uuid.UUID, error)
 	GetWindow(ctx context.Context, appointmentID uuid.UUID) (Window, error)
 	UpdateStatus(ctx context.Context, appointmentID uuid.UUID, newStatus, expectedStatus Status) error
+	ExpireOverdue(ctx context.Context) (int64, error)
 }
 
 // Metrics records appointment business events. It is satisfied by
@@ -81,8 +82,9 @@ type repository interface {
 type Metrics interface {
 	RecordAppointmentCreated()
 	RecordAppointmentAttended()
-	RecordAppointmentCancelled()
+	RecordAppointmentsCancelled(n int64)
 	RecordAppointmentAbsent()
+	RecordAppointmentsExpired(n int64)
 }
 
 type Service struct {
@@ -182,6 +184,9 @@ func (s *Service) Create(ctx context.Context, input CreateInput) (id uuid.UUID, 
 	return appointmentID, nil
 }
 
+// Cancel cancels a single appointment at the patient's request, marking it
+// absent instead when it happens inside the 24h window. CancelBySlot is the
+// clinic-initiated counterpart and deliberately skips that penalty.
 func (s *Service) Cancel(ctx context.Context, appointmentID uuid.UUID) (err error) {
 	ctx, span := tracer.Start(ctx, "appointment.Service.Cancel")
 	defer func() { tracing.EndSpan(span, spanError(err)) }()
@@ -212,10 +217,30 @@ func (s *Service) Cancel(ctx context.Context, appointmentID uuid.UUID) (err erro
 	if finalStatus == StatusAbsent {
 		s.metrics.RecordAppointmentAbsent()
 	} else {
-		s.metrics.RecordAppointmentCancelled()
+		s.metrics.RecordAppointmentsCancelled(1)
 	}
 
 	return nil
+}
+
+// ExpireOverdue marks every confirmed appointment whose slot has already ended
+// as absent, and reports how many it swept. The patient neither attended nor
+// cancelled in time, so the no-show penalty is the correct outcome here.
+// Sweeping nothing is the normal case, not an error.
+func (s *Service) ExpireOverdue(ctx context.Context) (expired int64, err error) {
+	ctx, span := tracer.Start(ctx, "appointment.Service.ExpireOverdue")
+	defer func() { tracing.EndSpan(span, spanError(err)) }()
+
+	expired, err = s.repo.ExpireOverdue(ctx)
+	if err != nil {
+		return 0, err
+	}
+
+	if expired > 0 {
+		s.metrics.RecordAppointmentsExpired(expired)
+	}
+
+	return expired, nil
 }
 
 func (s *Service) Attend(ctx context.Context, appointmentID uuid.UUID) (err error) {
@@ -317,10 +342,14 @@ func (noopMetrics) RecordAppointmentAttended() {
 	// RecordAppointmentAttended is intentionally empty: no metrics recorder was configured.
 }
 
-func (noopMetrics) RecordAppointmentCancelled() {
-	// RecordAppointmentCancelled is intentionally empty: no metrics recorder was configured.
+func (noopMetrics) RecordAppointmentsCancelled(int64) {
+	// RecordAppointmentsCancelled is intentionally empty: no metrics recorder was configured.
 }
 
 func (noopMetrics) RecordAppointmentAbsent() {
 	// RecordAppointmentAbsent is intentionally empty: no metrics recorder was configured.
+}
+
+func (noopMetrics) RecordAppointmentsExpired(int64) {
+	// RecordAppointmentsExpired is intentionally empty: no metrics recorder was configured.
 }

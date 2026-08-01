@@ -51,6 +51,11 @@ func (m *serviceRepoMock) UpdateStatus(ctx context.Context, appointmentID uuid.U
 	return args.Error(0)
 }
 
+func (m *serviceRepoMock) ExpireOverdue(ctx context.Context) (int64, error) {
+	args := m.Called(ctx)
+	return args.Get(0).(int64), args.Error(1)
+}
+
 func TestNewServiceValidation(t *testing.T) {
 	t.Parallel()
 
@@ -456,14 +461,17 @@ func TestSpanError(t *testing.T) {
 type serviceMetricsMock struct {
 	created   int
 	attended  int
-	cancelled int
+	cancelled int64
 	absent    int
+	expired   int64
 }
 
-func (m *serviceMetricsMock) RecordAppointmentCreated()   { m.created++ }
-func (m *serviceMetricsMock) RecordAppointmentAttended()  { m.attended++ }
-func (m *serviceMetricsMock) RecordAppointmentCancelled() { m.cancelled++ }
-func (m *serviceMetricsMock) RecordAppointmentAbsent()    { m.absent++ }
+func (m *serviceMetricsMock) RecordAppointmentCreated()  { m.created++ }
+func (m *serviceMetricsMock) RecordAppointmentAttended() { m.attended++ }
+func (m *serviceMetricsMock) RecordAppointmentAbsent()   { m.absent++ }
+
+func (m *serviceMetricsMock) RecordAppointmentsCancelled(n int64) { m.cancelled += n }
+func (m *serviceMetricsMock) RecordAppointmentsExpired(n int64)   { m.expired += n }
 
 func validCreateInput() CreateInput {
 	return CreateInput{
@@ -514,6 +522,61 @@ func TestServiceRecordsBusinessMetrics(t *testing.T) {
 		repo.AssertExpectations(t)
 	})
 
+	t.Run("expiring overdue appointments records what it swept", func(t *testing.T) {
+		t.Parallel()
+
+		repo := new(serviceRepoMock)
+		recorder := &serviceMetricsMock{}
+		svc, err := NewService(repo, recorder)
+		require.NoError(t, err)
+
+		repo.On("ExpireOverdue", mock.Anything).Return(int64(4), nil).Once()
+
+		expired, err := svc.ExpireOverdue(context.Background())
+
+		require.NoError(t, err)
+		assert.Equal(t, int64(4), expired)
+		assert.Equal(t, int64(4), recorder.expired)
+		assert.Equal(t, int64(0), recorder.cancelled, "a no-show is not a cancellation")
+		repo.AssertExpectations(t)
+	})
+
+	t.Run("expiring nothing records nothing", func(t *testing.T) {
+		t.Parallel()
+
+		repo := new(serviceRepoMock)
+		recorder := &serviceMetricsMock{}
+		svc, err := NewService(repo, recorder)
+		require.NoError(t, err)
+
+		repo.On("ExpireOverdue", mock.Anything).Return(int64(0), nil).Once()
+
+		expired, err := svc.ExpireOverdue(context.Background())
+
+		require.NoError(t, err)
+		assert.Equal(t, int64(0), expired)
+		assert.Equal(t, int64(0), recorder.expired)
+		repo.AssertExpectations(t)
+	})
+
+	t.Run("expire failure propagates and records nothing", func(t *testing.T) {
+		t.Parallel()
+
+		repo := new(serviceRepoMock)
+		recorder := &serviceMetricsMock{}
+		svc, err := NewService(repo, recorder)
+		require.NoError(t, err)
+
+		repo.On("ExpireOverdue", mock.Anything).Return(int64(0), errors.New(serviceBoomError)).Once()
+
+		_, err = svc.ExpireOverdue(context.Background())
+
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), serviceBoomError)
+		assert.Equal(t, int64(0), recorder.expired)
+		repo.AssertExpectations(t)
+	})
+
 	t.Run("cancel outside window records cancelled", func(t *testing.T) {
 		t.Parallel()
 
@@ -530,7 +593,7 @@ func TestServiceRecordsBusinessMetrics(t *testing.T) {
 		repo.On("UpdateStatus", mock.Anything, appointmentID, StatusCancelled, StatusConfirmed).Return(nil).Once()
 
 		require.NoError(t, svc.Cancel(context.Background(), appointmentID))
-		assert.Equal(t, 1, recorder.cancelled)
+		assert.Equal(t, int64(1), recorder.cancelled)
 		assert.Equal(t, 0, recorder.absent)
 		repo.AssertExpectations(t)
 	})
@@ -552,7 +615,7 @@ func TestServiceRecordsBusinessMetrics(t *testing.T) {
 
 		require.NoError(t, svc.Cancel(context.Background(), appointmentID))
 		assert.Equal(t, 1, recorder.absent)
-		assert.Equal(t, 0, recorder.cancelled)
+		assert.Equal(t, int64(0), recorder.cancelled)
 		repo.AssertExpectations(t)
 	})
 

@@ -17,22 +17,23 @@ import (
 )
 
 const (
-	testTickerInterval = time.Millisecond
-	expiredCount       = int64(3)
-	boomError          = "boom"
+	tickerInterval = time.Millisecond
+	changedCount   = int64(3)
+	boomError      = "boom"
+	jobName        = "expire-overdue"
 
-	logExpiredMessage = "expired overdue appointments"
-	logFailedMessage  = "failed to expire overdue appointments"
-	logNoOverdueMsg   = "no overdue appointments"
+	logCompletedMessage = "worker job completed"
+	logFailedMessage    = "worker job failed"
+	logNoChangeMessage  = "worker job changed nothing"
 
 	eventuallyTimeout = time.Second
 )
 
-type expirerMock struct {
+type jobMock struct {
 	mock.Mock
 }
 
-func (m *expirerMock) ExpireOverdue(ctx context.Context) (int64, error) {
+func (m *jobMock) Run(ctx context.Context) (int64, error) {
 	args := m.Called(ctx)
 	return args.Get(0).(int64), args.Error(1)
 }
@@ -60,26 +61,29 @@ func TestNewWorkerValidation(t *testing.T) {
 	t.Parallel()
 
 	logger := slog.New(slog.DiscardHandler)
-	expirer := (&expirerMock{}).ExpireOverdue
+	job := (&jobMock{}).Run
 
 	tests := []struct {
 		name     string
 		logger   *slog.Logger
-		expirer  worker.ExpireOverdueFunc
+		jobName  string
+		job      worker.JobFunc
 		interval time.Duration
 		wantErr  error
 	}{
-		{name: "nil logger", logger: nil, expirer: expirer, interval: testTickerInterval, wantErr: worker.ErrNilLogger},
-		{name: "nil expirer", logger: logger, expirer: nil, interval: testTickerInterval, wantErr: worker.ErrNilAppointmentExpirer},
-		{name: "zero interval", logger: logger, expirer: expirer, interval: 0, wantErr: worker.ErrInvalidTickerInterval},
-		{name: "negative interval", logger: logger, expirer: expirer, interval: -testTickerInterval, wantErr: worker.ErrInvalidTickerInterval},
+		{name: "nil logger", logger: nil, jobName: jobName, job: job, interval: tickerInterval, wantErr: worker.ErrNilLogger},
+		{name: "empty job name", logger: logger, jobName: "", job: job, interval: tickerInterval, wantErr: worker.ErrEmptyJobName},
+		{name: "blank job name", logger: logger, jobName: "   ", job: job, interval: tickerInterval, wantErr: worker.ErrEmptyJobName},
+		{name: "nil job", logger: logger, jobName: jobName, job: nil, interval: tickerInterval, wantErr: worker.ErrNilJob},
+		{name: "zero interval", logger: logger, jobName: jobName, job: job, interval: 0, wantErr: worker.ErrInvalidTickerInterval},
+		{name: "negative interval", logger: logger, jobName: jobName, job: job, interval: -tickerInterval, wantErr: worker.ErrInvalidTickerInterval},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			w, err := worker.NewWorker(tt.logger, tt.expirer, tt.interval)
+			w, err := worker.NewWorker(tt.logger, tt.jobName, tt.job, tt.interval)
 
 			require.ErrorIs(t, err, tt.wantErr)
 			assert.Nil(t, w)
@@ -90,7 +94,7 @@ func TestNewWorkerValidation(t *testing.T) {
 func TestNewWorkerSuccess(t *testing.T) {
 	t.Parallel()
 
-	w, err := worker.NewWorker(slog.New(slog.DiscardHandler), (&expirerMock{}).ExpireOverdue, testTickerInterval)
+	w, err := worker.NewWorker(slog.New(slog.DiscardHandler), jobName, (&jobMock{}).Run, tickerInterval)
 
 	require.NoError(t, err)
 	assert.NotNil(t, w)
@@ -102,28 +106,28 @@ func TestWorkerRun(t *testing.T) {
 	tests := []struct {
 		name        string
 		count       int64
-		expireErr   error
+		jobErr      error
 		wantLog     string
 		notWantLogs []string
 	}{
 		{
-			name:        "expires overdue appointments",
-			count:       expiredCount,
-			wantLog:     logExpiredMessage,
+			name:        "reports the rows a run changed",
+			count:       changedCount,
+			wantLog:     logCompletedMessage,
 			notWantLogs: []string{logFailedMessage},
 		},
 		{
-			name:        "no overdue appointments is a quiet no-op",
+			name:        "changing nothing is a quiet no-op",
 			count:       0,
 			wantLog:     "",
-			notWantLogs: []string{logExpiredMessage, logFailedMessage, logNoOverdueMsg},
+			notWantLogs: []string{logCompletedMessage, logFailedMessage, logNoChangeMessage},
 		},
 		{
-			name:        "logs error when expiration fails",
+			name:        "logs error when the job fails",
 			count:       0,
-			expireErr:   errors.New(boomError),
+			jobErr:      errors.New(boomError),
 			wantLog:     logFailedMessage,
-			notWantLogs: []string{logExpiredMessage},
+			notWantLogs: []string{logCompletedMessage},
 		},
 	}
 
@@ -132,19 +136,19 @@ func TestWorkerRun(t *testing.T) {
 			t.Parallel()
 
 			buf := &syncBuffer{}
-			// Info level so the count==0 Debug ("no overdue appointments") is filtered out.
+			// Info level so the count==0 Debug ("worker job changed nothing") is filtered out.
 			logger := slog.New(slog.NewJSONHandler(buf, &slog.HandlerOptions{Level: slog.LevelInfo}))
 
 			firstCall := make(chan struct{})
 			var once sync.Once
-			expirer := &expirerMock{}
-			expirer.On("ExpireOverdue", mock.Anything).
-				Return(tt.count, tt.expireErr).
+			job := &jobMock{}
+			job.On("Run", mock.Anything).
+				Return(tt.count, tt.jobErr).
 				Run(func(mock.Arguments) {
 					once.Do(func() { close(firstCall) })
 				})
 
-			w, err := worker.NewWorker(logger, expirer.ExpireOverdue, testTickerInterval)
+			w, err := worker.NewWorker(logger, jobName, job.Run, tickerInterval)
 			require.NoError(t, err)
 
 			ctx, cancel := context.WithCancel(context.Background())
@@ -158,7 +162,7 @@ func TestWorkerRun(t *testing.T) {
 			select {
 			case <-firstCall:
 			case <-time.After(eventuallyTimeout):
-				t.Fatal("worker did not call ExpireOverdue")
+				t.Fatal("worker did not run the job")
 			}
 
 			cancel()
@@ -175,6 +179,11 @@ func TestWorkerRun(t *testing.T) {
 			}
 			for _, unwanted := range tt.notWantLogs {
 				assert.NotContains(t, logs, unwanted)
+			}
+			// Every line must carry the job name so concurrent workers stay
+			// distinguishable in a shared log stream.
+			if logs != "" {
+				assert.Contains(t, logs, `"job":"`+jobName+`"`)
 			}
 		})
 	}

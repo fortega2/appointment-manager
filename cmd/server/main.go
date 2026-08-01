@@ -108,12 +108,12 @@ func run() error {
 	stopMetricsServer := startMetricsServer(ctx, logger, appMetrics, parseMetricsAddr(os.Getenv(metricsAddrEnv)))
 	defer stopMetricsServer()
 
-	stopWorker, err := startOverdueWorker(ctx, logger, deps, appMetrics)
+	stopWorkers, err := startBackgroundWorkers(ctx, logger, deps)
 	if err != nil {
-		logger.ErrorContext(ctx, "failed to start overdue appointment worker", slog.Any("error", err))
+		logger.ErrorContext(ctx, "failed to start background workers", slog.Any("error", err))
 		return err
 	}
-	defer stopWorker()
+	defer stopWorkers()
 
 	if err := server.Start(ctx, logger, handler, serverAddr, server.Config{
 		ReadHeaderTimeout: serverReadHeaderTimeout,

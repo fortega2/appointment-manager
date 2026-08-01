@@ -189,9 +189,10 @@ func (m *Metrics) RecordAppointmentCreated() { m.apptCreated.Inc() }
 // RecordAppointmentAttended counts one appointment that transitioned to attended.
 func (m *Metrics) RecordAppointmentAttended() { m.apptFinalized.WithLabelValues(outcomeAttended).Inc() }
 
-// RecordAppointmentCancelled counts one appointment cancelled outside the 24h window.
-func (m *Metrics) RecordAppointmentCancelled() {
-	m.apptFinalized.WithLabelValues(outcomeCancelled).Inc()
+// RecordAppointmentsCancelled counts n cancelled appointments, whether they were
+// cancelled one at a time or in bulk because their slot was cancelled.
+func (m *Metrics) RecordAppointmentsCancelled(n int64) {
+	m.apptFinalized.WithLabelValues(outcomeCancelled).Add(float64(n))
 }
 
 // RecordAppointmentAbsent counts one appointment marked absent inside the 24h window.

@@ -3,25 +3,35 @@ package worker
 import (
 	"context"
 	"log/slog"
+	"strings"
 	"time"
 )
 
 var updateAppointmentTimeout = 5 * time.Second
 
-type ExpireOverdueFunc func(ctx context.Context) (int64, error)
+// JobFunc is a periodic sweep. It reports how many rows it changed so the
+// worker can log the effect of a run, and zero is a valid, non-error result.
+type JobFunc func(ctx context.Context) (int64, error)
 
 type Worker struct {
 	logger         *slog.Logger
-	expireOverdue  ExpireOverdueFunc
+	job            JobFunc
+	name           string
 	tickerInterval time.Duration
 }
 
-func NewWorker(logger *slog.Logger, expireOverdue ExpireOverdueFunc, tickerInterval time.Duration) (*Worker, error) {
+// NewWorker builds a worker that runs one named job on an interval. The name
+// identifies the job in every log line, so several workers can share the log
+// stream without their runs becoming indistinguishable.
+func NewWorker(logger *slog.Logger, name string, job JobFunc, tickerInterval time.Duration) (*Worker, error) {
 	if logger == nil {
 		return nil, ErrNilLogger
 	}
-	if expireOverdue == nil {
-		return nil, ErrNilAppointmentExpirer
+	if strings.TrimSpace(name) == "" {
+		return nil, ErrEmptyJobName
+	}
+	if job == nil {
+		return nil, ErrNilJob
 	}
 	if tickerInterval <= 0 {
 		return nil, ErrInvalidTickerInterval
@@ -29,7 +39,8 @@ func NewWorker(logger *slog.Logger, expireOverdue ExpireOverdueFunc, tickerInter
 
 	return &Worker{
 		logger:         logger,
-		expireOverdue:  expireOverdue,
+		name:           name,
+		job:            job,
 		tickerInterval: tickerInterval,
 	}, nil
 }
@@ -40,37 +51,37 @@ func (w *Worker) Run(ctx context.Context) {
 
 	select {
 	case <-ctx.Done():
-		w.logger.InfoContext(ctx, "worker stopped")
+		w.logger.InfoContext(ctx, "worker stopped", slog.String("job", w.name))
 		return
 	default:
-		w.processExpiredAppointments(ctx)
+		w.runJob(ctx)
 	}
 
 	for {
 		select {
 		case <-ticker.C:
-			w.processExpiredAppointments(ctx)
+			w.runJob(ctx)
 		case <-ctx.Done():
-			w.logger.InfoContext(ctx, "worker stopped")
+			w.logger.InfoContext(ctx, "worker stopped", slog.String("job", w.name))
 			return
 		}
 	}
 }
 
-func (w *Worker) processExpiredAppointments(ctx context.Context) {
+func (w *Worker) runJob(ctx context.Context) {
 	ctx, cancel := context.WithTimeout(ctx, updateAppointmentTimeout)
 	defer cancel()
 
-	count, err := w.expireOverdue(ctx)
+	count, err := w.job(ctx)
 	if err != nil {
-		w.logger.ErrorContext(ctx, "failed to expire overdue appointments", slog.Any("error", err))
+		w.logger.ErrorContext(ctx, "worker job failed", slog.String("job", w.name), slog.Any("error", err))
 		return
 	}
 
 	if count == 0 {
-		w.logger.DebugContext(ctx, "no overdue appointments")
+		w.logger.DebugContext(ctx, "worker job changed nothing", slog.String("job", w.name))
 		return
 	}
 
-	w.logger.InfoContext(ctx, "expired overdue appointments", slog.Int64("count", count))
+	w.logger.InfoContext(ctx, "worker job completed", slog.String("job", w.name), slog.Int64("count", count))
 }
