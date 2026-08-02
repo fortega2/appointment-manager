@@ -361,15 +361,17 @@ func (r *PostgresRepository) ExpireOverdue(ctx context.Context) (int64, error) {
 }
 
 // CancelBySlot marks every CONFIRMED appointment booked on the given slot as
-// CANCELLED in a single atomic statement and returns the number of rows
-// updated. It is the counterpart of cancelling the slot itself: the clinic
+// CANCELLED BY CLINIC in a single atomic statement and returns the number of
+// rows updated. It is the counterpart of cancelling the slot itself: the clinic
 // withdrew the slot, so patients are never marked ABSENT here, regardless of
 // how close the slot is — the 24h rule in Service.Cancel deliberately does not
-// apply. The status = CONFIRMED predicate makes the update concurrency-safe: a
-// row concurrently attended or cancelled no longer matches and is skipped.
-// Zero rows is a valid, non-error result (a slot with no bookings).
+// apply. The distinct status is what keeps these rows separable afterwards from
+// appointments the patients themselves had already cancelled on the same slot.
+// The status = CONFIRMED predicate makes the update concurrency-safe: a row
+// concurrently attended or cancelled no longer matches and is skipped. Zero
+// rows is a valid, non-error result (a slot with no bookings).
 func (r *PostgresRepository) CancelBySlot(ctx context.Context, slotID uuid.UUID) (int64, error) {
-	cmd, err := r.pool.Exec(ctx, cancelAppointmentsBySlotQuery, StatusCancelled, slotID)
+	cmd, err := r.pool.Exec(ctx, cancelAppointmentsBySlotQuery, StatusCancelledByClinic, slotID)
 	if err != nil {
 		return 0, fmt.Errorf("cancel appointments by slot: %w", err)
 	}
@@ -382,9 +384,11 @@ func (r *PostgresRepository) CancelBySlot(ctx context.Context, slotID uuid.UUID)
 // two independent steps (block the slot, then cancel its appointments), so a
 // failure between them leaves the pair inconsistent; this sweep converges that
 // state on the next worker tick. It is idempotent — once no CONFIRMED
-// appointment sits on a blocked slot, it updates nothing and returns zero.
+// appointment sits on a blocked slot, it updates nothing and returns zero. It
+// writes the same CANCELLED BY CLINIC status as CancelBySlot, since the rows it
+// converges are ones that cancel should have caught.
 func (r *PostgresRepository) CancelOnBlockedSlots(ctx context.Context) (int64, error) {
-	cmd, err := r.pool.Exec(ctx, cancelAppointmentsOnBlockedSlotsQuery, StatusCancelled)
+	cmd, err := r.pool.Exec(ctx, cancelAppointmentsOnBlockedSlotsQuery, StatusCancelledByClinic)
 	if err != nil {
 		return 0, fmt.Errorf("cancel appointments on blocked slots: %w", err)
 	}

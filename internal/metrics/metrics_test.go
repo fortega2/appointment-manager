@@ -54,6 +54,7 @@ func TestBusinessRecorders(t *testing.T) {
 	m.RecordAppointmentAttended()
 	m.RecordAppointmentsCancelled(1)
 	m.RecordAppointmentsCancelled(4)
+	m.RecordAppointmentsCancelledByClinic(2)
 	m.RecordAppointmentAbsent()
 	m.RecordAppointmentsExpired(3)
 
@@ -62,6 +63,10 @@ func TestBusinessRecorders(t *testing.T) {
 	assert.InDelta(t, 5, testutil.ToFloat64(m.apptFinalized.WithLabelValues(outcomeCancelled)), 0)
 	assert.InDelta(t, 1, testutil.ToFloat64(m.apptFinalized.WithLabelValues(outcomeAbsent)), 0)
 	assert.InDelta(t, 3, testutil.ToFloat64(m.apptFinalized.WithLabelValues(outcomeExpired)), 0)
+
+	// The two cancellation series must stay separable: a clinic cancellation
+	// landing in the patient-initiated series would make either one unreadable.
+	assert.InDelta(t, 2, testutil.ToFloat64(m.apptFinalized.WithLabelValues(outcomeCancelledByClinic)), 0)
 }
 
 func TestObserveRequestAndInFlight(t *testing.T) {

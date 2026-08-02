@@ -59,3 +59,39 @@ func TestNewAppointmentCreatesUniqueID(t *testing.T) {
 	require.NotNil(t, second)
 	assert.NotEqual(t, first.ID, second.ID)
 }
+
+func TestStatusIsCancelled(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name   string
+		status appointment.Status
+		want   bool
+	}{
+		{name: "patient cancellation", status: appointment.StatusCancelled, want: true},
+		{name: "clinic cancellation", status: appointment.StatusCancelledByClinic, want: true},
+		{name: "confirmed", status: appointment.StatusConfirmed, want: false},
+		{name: "absent", status: appointment.StatusAbsent, want: false},
+		{name: "attended", status: appointment.StatusAttended, want: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			assert.Equal(t, tt.want, tt.status.IsCancelled())
+		})
+	}
+}
+
+// The status values are pinned by the appointment_status lookup table that
+// appointment.status references, so a drift here means writes fail on the
+// foreign key rather than storing an unknown status.
+func TestStatusValuesMatchLookupTable(t *testing.T) {
+	t.Parallel()
+
+	assert.Equal(t, appointment.Status(1), appointment.StatusConfirmed)
+	assert.Equal(t, appointment.Status(2), appointment.StatusCancelled)
+	assert.Equal(t, appointment.Status(3), appointment.StatusAbsent)
+	assert.Equal(t, appointment.Status(4), appointment.StatusAttended)
+	assert.Equal(t, appointment.Status(5), appointment.StatusCancelledByClinic)
+}

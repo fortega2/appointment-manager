@@ -116,6 +116,42 @@ func TestServiceListSuccess(t *testing.T) {
 	repo.AssertExpectations(t)
 }
 
+// Every status the lookup table accepts must survive parsing, or the filter
+// silently rejects appointments that exist in the database.
+func TestServiceListAcceptsEveryStatus(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name  string
+		input string
+		want  Status
+	}{
+		{name: "confirmed", input: "1", want: StatusConfirmed},
+		{name: "cancelled", input: "2", want: StatusCancelled},
+		{name: "absent", input: "3", want: StatusAbsent},
+		{name: "attended", input: "4", want: StatusAttended},
+		{name: "cancelled by clinic", input: "5", want: StatusCancelledByClinic},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			repo := new(serviceRepoMock)
+			svc, err := NewService(repo, nil)
+			require.NoError(t, err)
+
+			repo.On("List", mock.Anything, ListFilter{Page: 1, Limit: 20, Status: tt.want}).
+				Return([]Appointment{}, nil).Once()
+
+			_, err = svc.List(context.Background(), ListInput{Status: tt.input})
+
+			require.NoError(t, err)
+			repo.AssertExpectations(t)
+		})
+	}
+}
+
 func TestServiceCreateValidation(t *testing.T) {
 	t.Parallel()
 
@@ -247,6 +283,28 @@ func TestServiceCancel(t *testing.T) {
 			StartTime: referenceTime.Add(1 * time.Hour),
 			EndTime:   referenceTime.Add(2 * time.Hour),
 			Status:    StatusCancelled,
+		}, nil).Once()
+
+		err = svc.Cancel(context.Background(), appointmentID)
+
+		require.NoError(t, err)
+		repo.AssertNotCalled(t, "UpdateStatus", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
+		repo.AssertExpectations(t)
+	})
+
+	// The clinic got there first. The caller wanted the appointment called off
+	// and it is, so this stays idempotent rather than reporting a conflict.
+	t.Run("already cancelled by the clinic is idempotent", func(t *testing.T) {
+		t.Parallel()
+
+		repo := new(serviceRepoMock)
+		svc, err := newServiceWithClock(repo, func() time.Time { return referenceTime }, nil)
+		require.NoError(t, err)
+
+		repo.On("GetWindow", mock.Anything, appointmentID).Return(Window{
+			StartTime: referenceTime.Add(1 * time.Hour),
+			EndTime:   referenceTime.Add(2 * time.Hour),
+			Status:    StatusCancelledByClinic,
 		}, nil).Once()
 
 		err = svc.Cancel(context.Background(), appointmentID)
@@ -469,19 +527,21 @@ func TestSpanError(t *testing.T) {
 }
 
 type serviceMetricsMock struct {
-	created   int
-	attended  int
-	cancelled int64
-	absent    int
-	expired   int64
+	created           int
+	attended          int
+	cancelled         int64
+	cancelledByClinic int64
+	absent            int
+	expired           int64
 }
 
 func (m *serviceMetricsMock) RecordAppointmentCreated()  { m.created++ }
 func (m *serviceMetricsMock) RecordAppointmentAttended() { m.attended++ }
 func (m *serviceMetricsMock) RecordAppointmentAbsent()   { m.absent++ }
 
-func (m *serviceMetricsMock) RecordAppointmentsCancelled(n int64) { m.cancelled += n }
-func (m *serviceMetricsMock) RecordAppointmentsExpired(n int64)   { m.expired += n }
+func (m *serviceMetricsMock) RecordAppointmentsCancelled(n int64)         { m.cancelled += n }
+func (m *serviceMetricsMock) RecordAppointmentsCancelledByClinic(n int64) { m.cancelledByClinic += n }
+func (m *serviceMetricsMock) RecordAppointmentsExpired(n int64)           { m.expired += n }
 
 func validCreateInput() CreateInput {
 	return CreateInput{
@@ -544,7 +604,8 @@ func TestServiceRecordsBusinessMetrics(t *testing.T) {
 		repo.On("CancelBySlot", mock.Anything, slotID).Return(int64(3), nil).Once()
 
 		require.NoError(t, svc.CancelBySlot(context.Background(), slotID))
-		assert.Equal(t, int64(3), recorder.cancelled, "the whole batch must be counted, not one event")
+		assert.Equal(t, int64(3), recorder.cancelledByClinic, "the whole batch must be counted, not one event")
+		assert.Equal(t, int64(0), recorder.cancelled, "a clinic cancellation must not land in the patient-initiated series")
 		assert.Equal(t, 0, recorder.absent, "a clinic-cancelled slot never marks anyone absent")
 		repo.AssertExpectations(t)
 	})
@@ -563,7 +624,7 @@ func TestServiceRecordsBusinessMetrics(t *testing.T) {
 		repo.On("CancelBySlot", mock.Anything, slotID).Return(int64(0), nil).Once()
 
 		require.NoError(t, svc.CancelBySlot(context.Background(), slotID))
-		assert.Equal(t, int64(0), recorder.cancelled)
+		assert.Equal(t, int64(0), recorder.cancelledByClinic)
 		repo.AssertExpectations(t)
 	})
 
@@ -582,7 +643,7 @@ func TestServiceRecordsBusinessMetrics(t *testing.T) {
 
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), serviceBoomError)
-		assert.Equal(t, int64(0), recorder.cancelled)
+		assert.Equal(t, int64(0), recorder.cancelledByClinic)
 		repo.AssertExpectations(t)
 	})
 
@@ -600,7 +661,8 @@ func TestServiceRecordsBusinessMetrics(t *testing.T) {
 
 		require.NoError(t, err)
 		assert.Equal(t, int64(2), reconciled)
-		assert.Equal(t, int64(2), recorder.cancelled)
+		assert.Equal(t, int64(2), recorder.cancelledByClinic)
+		assert.Equal(t, int64(0), recorder.cancelled, "the sweep repairs a clinic cancellation, not a patient one")
 		repo.AssertExpectations(t)
 	})
 
@@ -620,7 +682,7 @@ func TestServiceRecordsBusinessMetrics(t *testing.T) {
 
 		require.NoError(t, err)
 		assert.Equal(t, int64(0), reconciled)
-		assert.Equal(t, int64(0), recorder.cancelled)
+		assert.Equal(t, int64(0), recorder.cancelledByClinic)
 		repo.AssertExpectations(t)
 	})
 

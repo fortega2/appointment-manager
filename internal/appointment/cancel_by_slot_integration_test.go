@@ -19,8 +19,8 @@ const (
 )
 
 // CancelBySlot flips only the CONFIRMED appointments of the given slot to
-// CANCELLED, never touching other statuses, other slots, or the 24h rule that
-// would otherwise mark a late cancellation as ABSENT.
+// CANCELLED BY CLINIC, never touching other statuses, other slots, or the 24h
+// rule that would otherwise mark a late cancellation as ABSENT.
 func TestCancelBySlotCancelsOnlyConfirmedAppointmentsOfThatSlot(t *testing.T) {
 	testcontainers.SkipIfProviderIsNotHealthy(t)
 	ctx := context.Background()
@@ -81,13 +81,19 @@ func TestCancelBySlotCancelsOnlyConfirmedAppointmentsOfThatSlot(t *testing.T) {
 	assert.Equal(t, int64(2), count)
 
 	firstStatus, _ := fetchAppointmentStatusAndNotes(ctx, t, pool, firstConfirmedID)
-	assert.Equal(t, statusCancelledValue, firstStatus)
+	assert.Equal(t, statusCancelledByClinicValue, firstStatus)
 
 	secondStatus, _ := fetchAppointmentStatusAndNotes(ctx, t, pool, secondConfirmedID)
-	assert.Equal(t, statusCancelledValue, secondStatus)
+	assert.Equal(t, statusCancelledByClinicValue, secondStatus)
 
 	attendedStatus, _ := fetchAppointmentStatusAndNotes(ctx, t, pool, attendedID)
 	assert.Equal(t, statusAttendedValue, attendedStatus)
+
+	// The whole point of the distinct status: a patient who had already
+	// cancelled stays CANCELLED, so a later "the clinic called this off"
+	// notification can exclude them by status alone.
+	alreadyCancelledStatus, _ := fetchAppointmentStatusAndNotes(ctx, t, pool, alreadyCancelledID)
+	assert.Equal(t, statusCancelledValue, alreadyCancelledStatus)
 
 	otherSlotStatus, _ := fetchAppointmentStatusAndNotes(ctx, t, pool, otherSlotApptID)
 	assert.Equal(t, statusConfirmedValue, otherSlotStatus)
@@ -173,7 +179,7 @@ func TestCancelOnBlockedSlotsReconcilesConfirmedAppointments(t *testing.T) {
 	assert.Equal(t, int64(1), count)
 
 	strandedStatus, _ := fetchAppointmentStatusAndNotes(ctx, t, pool, strandedID)
-	assert.Equal(t, statusCancelledValue, strandedStatus)
+	assert.Equal(t, statusCancelledByClinicValue, strandedStatus)
 
 	blockedAttendedStatus, _ := fetchAppointmentStatusAndNotes(ctx, t, pool, blockedAttendedID)
 	assert.Equal(t, statusAttendedValue, blockedAttendedStatus)

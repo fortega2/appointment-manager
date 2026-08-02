@@ -26,10 +26,11 @@ const (
 )
 
 const (
-	outcomeAttended  = "attended"
-	outcomeCancelled = "cancelled"
-	outcomeAbsent    = "absent"
-	outcomeExpired   = "expired"
+	outcomeAttended          = "attended"
+	outcomeCancelled         = "cancelled"
+	outcomeCancelledByClinic = "cancelled_by_clinic"
+	outcomeAbsent            = "absent"
+	outcomeExpired           = "expired"
 )
 
 // dbDurationBuckets are latency buckets tuned for database queries, which are
@@ -189,10 +190,19 @@ func (m *Metrics) RecordAppointmentCreated() { m.apptCreated.Inc() }
 // RecordAppointmentAttended counts one appointment that transitioned to attended.
 func (m *Metrics) RecordAppointmentAttended() { m.apptFinalized.WithLabelValues(outcomeAttended).Inc() }
 
-// RecordAppointmentsCancelled counts n cancelled appointments, whether they were
-// cancelled one at a time or in bulk because their slot was cancelled.
+// RecordAppointmentsCancelled counts n appointments cancelled at the patient's
+// request. Clinic-initiated cancellations are counted separately by
+// RecordAppointmentsCancelledByClinic, so the two are comparable on a dashboard
+// rather than summed into one indistinguishable series.
 func (m *Metrics) RecordAppointmentsCancelled(n int64) {
 	m.apptFinalized.WithLabelValues(outcomeCancelled).Add(float64(n))
+}
+
+// RecordAppointmentsCancelledByClinic counts n appointments the clinic called
+// off by cancelling their slot, whether through the cancel handler or the
+// reconciliation sweep.
+func (m *Metrics) RecordAppointmentsCancelledByClinic(n int64) {
+	m.apptFinalized.WithLabelValues(outcomeCancelledByClinic).Add(float64(n))
 }
 
 // RecordAppointmentAbsent counts one appointment marked absent inside the 24h window.

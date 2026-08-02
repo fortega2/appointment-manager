@@ -120,7 +120,10 @@ func TestCreateEndpointRejectsWhenPrescriptionExhausted(t *testing.T) {
 }
 
 // The session balance view counts CONFIRMED (1), ABSENT (3) and ATTENDED (4)
-// appointments as consumed, while CANCELLED (2) frees the session.
+// appointments as consumed, so both cancellation statuses free the session.
+// This holds because the view lists the statuses that consume rather than the
+// ones that do not: a patient must never be charged a session for an
+// appointment the clinic itself called off.
 func TestPatientSessionBalanceViewExcludesCancelledAppointments(t *testing.T) {
 	testcontainers.SkipIfProviderIsNotHealthy(t)
 	ctx := context.Background()
@@ -133,6 +136,7 @@ func TestPatientSessionBalanceViewExcludesCancelledAppointments(t *testing.T) {
 	confirmedSlotID := uuid.Must(uuid.NewV7())
 	cancelledSlotID := uuid.Must(uuid.NewV7())
 	absentSlotID := uuid.Must(uuid.NewV7())
+	clinicCancelledSlotID := uuid.Must(uuid.NewV7())
 
 	insertProfessional(ctx, t, pool, professionalID)
 	insertAssistant(ctx, t, pool, assistantID)
@@ -141,12 +145,15 @@ func TestPatientSessionBalanceViewExcludesCancelledAppointments(t *testing.T) {
 	insertSlot(ctx, t, pool, confirmedSlotID, professionalID, "2026-03-04", "09:00:00+00", "09:30:00+00", 2, false)
 	insertSlot(ctx, t, pool, cancelledSlotID, professionalID, "2026-03-04", "10:00:00+00", "10:30:00+00", 2, false)
 	insertSlot(ctx, t, pool, absentSlotID, professionalID, "2026-03-04", "11:00:00+00", "11:30:00+00", 2, false)
+	insertSlot(ctx, t, pool, clinicCancelledSlotID, professionalID, "2026-03-04", "12:00:00+00", "12:30:00+00", 2, true)
 
 	insertAppointment(ctx, t, pool, uuid.Must(uuid.NewV7()), confirmedSlotID, patientID, professionalID, assistantID, statusConfirmedValue, nil)
 	insertAppointment(ctx, t, pool, uuid.Must(uuid.NewV7()), cancelledSlotID, patientID, professionalID, assistantID, statusCancelledValue, nil)
 	insertAppointment(ctx, t, pool, uuid.Must(uuid.NewV7()), absentSlotID, patientID, professionalID, assistantID, statusAbsentValue, nil)
+	insertAppointment(ctx, t, pool, uuid.Must(uuid.NewV7()), clinicCancelledSlotID, patientID, professionalID, assistantID, statusCancelledByClinicValue, nil)
 
-	// total 3 - consumed 2 (confirmed + absent) = 1 remaining; cancelled excluded.
+	// total 3 - consumed 2 (confirmed + absent) = 1 remaining; neither
+	// cancellation status is charged.
 	assert.Equal(t, 1, fetchRemainingSessions(ctx, t, pool, patientID))
 }
 

@@ -260,10 +260,9 @@ func (h *Handler) cancelUIHandler() http.HandlerFunc {
 
 		// Only infrastructure errors reach this point: the update underneath is a
 		// bulk one, so cancelling zero appointments is an ordinary result. The
-		// slot is already blocked here, leaving the pair inconsistent until the
-		// reconciliation sweep runs. That sweep exists as
-		// appointment.PostgresRepository.CancelOnBlockedSlots but is not yet
-		// scheduled, so for now the inconsistency persists until a retry.
+		// slot is already blocked here, leaving the pair inconsistent, and the
+		// slot can no longer be cancelled again so a retry cannot repair it.
+		// The reconciliation sweep converges that state on its next tick.
 		if err := h.cancelAppointments(ctx, id); err != nil {
 			h.logger.ErrorContext(ctx, "failed to cancel appointments for slot", slog.Any("error", err), slog.String("slot_id", idStr))
 			h.createSnackbarError(ctx, w, http.StatusInternalServerError, "Failed to cancel associated appointments", "cancelAppointments")

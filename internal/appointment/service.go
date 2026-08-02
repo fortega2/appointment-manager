@@ -85,6 +85,7 @@ type Metrics interface {
 	RecordAppointmentCreated()
 	RecordAppointmentAttended()
 	RecordAppointmentsCancelled(n int64)
+	RecordAppointmentsCancelledByClinic(n int64)
 	RecordAppointmentAbsent()
 	RecordAppointmentsExpired(n int64)
 }
@@ -198,7 +199,11 @@ func (s *Service) Cancel(ctx context.Context, appointmentID uuid.UUID) (err erro
 		return err
 	}
 
-	if window.Status == StatusCancelled {
+	// Already cancelled by either party: the caller's intent is satisfied, so
+	// this stays idempotent rather than rejecting. Testing IsCancelled instead
+	// of StatusCancelled alone is what keeps a clinic-cancelled appointment from
+	// falling through to the rejection below.
+	if window.Status.IsCancelled() {
 		return nil
 	}
 
@@ -239,7 +244,7 @@ func (s *Service) CancelBySlot(ctx context.Context, slotID uuid.UUID) (err error
 	}
 
 	if cancelled > 0 {
-		s.metrics.RecordAppointmentsCancelled(cancelled)
+		s.metrics.RecordAppointmentsCancelledByClinic(cancelled)
 	}
 
 	return nil
@@ -262,7 +267,7 @@ func (s *Service) CancelOnBlockedSlots(ctx context.Context) (reconciled int64, e
 	}
 
 	if reconciled > 0 {
-		s.metrics.RecordAppointmentsCancelled(reconciled)
+		s.metrics.RecordAppointmentsCancelledByClinic(reconciled)
 	}
 
 	return reconciled, nil
@@ -390,6 +395,10 @@ func (noopMetrics) RecordAppointmentAttended() {
 
 func (noopMetrics) RecordAppointmentsCancelled(int64) {
 	// RecordAppointmentsCancelled is intentionally empty: no metrics recorder was configured.
+}
+
+func (noopMetrics) RecordAppointmentsCancelledByClinic(int64) {
+	// RecordAppointmentsCancelledByClinic is intentionally empty: no metrics recorder was configured.
 }
 
 func (noopMetrics) RecordAppointmentAbsent() {

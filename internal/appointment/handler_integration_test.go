@@ -39,10 +39,11 @@ const (
 	problemContentType   = "application/problem+json"
 	writeFailureMessage  = "write failed"
 
-	statusConfirmedValue int16 = 1
-	statusCancelledValue int16 = 2
-	statusAbsentValue    int16 = 3
-	statusAttendedValue  int16 = 4
+	statusConfirmedValue         int16 = 1
+	statusCancelledValue         int16 = 2
+	statusAbsentValue            int16 = 3
+	statusAttendedValue          int16 = 4
+	statusCancelledByClinicValue int16 = 5
 
 	// Generous session count so seeded patients can always book in tests that
 	// are not specifically exercising prescription-session limits.
