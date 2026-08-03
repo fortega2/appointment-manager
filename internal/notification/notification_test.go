@@ -3,6 +3,7 @@ package notification_test
 import (
 	"bytes"
 	"context"
+	"errors"
 	"log/slog"
 	"strings"
 	"sync"
@@ -20,13 +21,67 @@ const (
 	drainInterval = time.Millisecond
 	bufferSize    = 8
 
-	sentMessage    = "slot cancellation notification"
-	droppedMessage = "notification queue is full, dropping notification"
-	stoppedMessage = "notification worker stopped"
+	sentMessage           = "slot cancellation notification sent"
+	droppedMessage        = "notification queue is full, dropping notification"
+	stoppedMessage        = "notification worker stopped"
+	noRecipientsMessage   = "cancelled slot had no recipients to notify"
+	lookupFailedMessage   = "failed to resolve slot cancellation recipients"
+	recipientDebugMessage = "slot cancellation recipient"
 
 	eventuallyTimeout = time.Second
 	settleDelay       = 50 * time.Millisecond
+
+	lookupBoomError = "boom"
 )
+
+// Contact details that must never reach the log backend, so the assertions can
+// prove they did not.
+const (
+	recipientName  = "Bruno Ferreyra"
+	recipientEmail = "bruno.ferreyra@example.com"
+	recipientPhone = "+54 11 5555 0100"
+)
+
+func oneRecipient(id string) notification.SlotCancellation {
+	email := recipientEmail
+
+	return notification.SlotCancellation{
+		StartTime:            time.Date(2026, 6, 5, 10, 0, 0, 0, time.UTC),
+		EndTime:              time.Date(2026, 6, 5, 10, 30, 0, 0, time.UTC),
+		ProfessionalFullName: "Dr. Ruiz",
+		Recipients: []notification.Recipient{
+			{ID: id, FullName: recipientName, Email: &email, Phone: recipientPhone},
+		},
+	}
+}
+
+// noRecipients is the lookup used by tests that do not care who was affected:
+// an empty result is a valid outcome, so it stands in as the quiet default.
+func noRecipients(_ context.Context, _ uuid.UUID) (notification.SlotCancellation, error) {
+	return notification.SlotCancellation{}, nil
+}
+
+// withRecipient resolves every slot to a single affected patient.
+func withRecipient(_ context.Context, _ uuid.UUID) (notification.SlotCancellation, error) {
+	return oneRecipient(uuid.Must(uuid.NewV7()).String()), nil
+}
+
+// failingLookup stands in for an unreachable database.
+func failingLookup(_ context.Context, _ uuid.UUID) (notification.SlotCancellation, error) {
+	return notification.SlotCancellation{}, errors.New(lookupBoomError)
+}
+
+// countMessages counts records whose msg is exactly this one. Plain substring
+// matching would be ambiguous here: "failed to resolve slot cancellation
+// recipients" contains "slot cancellation recipient", so asserting one message
+// is absent would silently pass on the other.
+func countMessages(logs, msg string) int {
+	return strings.Count(logs, `"msg":"`+msg+`"`)
+}
+
+func hasMessage(logs, msg string) bool {
+	return countMessages(logs, msg) > 0
+}
 
 // syncBuffer is a goroutine-safe buffer so the drain goroutine can write logs
 // while the test reads them without triggering the race detector.
@@ -49,13 +104,21 @@ func (b *syncBuffer) String() string {
 	return b.buf.String()
 }
 
-func newRecordingService(t *testing.T, interval time.Duration, size int) (*notification.Service, *syncBuffer) {
+// newRecordingService builds a service whose logs land in a buffer the test can
+// read. The lookup is passed as a plain func literal, which is all an
+// unexported func-typed parameter needs from another package.
+func newRecordingService(
+	t *testing.T,
+	interval time.Duration,
+	size int,
+	lookup func(context.Context, uuid.UUID) (notification.SlotCancellation, error),
+) (*notification.Service, *syncBuffer) {
 	t.Helper()
 
 	buf := &syncBuffer{}
 	logger := slog.New(slog.NewJSONHandler(buf, &slog.HandlerOptions{Level: slog.LevelDebug}))
 
-	svc, err := notification.NewService(logger, interval, size)
+	svc, err := notification.NewService(logger, interval, size, lookup)
 	require.NoError(t, err)
 
 	return svc, buf
@@ -91,12 +154,14 @@ func TestNewServiceValidation(t *testing.T) {
 	tests := []struct {
 		name     string
 		logger   *slog.Logger
+		lookup   func(context.Context, uuid.UUID) (notification.SlotCancellation, error)
 		interval time.Duration
 		size     int
 		wantErrs []error
 	}{
 		{
 			name:     "nil logger",
+			lookup:   noRecipients,
 			interval: drainInterval,
 			size:     bufferSize,
 			wantErrs: []error{notification.ErrNilLogger},
@@ -104,6 +169,7 @@ func TestNewServiceValidation(t *testing.T) {
 		{
 			name:     "zero interval",
 			logger:   logger,
+			lookup:   noRecipients,
 			interval: 0,
 			size:     bufferSize,
 			wantErrs: []error{notification.ErrInvalidTickerInterval},
@@ -111,6 +177,7 @@ func TestNewServiceValidation(t *testing.T) {
 		{
 			name:     "negative interval",
 			logger:   logger,
+			lookup:   noRecipients,
 			interval: -drainInterval,
 			size:     bufferSize,
 			wantErrs: []error{notification.ErrInvalidTickerInterval},
@@ -118,6 +185,7 @@ func TestNewServiceValidation(t *testing.T) {
 		{
 			name:     "zero buffer size",
 			logger:   logger,
+			lookup:   noRecipients,
 			interval: drainInterval,
 			size:     0,
 			wantErrs: []error{notification.ErrInvalidBufferSize},
@@ -125,9 +193,17 @@ func TestNewServiceValidation(t *testing.T) {
 		{
 			name:     "negative buffer size",
 			logger:   logger,
+			lookup:   noRecipients,
 			interval: drainInterval,
 			size:     -1,
 			wantErrs: []error{notification.ErrInvalidBufferSize},
+		},
+		{
+			name:     "nil recipient lookup",
+			logger:   logger,
+			interval: drainInterval,
+			size:     bufferSize,
+			wantErrs: []error{notification.ErrNilSlotCancellationFunc},
 		},
 		{
 			// Every problem is reported at once so a misconfigured deployment
@@ -139,6 +215,7 @@ func TestNewServiceValidation(t *testing.T) {
 				notification.ErrNilLogger,
 				notification.ErrInvalidTickerInterval,
 				notification.ErrInvalidBufferSize,
+				notification.ErrNilSlotCancellationFunc,
 			},
 		},
 	}
@@ -147,7 +224,7 @@ func TestNewServiceValidation(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			svc, err := notification.NewService(tt.logger, tt.interval, tt.size)
+			svc, err := notification.NewService(tt.logger, tt.interval, tt.size, tt.lookup)
 
 			require.Error(t, err)
 			assert.Nil(t, svc)
@@ -161,7 +238,7 @@ func TestNewServiceValidation(t *testing.T) {
 func TestNewServiceSuccess(t *testing.T) {
 	t.Parallel()
 
-	svc, err := notification.NewService(slog.New(slog.DiscardHandler), drainInterval, bufferSize)
+	svc, err := notification.NewService(slog.New(slog.DiscardHandler), drainInterval, bufferSize, noRecipients)
 
 	require.NoError(t, err)
 	assert.NotNil(t, svc)
@@ -170,7 +247,7 @@ func TestNewServiceSuccess(t *testing.T) {
 func TestServiceDrainsQueuedNotifications(t *testing.T) {
 	t.Parallel()
 
-	svc, buf := newRecordingService(t, drainInterval, bufferSize)
+	svc, buf := newRecordingService(t, drainInterval, bufferSize, withRecipient)
 	stop := runService(t, svc)
 
 	slotIDs := []uuid.UUID{
@@ -183,7 +260,7 @@ func TestServiceDrainsQueuedNotifications(t *testing.T) {
 	}
 
 	require.Eventually(t, func() bool {
-		return strings.Count(buf.String(), sentMessage) == len(slotIDs)
+		return countMessages(buf.String(), sentMessage) == len(slotIDs)
 	}, eventuallyTimeout, drainInterval, "every queued notification should be sent")
 
 	stop()
@@ -194,7 +271,7 @@ func TestServiceDrainsQueuedNotifications(t *testing.T) {
 	for _, slotID := range slotIDs {
 		assert.Contains(t, logs, slotID.String())
 	}
-	assert.NotContains(t, logs, droppedMessage)
+	assert.False(t, hasMessage(logs, droppedMessage))
 }
 
 // A saturated queue must cost the caller nothing: the notification is dropped
@@ -203,7 +280,7 @@ func TestNotifySlotCancelledDropsWhenQueueIsFull(t *testing.T) {
 	t.Parallel()
 
 	// No drain loop is started, so nothing ever empties the queue.
-	svc, buf := newRecordingService(t, time.Hour, 1)
+	svc, buf := newRecordingService(t, time.Hour, 1, noRecipients)
 
 	done := make(chan struct{})
 	go func() {
@@ -220,9 +297,9 @@ func TestNotifySlotCancelledDropsWhenQueueIsFull(t *testing.T) {
 	}
 
 	logs := buf.String()
-	assert.Contains(t, logs, droppedMessage)
+	assert.True(t, hasMessage(logs, droppedMessage))
 	// One event fits the buffer; the remaining nine have nowhere to go.
-	assert.Equal(t, 9, strings.Count(logs, droppedMessage))
+	assert.Equal(t, 9, countMessages(logs, droppedMessage))
 }
 
 // Notifications raised just before shutdown are still delivered: the drain loop
@@ -233,7 +310,7 @@ func TestServiceFlushesQueueOnShutdown(t *testing.T) {
 
 	// An interval far longer than the test guarantees no ordinary tick fires,
 	// so anything delivered here came from the shutdown flush.
-	svc, buf := newRecordingService(t, time.Hour, bufferSize)
+	svc, buf := newRecordingService(t, time.Hour, bufferSize, withRecipient)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan struct{})
@@ -254,20 +331,20 @@ func TestServiceFlushesQueueOnShutdown(t *testing.T) {
 	}
 
 	logs := buf.String()
-	assert.Contains(t, logs, sentMessage, "a notification queued before shutdown must still be sent")
+	assert.True(t, hasMessage(logs, sentMessage), "a notification queued before shutdown must still be sent")
 	assert.Contains(t, logs, slotID.String())
-	assert.Contains(t, logs, stoppedMessage)
+	assert.True(t, hasMessage(logs, stoppedMessage))
 }
 
 func TestServiceRunStopsOnContextCancellation(t *testing.T) {
 	t.Parallel()
 
-	svc, buf := newRecordingService(t, drainInterval, bufferSize)
+	svc, buf := newRecordingService(t, drainInterval, bufferSize, noRecipients)
 	stop := runService(t, svc)
 
 	stop()
 
-	assert.Contains(t, buf.String(), stoppedMessage)
+	assert.True(t, hasMessage(buf.String(), stoppedMessage))
 
 	// Producers outlive the drain loop, so enqueuing after it stopped must stay
 	// safe -- the channel is never closed.
@@ -281,7 +358,7 @@ func TestServiceRunStopsOnContextCancellation(t *testing.T) {
 func TestNotifySlotCancelledIgnoresCallerContextCancellation(t *testing.T) {
 	t.Parallel()
 
-	svc, buf := newRecordingService(t, drainInterval, bufferSize)
+	svc, buf := newRecordingService(t, drainInterval, bufferSize, noRecipients)
 	stop := runService(t, svc)
 	defer stop()
 
@@ -299,13 +376,125 @@ func TestNotifySlotCancelledIgnoresCallerContextCancellation(t *testing.T) {
 func TestServiceDrainIsQuietWhenNothingIsQueued(t *testing.T) {
 	t.Parallel()
 
-	svc, buf := newRecordingService(t, drainInterval, bufferSize)
+	svc, buf := newRecordingService(t, drainInterval, bufferSize, noRecipients)
 	stop := runService(t, svc)
 
 	// Let several ticks pass with an empty queue.
 	time.Sleep(settleDelay)
 	stop()
 
-	assert.NotContains(t, buf.String(), sentMessage)
-	assert.NotContains(t, buf.String(), droppedMessage)
+	assert.False(t, hasMessage(buf.String(), sentMessage))
+	assert.False(t, hasMessage(buf.String(), droppedMessage))
+}
+
+// Contact details are needed to deliver a notification but must never be
+// written to the log backend, which has a different audience and retention from
+// the database. Recipients are identified by opaque id only.
+func TestSendSlotCancelledKeepsContactDetailsOutOfLogs(t *testing.T) {
+	t.Parallel()
+
+	patientID := uuid.Must(uuid.NewV7())
+	lookup := func(_ context.Context, _ uuid.UUID) (notification.SlotCancellation, error) {
+		return oneRecipient(patientID.String()), nil
+	}
+
+	svc, buf := newRecordingService(t, drainInterval, bufferSize, lookup)
+	stop := runService(t, svc)
+
+	slotID := uuid.Must(uuid.NewV7())
+	svc.NotifySlotCancelled(context.Background(), slotID)
+
+	require.Eventually(t, func() bool {
+		return hasMessage(buf.String(), sentMessage)
+	}, eventuallyTimeout, drainInterval)
+
+	stop()
+
+	logs := buf.String()
+
+	// The recipient is identified, and the delivery is recorded.
+	assert.True(t, hasMessage(logs, recipientDebugMessage))
+	assert.Contains(t, logs, patientID.String())
+	assert.Contains(t, logs, `"recipients":1`)
+
+	// None of the personal data is.
+	assert.NotContains(t, logs, recipientName)
+	assert.NotContains(t, logs, recipientEmail)
+	assert.NotContains(t, logs, recipientPhone)
+}
+
+// A slot nobody booked is an ordinary outcome, not a failure: it is recorded
+// and nothing is delivered.
+func TestSendSlotCancelledWithoutRecipientsIsNotAnError(t *testing.T) {
+	t.Parallel()
+
+	svc, buf := newRecordingService(t, drainInterval, bufferSize, noRecipients)
+	stop := runService(t, svc)
+
+	svc.NotifySlotCancelled(context.Background(), uuid.Must(uuid.NewV7()))
+
+	require.Eventually(t, func() bool {
+		return hasMessage(buf.String(), noRecipientsMessage)
+	}, eventuallyTimeout, drainInterval)
+
+	stop()
+
+	logs := buf.String()
+	assert.False(t, hasMessage(logs, lookupFailedMessage), "an empty result is not a failure")
+	assert.False(t, hasMessage(logs, sentMessage), "nothing was delivered")
+	assert.False(t, hasMessage(logs, recipientDebugMessage))
+}
+
+// A failed lookup is logged and abandoned: nothing is delivered, and the drain
+// loop carries on with the rest of the queue.
+func TestSendSlotCancelledStopsWhenLookupFails(t *testing.T) {
+	t.Parallel()
+
+	svc, buf := newRecordingService(t, drainInterval, bufferSize, failingLookup)
+	stop := runService(t, svc)
+
+	svc.NotifySlotCancelled(context.Background(), uuid.Must(uuid.NewV7()))
+
+	require.Eventually(t, func() bool {
+		return hasMessage(buf.String(), lookupFailedMessage)
+	}, eventuallyTimeout, drainInterval)
+
+	stop()
+
+	logs := buf.String()
+	assert.Contains(t, logs, lookupBoomError)
+	assert.False(t, hasMessage(logs, sentMessage), "a failed lookup must not report a delivery")
+	assert.False(t, hasMessage(logs, recipientDebugMessage))
+}
+
+// One failing event must not cost the events queued behind it.
+func TestServiceKeepsDrainingAfterALookupFailure(t *testing.T) {
+	t.Parallel()
+
+	failing := uuid.Must(uuid.NewV7())
+	lookup := func(_ context.Context, slotID uuid.UUID) (notification.SlotCancellation, error) {
+		if slotID == failing {
+			return notification.SlotCancellation{}, errors.New(lookupBoomError)
+		}
+
+		return oneRecipient(uuid.Must(uuid.NewV7()).String()), nil
+	}
+
+	svc, buf := newRecordingService(t, drainInterval, bufferSize, lookup)
+	stop := runService(t, svc)
+
+	healthy := uuid.Must(uuid.NewV7())
+	svc.NotifySlotCancelled(context.Background(), failing)
+	svc.NotifySlotCancelled(context.Background(), healthy)
+
+	require.Eventually(t, func() bool {
+		logs := buf.String()
+		return hasMessage(logs, lookupFailedMessage) && hasMessage(logs, sentMessage)
+	}, eventuallyTimeout, drainInterval)
+
+	stop()
+
+	logs := buf.String()
+	assert.Contains(t, logs, failing.String())
+	assert.Contains(t, logs, healthy.String())
 }

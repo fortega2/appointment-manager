@@ -28,26 +28,57 @@ const (
 	sendTimeout = 5 * time.Second
 )
 
+// Recipient is one person to tell about a cancelled slot.
+type Recipient struct {
+	FullName string
+	Phone    string
+	ID       string
+	Email    *string
+}
+
+// SlotCancellation is everything needed to tell people a slot is off. The slot
+// and professional details are held once rather than repeated on every
+// Recipient, because a single cancellation is what the whole group shares.
+type SlotCancellation struct {
+	StartTime            time.Time
+	EndTime              time.Time
+	Recipients           []Recipient
+	ProfessionalFullName string
+}
+
+// slotCancellationFunc resolves who to tell about a cancelled slot, and what to
+// tell them.
+// No recipients is an ordinary result, not an error: cancelling a slot nobody
+// booked is normal, and the caller checks the length.
+type slotCancellationFunc func(ctx context.Context, slotID uuid.UUID) (SlotCancellation, error)
+
 // Service owns the notification queue and the goroutine that drains it.
 type Service struct {
-	logger         *slog.Logger
-	queue          chan Event
-	tickerInterval time.Duration
+	logger                  *slog.Logger
+	queue                   chan Event
+	resolveSlotCancellation slotCancellationFunc
+	tickerInterval          time.Duration
 }
 
 // NewService builds a notification service that drains its queue every
 // tickerInterval. bufferSize caps how many notifications may wait at once;
 // beyond that, new ones are dropped rather than blocking their producer.
-func NewService(logger *slog.Logger, tickerInterval time.Duration, bufferSize int) (*Service, error) {
-	errs := validate(logger, tickerInterval, bufferSize)
+func NewService(
+	logger *slog.Logger,
+	tickerInterval time.Duration,
+	bufferSize int,
+	resolveSlotCancellation slotCancellationFunc,
+) (*Service, error) {
+	errs := validate(logger, tickerInterval, bufferSize, resolveSlotCancellation)
 	if len(errs) > 0 {
 		return nil, errors.Join(errs...)
 	}
 
 	return &Service{
-		logger:         logger,
-		queue:          make(chan Event, bufferSize),
-		tickerInterval: tickerInterval,
+		logger:                  logger,
+		queue:                   make(chan Event, bufferSize),
+		resolveSlotCancellation: resolveSlotCancellation,
+		tickerInterval:          tickerInterval,
 	}, nil
 }
 
@@ -133,20 +164,56 @@ func (s *Service) send(ctx context.Context, event Event) {
 	}
 }
 
-// sendSlotCancelled is the transport, and the only part of the pipeline that is
-// still a placeholder: it logs one line for the slot rather than resolving the
-// affected patients and mailing them. Replacing this body is what makes
-// delivery real; nothing above it changes.
+// sendSlotCancelled resolves who was affected by a cancelled slot and delivers
+// to each of them. The delivery itself is still a placeholder -- a log line per
+// recipient rather than an email -- and is the only part of the pipeline that
+// is: replacing this function's inner loop is what makes delivery real.
+//
+// Nothing here logs a name, address or phone number. These records reach the
+// log backend, which has a different audience and retention from the database,
+// so recipients are identified by opaque id only.
 func (s *Service) sendSlotCancelled(ctx context.Context, slotID uuid.UUID) {
-	// TODO: Implement the actual search for affected patients and send them a notification. This is a placeholder.
-	s.logger.InfoContext(ctx, "slot cancellation notification",
+	cancellation, err := s.resolveSlotCancellation(ctx, slotID)
+	if err != nil {
+		s.logger.ErrorContext(ctx, "failed to resolve slot cancellation recipients",
+			slog.String("slot_id", slotID.String()),
+			slog.Any("error", err),
+		)
+		return
+	}
+
+	if len(cancellation.Recipients) == 0 {
+		s.logger.InfoContext(ctx, "cancelled slot had no recipients to notify",
+			slog.String("slot_id", slotID.String()),
+		)
+		return
+	}
+
+	for _, recipient := range cancellation.Recipients {
+		s.logger.DebugContext(ctx, "slot cancellation recipient",
+			slog.String("slot_id", slotID.String()),
+			slog.String("patient_id", recipient.ID),
+			slog.Bool("has_email", recipient.Email != nil),
+		)
+	}
+
+	s.logger.InfoContext(ctx, "slot cancellation notification sent",
 		slog.String("slot_id", slotID.String()),
+		slog.String("professional", cancellation.ProfessionalFullName),
+		slog.Int("recipients", len(cancellation.Recipients)),
+		slog.Time("slot_start", cancellation.StartTime),
+		slog.Time("slot_end", cancellation.EndTime),
 	)
 }
 
 // validate reports every problem with the constructor arguments at once, rather
 // than the first, so a misconfigured deployment surfaces all of them in one go.
-func validate(logger *slog.Logger, tickerInterval time.Duration, bufferSize int) []error {
+func validate(
+	logger *slog.Logger,
+	tickerInterval time.Duration,
+	bufferSize int,
+	resolveSlotCancellation slotCancellationFunc,
+) []error {
 	errs := make([]error, 0)
 
 	if logger == nil {
@@ -159,6 +226,10 @@ func validate(logger *slog.Logger, tickerInterval time.Duration, bufferSize int)
 
 	if bufferSize <= 0 {
 		errs = append(errs, ErrInvalidBufferSize)
+	}
+
+	if resolveSlotCancellation == nil {
+		errs = append(errs, ErrNilSlotCancellationFunc)
 	}
 
 	return errs
