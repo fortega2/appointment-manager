@@ -108,12 +108,16 @@ over the `.env` file.
 | --- | --- | --- |
 | `DATABASE_URL` | yes | Postgres connection string. |
 | `ENV` | no | `development` (default) enables dev-friendly settings. |
+| `LOG_LEVEL` | no | `debug` (default), `info`, `warn` or `error`, case-insensitive. |
 | `STORAGE_ENDPOINT` | no | S3-compatible endpoint, e.g. `s3.example.com`. When unset, object storage is disabled. |
 | `STORAGE_ACCESS_KEY` | with storage | Access key for the object store. |
 | `STORAGE_SECRET_KEY` | with storage | Secret key for the object store. |
 | `STORAGE_BUCKET` | with storage | Bucket where prescription documents are stored (created if missing). |
 | `STORAGE_REGION` | no | Optional region for the object store. |
 | `STORAGE_USE_SSL` | no | `true` (default) uses HTTPS; set `false` for a plain-HTTP store. |
+| `WORKER_TICKER_INTERVAL` | no | How often the background sweeps run — expiring overdue appointments to absent, and cancelling appointments stranded on an already-blocked slot (default `30m`). |
+| `NOTIFICATION_TICKER_INTERVAL` | no | How often queued notifications are drained and delivered (default `1m`). This is also the window a crash can lose, since the queue is in memory. |
+| `NOTIFICATION_BUFFER_SIZE` | no | How many notifications may wait at once (default `100`). Beyond that, new ones are dropped with a warning rather than blocking the request that raised them. |
 | `METRICS_ADDR` | no | Listen address for the Prometheus metrics server (default `:9090`). Served on a separate listener from the app. |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | no | OTLP/HTTP collector base URL for tracing (e.g. `http://tempo:4318`). When unset, tracing is disabled. |
 | `OTEL_TRACES_SAMPLE_RATIO` | no | Head-based trace sampling probability in `[0,1]` (default `1.0`). Child spans follow their parent's decision. |
