@@ -70,9 +70,11 @@ func resolveSlotCancellation(query *appointment.Query) func(context.Context, uui
 // flush, so callers must defer it while the pool is still open -- the flush
 // queries the database for recipients.
 //
-// Unlike startWorker this takes no logger: the service logs its own start and
-// stop, and duplicating that here would double every line.
-func startNotificationWorker(ctx context.Context, logger *slog.Logger, service *notification.Service) func() {
+// ctx must not be the shutdown-signal context: cancelling it is what ends the
+// drain, and the drain has to outlive the HTTP server's graceful shutdown so
+// requests still finishing can queue a notification that someone will send.
+// Only the returned stop func should end it.
+func startNotificationWorker(ctx context.Context, service *notification.Service) func() {
 	workerCtx, cancelWorker := context.WithCancel(ctx)
 	workerDone := make(chan struct{})
 	go func() {
@@ -83,6 +85,5 @@ func startNotificationWorker(ctx context.Context, logger *slog.Logger, service *
 	return func() {
 		cancelWorker()
 		<-workerDone
-		logger.InfoContext(ctx, "notification worker stopped")
 	}
 }

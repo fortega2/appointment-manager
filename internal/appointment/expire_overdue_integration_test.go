@@ -81,6 +81,50 @@ func TestExpireOverdueMarksPastConfirmedAppointmentsAbsent(t *testing.T) {
 	assert.Equal(t, int64(0), secondCount)
 }
 
+// An appointment stranded on a blocked slot belongs to CancelOnBlockedSlots,
+// not to this sweep. Both run on the same interval, so whichever claimed the row
+// first would decide the outcome -- and they are not interchangeable: ABSENT
+// blames the patient and consumes their session, when it was the clinic that
+// withdrew the slot.
+func TestExpireOverdueLeavesAppointmentsOnBlockedSlots(t *testing.T) {
+	testcontainers.SkipIfProviderIsNotHealthy(t)
+	ctx := context.Background()
+
+	pool := newIntegrationPool(ctx, t)
+
+	professionalID := uuid.Must(uuid.NewV7())
+	assistantID := uuid.Must(uuid.NewV7())
+	patientID := uuid.Must(uuid.NewV7())
+
+	insertProfessional(ctx, t, pool, professionalID)
+	insertAssistant(ctx, t, pool, assistantID)
+	insertPatient(ctx, t, pool, patientID)
+
+	blockedSlotID := uuid.Must(uuid.NewV7())
+	insertSlot(ctx, t, pool, blockedSlotID, professionalID, pastSlotDate, "11:00:00+00", "11:30:00+00", 1, true)
+	strandedApptID := uuid.Must(uuid.NewV7())
+	insertAppointment(ctx, t, pool, strandedApptID, blockedSlotID, patientID, professionalID, assistantID, statusConfirmedValue, nil)
+
+	repo, err := appointment.NewPostgresRepository(pool)
+	require.NoError(t, err)
+
+	count, err := repo.ExpireOverdue(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, int64(0), count, "a blocked slot is the reconciliation sweep's business")
+
+	strandedStatus, _ := fetchAppointmentStatusAndNotes(ctx, t, pool, strandedApptID)
+	assert.Equal(t, statusConfirmedValue, strandedStatus)
+
+	// The reconciliation sweep then claims it, and blames the clinic rather than
+	// the patient.
+	reconciled, err := repo.CancelOnBlockedSlots(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, int64(1), reconciled)
+
+	reconciledStatus, _ := fetchAppointmentStatusAndNotes(ctx, t, pool, strandedApptID)
+	assert.Equal(t, statusCancelledByClinicValue, reconciledStatus)
+}
+
 func fetchAppointmentUpdatedAt(ctx context.Context, t *testing.T, pool *pgxpool.Pool, appointmentID uuid.UUID) *time.Time {
 	t.Helper()
 

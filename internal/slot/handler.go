@@ -90,16 +90,23 @@ func (h *Handler) showDashboardUIHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 
+		// Each failure returns: createSnackbarError has already written the status
+		// line and a body, so falling through to render the dashboard would append
+		// a second response to the first and call WriteHeader twice.
 		dto, err := h.query.List(ctx)
 		if err != nil {
 			h.logger.ErrorContext(ctx, "failed to list slots", slog.Any("error", err))
 			h.createSnackbarError(ctx, w, http.StatusInternalServerError, "Failed to load slots", "slot.Query.List")
+
+			return
 		}
 
 		professionals, err := h.pRepo.List(ctx)
 		if err != nil {
 			h.logger.ErrorContext(ctx, "failed to list professionals", slog.Any("error", err))
 			h.createSnackbarError(ctx, w, http.StatusInternalServerError, "Failed to load professionals", "professional.Query.List")
+
+			return
 		}
 
 		pDTO := make([]ProfessionalDTO, len(professionals))
@@ -111,9 +118,11 @@ func (h *Handler) showDashboardUIHandler() http.HandlerFunc {
 			}
 		}
 
+		// A render failure happens mid-body, once the 200 and part of the markup
+		// are already on the wire, so there is no status left to set and nothing
+		// useful to send. Logging is all this can do.
 		if err := Dashboard(dto, pDTO).Render(ctx, w); err != nil {
 			h.logger.ErrorContext(ctx, "failed to render dashboard", slog.Any("error", err))
-			h.createSnackbarError(ctx, w, http.StatusInternalServerError, "Failed to load dashboard", "Dashboard.Render")
 		}
 	}
 }

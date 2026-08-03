@@ -127,7 +127,14 @@ func run() error {
 	// Deferred before the sweeps so it stops after them, and after the pool so it
 	// stops before the pool closes: the shutdown flush still needs to query for
 	// recipients.
-	stopNotificationWorker := startNotificationWorker(ctx, logger, notificationService)
+	//
+	// It runs on a context detached from the shutdown signal on purpose. Sharing
+	// ctx would end the drain the moment SIGTERM arrives, while the HTTP server
+	// is still finishing in-flight requests -- a slot cancelled during those last
+	// seconds would queue a notification into a queue nobody drains any more, and
+	// it would be lost silently. Stopping it here instead, once server.Start has
+	// returned, is what makes the final flush actually final.
+	stopNotificationWorker := startNotificationWorker(context.WithoutCancel(ctx), notificationService)
 	defer stopNotificationWorker()
 
 	stopWorkers, err := startBackgroundWorkers(ctx, logger, deps)

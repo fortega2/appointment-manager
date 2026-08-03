@@ -163,6 +163,12 @@ const (
 		WHERE
 			id = $1
 	`
+	// Blocked slots are excluded so this sweep and CancelOnBlockedSlots cannot
+	// both claim the same row. They run on the same interval, so without this
+	// the winner would be arbitrary -- and the outcomes are not equivalent:
+	// ABSENT blames the patient and consumes their session, while the clinic is
+	// the one who withdrew the slot. Anything stranded on a blocked slot belongs
+	// to the reconciliation sweep, whatever its end time.
 	expireOverdueAppointmentsQuery = `
 		UPDATE
 			appointment AS a
@@ -175,6 +181,7 @@ const (
 			s.id = a.slot_id
 			AND a.status = $2
 			AND s.end_time < CURRENT_TIMESTAMP
+			AND s.blocked = FALSE
 	`
 	// The CONFIRMED predicate is written as the literal 1 rather than a
 	// placeholder so it provably implies idx_appointment_slot_confirmed's own
