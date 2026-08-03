@@ -92,11 +92,27 @@ func run() error {
 		return err
 	}
 
+	// Built before the handlers so the slot handler can bind NotifySlotCancelled,
+	// but not started until below: nothing may enqueue before the server is up.
+	notificationService, err := initializeNotificationService(logger, deps)
+	if err != nil {
+		logger.Error("failed to initialize notification service", slog.Any("error", err))
+		return err
+	}
+
 	env := strings.TrimSpace(os.Getenv(environmentEnv))
 	isDev := env == "" || strings.EqualFold(env, environmentDevelopment)
 
 	sessionStore := session.NewStore()
-	handler, err := initializeServerHandlers(logger, sessionStore, deps, storageClient, isDev, appMetrics)
+	handler, err := initializeServerHandlers(
+		logger,
+		sessionStore,
+		deps,
+		storageClient,
+		notificationService.NotifySlotCancelled,
+		isDev,
+		appMetrics,
+	)
 	if err != nil {
 		logger.Error("failed to initialize server handlers", slog.Any("error", err))
 		return err
@@ -107,6 +123,12 @@ func run() error {
 
 	stopMetricsServer := startMetricsServer(ctx, logger, appMetrics, parseMetricsAddr(os.Getenv(metricsAddrEnv)))
 	defer stopMetricsServer()
+
+	// Deferred before the sweeps so it stops after them, and after the pool so it
+	// stops before the pool closes: the shutdown flush still needs to query for
+	// recipients.
+	stopNotificationWorker := startNotificationWorker(ctx, logger, notificationService)
+	defer stopNotificationWorker()
 
 	stopWorkers, err := startBackgroundWorkers(ctx, logger, deps)
 	if err != nil {

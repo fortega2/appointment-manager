@@ -5,17 +5,19 @@ import (
 	"appointment-manager/internal/middleware"
 	"appointment-manager/internal/session"
 	"appointment-manager/internal/storage"
+	"context"
 	"fmt"
 	"log/slog"
 	"net/http"
 
+	"github.com/google/uuid"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
 
 // initializeServerHandlers builds every handler and wires it to a mux. Errors
 // are returned wrapped rather than logged here: run logs them once, so the
 // context of the failure is carried by the error chain itself.
-func initializeServerHandlers(logger *slog.Logger, sessionStore *session.Store, deps *dependencies, storageClient *storage.Client, isDev bool, m *metrics.Metrics) (http.Handler, error) {
+func initializeServerHandlers(logger *slog.Logger, sessionStore *session.Store, deps *dependencies, storageClient *storage.Client, sendNotification func(context.Context, uuid.UUID), isDev bool, m *metrics.Metrics) (http.Handler, error) {
 	authHandler, err := initializeAuthHandler(logger, sessionStore, deps, isDev)
 	if err != nil {
 		return nil, err
@@ -36,7 +38,7 @@ func initializeServerHandlers(logger *slog.Logger, sessionStore *session.Store, 
 	if err != nil {
 		return nil, err
 	}
-	slotHandler, err := initializeSlotHandler(logger, deps)
+	slotHandler, err := initializeSlotHandler(logger, deps, sendNotification)
 	if err != nil {
 		return nil, err
 	}

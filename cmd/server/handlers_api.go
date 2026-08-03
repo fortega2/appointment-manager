@@ -68,27 +68,28 @@ func initializePatientHandler(logger *slog.Logger, deps *dependencies) (*patient
 	return patientHandler, nil
 }
 
-func initializeSlotHandler(logger *slog.Logger, deps *dependencies) (*slot.Handler, error) {
+// initializeSlotHandler takes sendNotification as a plain func rather than the
+// notification service itself: the handler declares the shape it needs and this
+// package binds a method value to it, so nothing on the routing path has to know
+// which transport announces a cancellation.
+func initializeSlotHandler(
+	logger *slog.Logger,
+	deps *dependencies,
+	sendNotification func(context.Context, uuid.UUID),
+) (*slot.Handler, error) {
 	slotHandler, err := slot.NewHandler(
 		logger,
 		deps.slotRepo,
 		deps.slotQuery,
 		deps.professionalRepo,
 		deps.appointmentService.CancelBySlot,
-		noopSendNotification,
+		sendNotification,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create slot handler: %w", err)
 	}
 
 	return slotHandler, nil
-}
-
-// noopSendNotification is a placeholder notifier used until the notification
-// service exists. It satisfies the slot handler's non-nil dependency check
-// without pretending anything was delivered.
-func noopSendNotification(_ context.Context, _ uuid.UUID) {
-	// Intentionally empty: no notification transport is wired yet.
 }
 
 func initializeHealthHandler(logger *slog.Logger, deps *dependencies) (*health.Handler, error) {
