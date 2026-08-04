@@ -20,6 +20,22 @@ Guidance for coding agents working in `appointment-manager`.
 - Appointment status updates must be concurrency-safe (atomic update with expected current status, or equivalent locking).
 - Frontend assets (Tailwind CSS, htmx, Alpine.js) are self-hosted and pinned — no CDN `<script src="https://...">` tags in `.templ` files. Pinned versions: Tailwind CSS v4.3.2, htmx v2.0.10, Alpine.js v3.15.12. Regenerating/bumping these is covered by the `frontend-asset-update` skill.
 
+### Architecture Decision Records
+
+Design and performance decisions whose reasoning would not survive in the code live in
+`documents/decisions/` as numbered ADRs. `ls` that directory for the current set; each filename
+names the area it covers, and every ADR opens with a **Scope** line listing the packages and
+symbols it governs.
+
+- Read the relevant ADR before changing the code it covers. Several record a *load-bearing*
+  detail — a literal that must not become a placeholder, a struct that must stay pointer-free —
+  that no test would catch if broken.
+- Check the **Status** line before treating one as binding. `Accepted` describes the code as it
+  is; `Proposed` records reasoning for a decision that has *not* been made and that no code
+  implements yet — do not build against it without asking.
+- When a decision is made that a future reader would otherwise have to reverse-engineer, add the
+  next-numbered ADR in the same format rather than leaving it in a commit message.
+
 ## 1) Repository Snapshot
 
 - Language: Go (`go 1.26.5` in `go.mod`).
