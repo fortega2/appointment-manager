@@ -5,6 +5,8 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"maps"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -32,6 +34,13 @@ const (
 	settleDelay       = 50 * time.Millisecond
 
 	lookupBoomError = "boom"
+
+	kindSlotCancelled = "slot_cancelled"
+	kindUnknown       = "unknown"
+
+	outcomeSent         = "sent"
+	outcomeNoRecipients = "no_recipients"
+	outcomeLookupFailed = "lookup_failed"
 )
 
 // Contact details that must never reach the log backend, so the assertions can
@@ -104,9 +113,109 @@ func (b *syncBuffer) String() string {
 	return b.buf.String()
 }
 
+// processedKey mirrors the label pair on appt_notifications_processed_total, so
+// the spy records the same (kind, outcome) breakdown Prometheus would and a
+// test can assert the kind reached the recorder rather than only the outcome.
+type processedKey struct {
+	kind    string
+	outcome string
+}
+
+// metricsSpy records what the service instrumented. The drain writes to it from
+// its own goroutine while the test reads, so it is mutex-guarded for the same
+// reason syncBuffer is; without that, -race fails rather than the assertions.
+type metricsSpy struct {
+	mu               sync.Mutex
+	processed        map[processedKey]int
+	observed         []string
+	droppedQueueFull int
+	droppedUnknown   int
+}
+
+func newMetricsSpy() *metricsSpy {
+	return &metricsSpy{processed: make(map[processedKey]int)}
+}
+
+func (m *metricsSpy) RecordNotificationDroppedQueueFull() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	m.droppedQueueFull++
+}
+
+func (m *metricsSpy) RecordNotificationDroppedUnknownKind() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	m.droppedUnknown++
+}
+
+func (m *metricsSpy) RecordNotificationSent(kind string) {
+	m.recordProcessed(kind, outcomeSent)
+}
+
+func (m *metricsSpy) RecordNotificationNoRecipients(kind string) {
+	m.recordProcessed(kind, outcomeNoRecipients)
+}
+
+func (m *metricsSpy) RecordNotificationLookupFailed(kind string) {
+	m.recordProcessed(kind, outcomeLookupFailed)
+}
+
+func (m *metricsSpy) ObserveNotificationSend(_ context.Context, kind string, _ time.Duration) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	m.observed = append(m.observed, kind)
+}
+
+func (m *metricsSpy) recordProcessed(kind, outcome string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	m.processed[processedKey{kind: kind, outcome: outcome}]++
+}
+
+// snapshot copies every counter under one lock, so a reader cannot see a send
+// counted in one field but not yet in another.
+func (m *metricsSpy) snapshot() metricsSnapshot {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	return metricsSnapshot{
+		droppedQueueFull: m.droppedQueueFull,
+		droppedUnknown:   m.droppedUnknown,
+		processed:        maps.Clone(m.processed),
+		observed:         slices.Clone(m.observed),
+	}
+}
+
+type metricsSnapshot struct {
+	processed        map[processedKey]int
+	observed         []string
+	droppedQueueFull int
+	droppedUnknown   int
+}
+
+// totalProcessed sums every outcome, so a test can assert that one event
+// produced exactly one outcome rather than naming each one.
+func (s metricsSnapshot) totalProcessed() int {
+	total := 0
+	for _, count := range s.processed {
+		total += count
+	}
+
+	return total
+}
+
 // newRecordingService builds a service whose logs land in a buffer the test can
 // read. The lookup is passed as a plain func literal, which is all an
 // unexported func-typed parameter needs from another package.
+//
+// It passes no metrics recorder on purpose: every behavioural test in this file
+// therefore runs against the no-op implementation, which is what proves an
+// uninstrumented service still works rather than panicking on a nil recorder.
+// Tests that assert on instrumentation use newMeteredService instead.
 func newRecordingService(
 	t *testing.T,
 	interval time.Duration,
@@ -118,10 +227,26 @@ func newRecordingService(
 	buf := &syncBuffer{}
 	logger := slog.New(slog.NewJSONHandler(buf, &slog.HandlerOptions{Level: slog.LevelDebug}))
 
-	svc, err := notification.NewService(logger, interval, size, lookup)
+	svc, err := notification.NewService(logger, interval, size, lookup, nil)
 	require.NoError(t, err)
 
 	return svc, buf
+}
+
+// newMeteredService is newRecordingService with a recorder attached.
+func newMeteredService(
+	t *testing.T,
+	interval time.Duration,
+	size int,
+	lookup func(context.Context, uuid.UUID) (notification.SlotCancellation, error),
+) (*notification.Service, *metricsSpy) {
+	t.Helper()
+
+	spy := newMetricsSpy()
+	svc, err := notification.NewService(slog.New(slog.DiscardHandler), interval, size, lookup, spy)
+	require.NoError(t, err)
+
+	return svc, spy
 }
 
 // runService starts the drain loop and returns a stop func that cancels it and
@@ -224,7 +349,7 @@ func TestNewServiceValidation(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			svc, err := notification.NewService(tt.logger, tt.interval, tt.size, tt.lookup)
+			svc, err := notification.NewService(tt.logger, tt.interval, tt.size, tt.lookup, nil)
 
 			require.Error(t, err)
 			assert.Nil(t, svc)
@@ -238,10 +363,15 @@ func TestNewServiceValidation(t *testing.T) {
 func TestNewServiceSuccess(t *testing.T) {
 	t.Parallel()
 
-	svc, err := notification.NewService(slog.New(slog.DiscardHandler), drainInterval, bufferSize, noRecipients)
+	svc, err := notification.NewService(slog.New(slog.DiscardHandler), drainInterval, bufferSize, noRecipients, nil)
 
 	require.NoError(t, err)
 	assert.NotNil(t, svc)
+
+	// A nil recorder is a valid configuration, not a validation failure: the
+	// queue must run in a deployment that exports no metrics at all.
+	assert.Equal(t, bufferSize, svc.QueueCapacity())
+	assert.Equal(t, 0, svc.QueueDepth())
 }
 
 func TestServiceDrainsQueuedNotifications(t *testing.T) {
@@ -497,4 +627,117 @@ func TestServiceKeepsDrainingAfterALookupFailure(t *testing.T) {
 	logs := buf.String()
 	assert.Contains(t, logs, failing.String())
 	assert.Contains(t, logs, healthy.String())
+}
+
+// The kind reaches Prometheus as a label value, so an unrecognised kind must
+// collapse onto one series instead of opening a new one per bad value.
+func TestEventKindStringIsBoundedForUnknownKinds(t *testing.T) {
+	t.Parallel()
+
+	assert.Equal(t, kindSlotCancelled, notification.EventSlotCancelled.String())
+
+	for _, kind := range []notification.EventKind{0, -1, 99, 32767} {
+		assert.Equal(t, kindUnknown, kind.String(), "kind %d must not become its own label value", kind)
+	}
+}
+
+// The counter behind "is the buffer big enough?": a saturated queue must count
+// every event it turns away, not merely log the first.
+func TestServiceCountsQueueFullDrops(t *testing.T) {
+	t.Parallel()
+
+	// No drain loop is started, so nothing ever empties the queue.
+	svc, spy := newMeteredService(t, time.Hour, 1, noRecipients)
+
+	const attempts = 10
+	for range attempts {
+		svc.NotifySlotCancelled(context.Background(), uuid.Must(uuid.NewV7()))
+	}
+
+	got := spy.snapshot()
+	// One event fits the buffer; the remaining nine have nowhere to go.
+	assert.Equal(t, attempts-1, got.droppedQueueFull)
+	assert.Equal(t, 0, got.droppedUnknown)
+	assert.Empty(t, got.observed, "a dropped event is never sent, so it must not be timed")
+}
+
+func TestServiceRecordsSendOutcomes(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		lookup  func(context.Context, uuid.UUID) (notification.SlotCancellation, error)
+		name    string
+		outcome string
+	}{
+		{
+			name:    "delivered",
+			lookup:  withRecipient,
+			outcome: outcomeSent,
+		},
+		{
+			// Nobody had booked the slot. An ordinary result, and it must stay
+			// distinguishable from a delivery on a dashboard.
+			name:    "nobody to notify",
+			lookup:  noRecipients,
+			outcome: outcomeNoRecipients,
+		},
+		{
+			// The event is already off the queue and nothing retries it, so
+			// this notification is lost rather than late.
+			name:    "recipients could not be resolved",
+			lookup:  failingLookup,
+			outcome: outcomeLookupFailed,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			svc, spy := newMeteredService(t, drainInterval, bufferSize, tt.lookup)
+			stop := runService(t, svc)
+
+			svc.NotifySlotCancelled(context.Background(), uuid.Must(uuid.NewV7()))
+
+			want := processedKey{kind: kindSlotCancelled, outcome: tt.outcome}
+			require.Eventually(t, func() bool {
+				return spy.snapshot().processed[want] == 1
+			}, eventuallyTimeout, drainInterval)
+
+			stop()
+
+			// Exactly one outcome is recorded per event: a send counted twice,
+			// or under two outcomes, would make the breakdown add up to more
+			// than the traffic.
+			got := spy.snapshot()
+			assert.Equal(t, 1, got.totalProcessed())
+			assert.Equal(t, 0, got.droppedQueueFull)
+
+			// Every dequeued event is timed, including the failure: a send that
+			// errored or timed out is exactly what the histogram is for.
+			assert.Equal(t, []string{kindSlotCancelled}, got.observed)
+		})
+	}
+}
+
+func TestServiceObservesEverySendOnce(t *testing.T) {
+	t.Parallel()
+
+	svc, spy := newMeteredService(t, drainInterval, bufferSize, withRecipient)
+	stop := runService(t, svc)
+
+	const notifications = 3
+	for range notifications {
+		svc.NotifySlotCancelled(context.Background(), uuid.Must(uuid.NewV7()))
+	}
+
+	require.Eventually(t, func() bool {
+		return len(spy.snapshot().observed) == notifications
+	}, eventuallyTimeout, drainInterval)
+
+	stop()
+
+	got := spy.snapshot()
+	assert.Equal(t, notifications, got.processed[processedKey{kind: kindSlotCancelled, outcome: outcomeSent}])
+	assert.Len(t, got.observed, notifications)
 }

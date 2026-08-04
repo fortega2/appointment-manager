@@ -114,7 +114,7 @@ func run() error {
 
 	// Built before the handlers so the slot handler can bind NotifySlotCancelled,
 	// but not started until below: nothing may enqueue before the server is up.
-	notificationService, err := initializeNotificationService(logger, deps)
+	notificationService, err := initializeNotificationService(logger, deps, appMetrics)
 	if err != nil {
 		logger.Error("failed to initialize notification service", slog.Any("error", err))
 		return err

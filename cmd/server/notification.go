@@ -2,6 +2,7 @@ package main
 
 import (
 	"appointment-manager/internal/appointment"
+	"appointment-manager/internal/metrics"
 	"appointment-manager/internal/notification"
 	"context"
 	"fmt"
@@ -16,7 +17,11 @@ import (
 // the two happen at different points in start-up: the service must exist before
 // the handlers are built, so the slot handler can bind NotifySlotCancelled, but
 // its drain goroutine must not run until the process is otherwise ready.
-func initializeNotificationService(logger *slog.Logger, deps *dependencies) (*notification.Service, error) {
+func initializeNotificationService(
+	logger *slog.Logger,
+	deps *dependencies,
+	appMetrics *metrics.Metrics,
+) (*notification.Service, error) {
 	tickerInterval, bufferSize, err := parseNotificationConfig(
 		logger,
 		os.Getenv(notificationTickerIntervalEnv),
@@ -26,10 +31,24 @@ func initializeNotificationService(logger *slog.Logger, deps *dependencies) (*no
 		return nil, err
 	}
 
-	service, err := notification.NewService(logger, tickerInterval, bufferSize, resolveSlotCancellation(deps.appointmentQuery))
+	service, err := notification.NewService(
+		logger,
+		tickerInterval,
+		bufferSize,
+		resolveSlotCancellation(deps.appointmentQuery),
+		appMetrics,
+	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create notification service: %w", err)
 	}
+
+	// Registered here rather than in metrics.New because the queue does not
+	// exist until the service does. The gauges read the channel on scrape, so
+	// they report the buffer as this process actually configured it.
+	appMetrics.RegisterNotificationQueue(
+		func() float64 { return float64(service.QueueDepth()) },
+		func() float64 { return float64(service.QueueCapacity()) },
+	)
 
 	return service, nil
 }

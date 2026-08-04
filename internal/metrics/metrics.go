@@ -19,10 +19,11 @@ import (
 )
 
 const (
-	namespace             = "appt"
-	subsystemHTTP         = "http"
-	subsystemDB           = "db"
-	subsystemAppointments = "appointments"
+	namespace              = "appt"
+	subsystemHTTP          = "http"
+	subsystemDB            = "db"
+	subsystemAppointments  = "appointments"
+	subsystemNotifications = "notifications"
 )
 
 const (
@@ -33,11 +34,34 @@ const (
 	outcomeExpired           = "expired"
 )
 
+// Why a notification was thrown away. queue_full is the ordinary saturation
+// drop; unknown_kind is a programming error and should stay flat at zero.
+const (
+	dropReasonQueueFull   = "queue_full"
+	dropReasonUnknownKind = "unknown_kind"
+)
+
+// What became of a notification the drain picked up. no_recipients is a normal
+// outcome, not a failure: cancelling a slot nobody booked notifies nobody.
+const (
+	notificationOutcomeSent         = "sent"
+	notificationOutcomeNoRecipients = "no_recipients"
+	notificationOutcomeLookupFailed = "lookup_failed"
+)
+
 // dbDurationBuckets are latency buckets tuned for database queries, which are
 // typically faster than full HTTP requests, so the lower boundaries are finer.
 //
 //nolint:mnd // histogram bucket boundaries are metric configuration, not magic numbers.
 var dbDurationBuckets = []float64{0.0005, 0.001, 0.0025, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5}
+
+// notificationSendBuckets cover one notification's resolve-and-deliver pass.
+// The boundary at 5 is deliberate: it is the notification package's per-send
+// timeout, so a send that timed out lands on a bucket edge and is readable as
+// its own step in the histogram instead of being smeared across a wider bucket.
+//
+//nolint:mnd // histogram bucket boundaries are metric configuration, not magic numbers.
+var notificationSendBuckets = []float64{0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10}
 
 // Metrics holds the private registry and every collector the service exports.
 type Metrics struct {
@@ -50,6 +74,10 @@ type Metrics struct {
 	dbErrors      *prometheus.CounterVec
 	apptCreated   prometheus.Counter
 	apptFinalized *prometheus.CounterVec
+
+	notificationsDropped     *prometheus.CounterVec
+	notificationsProcessed   *prometheus.CounterVec
+	notificationSendDuration *prometheus.HistogramVec
 }
 
 // New builds a Metrics backed by a private registry (never the global default)
@@ -150,15 +178,55 @@ func New() *Metrics {
 		[]string{"outcome"},
 	)
 
+	// Dashboard: sum by (reason) (rate(appt_notifications_dropped_total[5m]))
+	// Alert:     increase(appt_notifications_dropped_total{reason="queue_full"}[5m]) > 0
+	notificationsDropped := factory.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: namespace,
+			Subsystem: subsystemNotifications,
+			Name:      "dropped_total",
+			Help:      "Total number of notifications discarded without being delivered, by reason.",
+		},
+		[]string{"reason"},
+	)
+
+	// Dashboard: sum by (outcome) (rate(appt_notifications_processed_total[5m]))
+	// Alert:     rate(appt_notifications_processed_total{outcome="lookup_failed"}[5m]) > 0
+	notificationsProcessed := factory.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: namespace,
+			Subsystem: subsystemNotifications,
+			Name:      "processed_total",
+			Help:      "Total number of notifications taken off the queue by kind and outcome.",
+		},
+		[]string{"kind", "outcome"},
+	)
+
+	// Dashboard: histogram_quantile(0.95, sum(rate(appt_notifications_send_duration_seconds_bucket[5m])) by (le))
+	// Alert:     histogram_quantile(0.95, sum(rate(appt_notifications_send_duration_seconds_bucket[5m])) by (le)) > 2
+	notificationSendDuration := factory.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Namespace: namespace,
+			Subsystem: subsystemNotifications,
+			Name:      "send_duration_seconds",
+			Help:      "Time spent resolving and delivering one notification, by kind.",
+			Buckets:   notificationSendBuckets,
+		},
+		[]string{"kind"},
+	)
+
 	return &Metrics{
-		reg:           reg,
-		httpRequests:  httpRequests,
-		httpDuration:  httpDuration,
-		httpInFlight:  httpInFlight,
-		dbDuration:    dbDuration,
-		dbErrors:      dbErrors,
-		apptCreated:   apptCreated,
-		apptFinalized: apptFinalized,
+		reg:                      reg,
+		httpRequests:             httpRequests,
+		httpDuration:             httpDuration,
+		httpInFlight:             httpInFlight,
+		dbDuration:               dbDuration,
+		dbErrors:                 dbErrors,
+		apptCreated:              apptCreated,
+		apptFinalized:            apptFinalized,
+		notificationsDropped:     notificationsDropped,
+		notificationsProcessed:   notificationsProcessed,
+		notificationSendDuration: notificationSendDuration,
 	}
 }
 
@@ -211,6 +279,81 @@ func (m *Metrics) RecordAppointmentAbsent() { m.apptFinalized.WithLabelValues(ou
 // RecordAppointmentsExpired counts n appointments swept to absent by the overdue worker.
 func (m *Metrics) RecordAppointmentsExpired(n int64) {
 	m.apptFinalized.WithLabelValues(outcomeExpired).Add(float64(n))
+}
+
+// RecordNotificationDroppedQueueFull counts one notification discarded because
+// the queue was saturated when its producer tried to enqueue it. This is the
+// series that answers whether the configured buffer size is large enough.
+func (m *Metrics) RecordNotificationDroppedQueueFull() {
+	m.notificationsDropped.WithLabelValues(dropReasonQueueFull).Inc()
+}
+
+// RecordNotificationDroppedUnknownKind counts one queued notification the drain
+// had no handler for. Unlike a queue-full drop this is never an ordinary
+// outcome: it means a kind was queued that the send switch does not know.
+func (m *Metrics) RecordNotificationDroppedUnknownKind() {
+	m.notificationsDropped.WithLabelValues(dropReasonUnknownKind).Inc()
+}
+
+// RecordNotificationSent counts one notification delivered to at least one
+// recipient.
+func (m *Metrics) RecordNotificationSent(kind string) {
+	m.notificationsProcessed.WithLabelValues(kind, notificationOutcomeSent).Inc()
+}
+
+// RecordNotificationNoRecipients counts one notification that resolved to
+// nobody. It is kept separate from sent so a run of empty results cannot be
+// mistaken for successful delivery on a dashboard.
+func (m *Metrics) RecordNotificationNoRecipients(kind string) {
+	m.notificationsProcessed.WithLabelValues(kind, notificationOutcomeNoRecipients).Inc()
+}
+
+// RecordNotificationLookupFailed counts one notification lost because its
+// recipients could not be resolved. The queue is in memory and the event is
+// already consumed, so this notification is not retried and never arrives.
+func (m *Metrics) RecordNotificationLookupFailed(kind string) {
+	m.notificationsProcessed.WithLabelValues(kind, notificationOutcomeLookupFailed).Inc()
+}
+
+// ObserveNotificationSend records how long one notification took to resolve and
+// deliver, whatever its outcome: a send that failed or timed out is exactly the
+// observation this histogram exists to capture. It carries a trace_id exemplar
+// when ctx holds a sampled span.
+func (m *Metrics) ObserveNotificationSend(ctx context.Context, kind string, duration time.Duration) {
+	observeWithExemplar(ctx, m.notificationSendDuration.WithLabelValues(kind), duration.Seconds())
+}
+
+// RegisterNotificationQueue registers gauges reporting the notification queue's
+// live depth and its configured capacity. Both are read on scrape rather than
+// written on enqueue, so an idle queue costs nothing and the depth can never
+// drift from the channel it describes.
+//
+// Capacity is exported alongside depth so a dashboard can plot saturation as a
+// ratio, rather than hard-coding the buffer size per environment.
+func (m *Metrics) RegisterNotificationQueue(depth, capacity func() float64) {
+	factory := promauto.With(m.reg)
+
+	// Dashboard: appt_notifications_queue_depth / appt_notifications_queue_capacity
+	// Alert:     appt_notifications_queue_depth / appt_notifications_queue_capacity > 0.8
+	factory.NewGaugeFunc(
+		prometheus.GaugeOpts{
+			Namespace: namespace,
+			Subsystem: subsystemNotifications,
+			Name:      "queue_depth",
+			Help:      "Number of notifications currently waiting in the queue.",
+		},
+		depth,
+	)
+
+	factory.NewGaugeFunc(
+		prometheus.GaugeOpts{
+			Namespace: namespace,
+			Subsystem: subsystemNotifications,
+			Name:      "queue_capacity",
+			Help:      "Configured maximum number of notifications the queue can hold.",
+		},
+		capacity,
+	)
 }
 
 // DBTracer returns a pgx query tracer that records this Metrics' database

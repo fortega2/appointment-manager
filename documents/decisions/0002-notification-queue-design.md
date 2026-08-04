@@ -28,7 +28,7 @@ without the reasoning, and two of them are easy to "optimise" in the wrong direc
 
 ## Decision 1 — The queue carries identifiers, not rendered content
 
-`Event` (`internal/notification/event.go:19`) holds a `SlotID` and a `Kind`. It does not hold
+`Event` (`internal/notification/event.go:31`) holds a `SlotID` and a `Kind`. It does not hold
 recipients, addresses, or message bodies.
 
 Recipients are resolved at *send* time, inside the drain. An event that waited in the queue
@@ -40,13 +40,13 @@ the clinic owes them nothing.
 The consequence to keep in mind is that this makes the queue *cheap* but the drain *dependent on
 the database*. The shutdown flush therefore has to run while the pool is still open, which is why
 `startNotificationWorker` returns a `stop` func that callers defer before the pool closes
-(`cmd/server/notification.go:77-89`).
+(`cmd/server/notification.go:96-108`).
 
 There is a second, quieter benefit: `Event` contains no pointers. See Decision 3.
 
 ## Decision 2 — Enqueue drops on a full queue, it never blocks
 
-`enqueue` (`internal/notification/notification.go:117-126`) is a `select` with a `default` that
+`enqueue` (`internal/notification/notification.go:157-167`) is a `select` with a `default` that
 logs a warning and discards the event.
 
 The alternative — blocking until space frees — would push backpressure from a broken mail server
@@ -117,7 +117,7 @@ and behaves the opposite way.
 | Default | `30m` | `1m` |
 | Interval is therefore | A real load knob | A **latency** knob |
 
-`drain` (`notification.go:142-151`) is a `select` with a `default`: on an empty queue it touches
+`drain` (`notification.go:183-192`) is a `select` with a `default`: on an empty queue it touches
 nothing and returns. 1440 ticks a day cost nanoseconds each. The differing defaults are not
 arbitrary — they follow from the two rows above.
 
@@ -147,7 +147,7 @@ A batched drain was considered: collect every buffered `SlotID`, issue a single
 
 And it would cost a property that is currently tested. Today the drain isolates failures: if
 resolving slot A fails, it is logged and slot B is still sent. That is asserted by
-`TestServiceKeepsDrainingAfterALookupFailure` (`notification_test.go:471`), which queues a
+`TestServiceKeepsDrainingAfterALookupFailure` (`notification_test.go:590`), which queues a
 `failing` and a `healthy` event together and requires both log lines. A single batched query turns
 any error into the loss of the whole batch, and that test would have to be weakened.
 
@@ -182,21 +182,21 @@ same change*:
   — the appointment is already in Postgres, so the announcement can be too.
 
 Two things that should be done *before* any of the above, because they make the tuning empirical
-instead of estimated:
+instead of estimated — **both are now built; see ADR 0004**:
 
-- **A drop counter.** The drop in `enqueue` is only a `WarnContext`. `internal/metrics` already
-  exists; an `appt_notifications_dropped_total` turns "is 100 enough?" into a Grafana panel. If it
-  never increments, 100 is generous. If it does, the first response is to *shorten* the interval,
-  not to deepen the buffer (Decision 4).
+- **A drop counter.** The drop in `enqueue` was only a `WarnContext`. `appt_notifications_dropped_total{reason="queue_full"}`
+  turns "is 100 enough?" into a Grafana panel. If it never increments, 100 is generous. If it does,
+  the first response is to *shorten* the interval, not to deepen the buffer (Decision 4).
 - **A queue-depth gauge**, for the same reason: it is the direct measurement behind the sizing rule
-  in Decision 3.
+  in Decision 3. Exported as `appt_notifications_queue_depth`, alongside
+  `appt_notifications_queue_capacity` so saturation reads as a ratio.
 
 ## Revisit when
 
 Any of:
 
 - Delivery stops being a log line — see the section above; it touches Decisions 4 and 5.
-- `appt_notifications_dropped_total` (once it exists) is non-zero in production.
+- `appt_notifications_dropped_total{reason="queue_full"}` is non-zero in production (ADR 0004).
 - Slot cancellation stops being one-at-a-time — a bulk endpoint, or a professional's whole week
   pulled in one action, breaks the "one event per human click" premise that Decisions 3 and 5 both
   rest on. This is the same trigger listed in ADR 0001.
