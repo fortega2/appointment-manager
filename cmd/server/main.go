@@ -69,7 +69,21 @@ func run() error {
 		return fmt.Errorf("%s is required", databaseURLEnv)
 	}
 
-	pool, err := db.NewPostgresPool(context.Background(), databaseURL, db.WithQueryTracer(appMetrics.DBTracer()))
+	poolOptions, err := parsePoolConfig(poolConfig{
+		MaxConns:              os.Getenv(dbPoolMaxConnsEnv),
+		MinConns:              os.Getenv(dbPoolMinConnsEnv),
+		MaxConnLifetime:       os.Getenv(dbPoolMaxConnLifetimeEnv),
+		MaxConnLifetimeJitter: os.Getenv(dbPoolMaxConnLifetimeJitterEnv),
+		MaxConnIdleTime:       os.Getenv(dbPoolMaxConnIdleTimeEnv),
+		HealthCheckPeriod:     os.Getenv(dbPoolHealthCheckPeriodEnv),
+	})
+	if err != nil {
+		logger.Error("failed to parse database pool configuration", slog.Any("error", err))
+		return err
+	}
+
+	poolOptions = append(poolOptions, db.WithQueryTracer(appMetrics.DBTracer()))
+	pool, err := db.NewPostgresPool(context.Background(), databaseURL, poolOptions...)
 	if err != nil {
 		logger.Error("failed to initialize postgres pool", slog.Any("error", err))
 		return err
@@ -78,6 +92,12 @@ func run() error {
 	defer func(logger *slog.Logger) {
 		logger.Info("postgres pool closed")
 	}(logger)
+
+	// Every DB_POOL_* variable is optional and the defaults behind them are pgx's,
+	// two of which depend on the host's CPU count. Reading the settings back off
+	// the live pool is the only way to know what a given machine actually ended up
+	// running, rather than inferring it from which variables happened to be set.
+	logPoolConfig(logger, pool.Config())
 
 	appMetrics.RegisterDBPool(pool)
 

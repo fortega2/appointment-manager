@@ -1,12 +1,16 @@
 package main
 
 import (
+	"appointment-manager/internal/db"
+	"errors"
 	"fmt"
 	"log/slog"
 	"math"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 const (
@@ -35,6 +39,21 @@ const (
 	// close to free.
 	defaultNotificationTickerInterval = time.Minute
 	defaultNotificationBufferSize     = 100
+
+	dbPoolMaxConnsEnv              = "DB_POOL_MAX_CONNS"
+	dbPoolMinConnsEnv              = "DB_POOL_MIN_CONNS"
+	dbPoolMaxConnLifetimeEnv       = "DB_POOL_MAX_CONN_LIFETIME"
+	dbPoolMaxConnLifetimeJitterEnv = "DB_POOL_MAX_CONN_LIFETIME_JITTER"
+	dbPoolMaxConnIdleTimeEnv       = "DB_POOL_MAX_CONN_IDLE_TIME"
+	dbPoolHealthCheckPeriodEnv     = "DB_POOL_HEALTH_CHECK_PERIOD"
+)
+
+// Range failures shared by the pool parsers. They carry no variable name of
+// their own: the caller wraps them with the environment variable at fault, so
+// the message reads the same as every other one in this file.
+var (
+	errMustBeGreaterThanZero = errors.New("must be greater than zero")
+	errMustBeNonNegative     = errors.New("must be non-negative")
 )
 
 // parseLogLevel reads LOG_LEVEL ("debug", "info", "warn", "error", case
@@ -161,4 +180,138 @@ func parseNotificationConfig(logger *slog.Logger, rawTickerInterval, rawBufferSi
 	}
 
 	return tickerInterval, bufferSize, nil
+}
+
+// poolConfig carries the raw DB_POOL_* values straight from the environment, so
+// parsePoolConfig stays a pure function of its input and testable without env
+// vars, matching the rest of this file.
+type poolConfig struct {
+	MaxConns              string
+	MinConns              string
+	MaxConnLifetime       string
+	MaxConnLifetimeJitter string
+	MaxConnIdleTime       string
+	HealthCheckPeriod     string
+}
+
+// parsePoolConfig turns the DB_POOL_* environment into pgx pool options. Every
+// one of them is optional and independent: an unset (or blank) value yields no
+// option at all, which leaves pgx's own default in place rather than a default
+// of ours. That is why nothing warns here, unlike parseNotificationConfig -- the
+// fallback is not a number this project picked, and the values that actually
+// took effect are logged once the pool is up.
+//
+// A value that is present but malformed or out of range is rejected instead of
+// defaulted: that is a misconfiguration, not an omission, and must fail fast.
+func parsePoolConfig(raw poolConfig) ([]db.Option, error) {
+	specs := []struct {
+		env   string
+		raw   string
+		parse func(string) (db.Option, error)
+	}{
+		{dbPoolMaxConnsEnv, raw.MaxConns, positiveInt32(db.WithMaxConns)},
+		{dbPoolMinConnsEnv, raw.MinConns, nonNegativeInt32(db.WithMinConns)},
+		{dbPoolMaxConnLifetimeEnv, raw.MaxConnLifetime, positiveDuration(db.WithMaxConnLifetime)},
+		{dbPoolMaxConnLifetimeJitterEnv, raw.MaxConnLifetimeJitter, nonNegativeDuration(db.WithMaxConnLifetimeJitter)},
+		{dbPoolMaxConnIdleTimeEnv, raw.MaxConnIdleTime, positiveDuration(db.WithMaxConnIdleTime)},
+		{dbPoolHealthCheckPeriodEnv, raw.HealthCheckPeriod, positiveDuration(db.WithHealthCheckPeriod)},
+	}
+
+	options := make([]db.Option, 0, len(specs))
+	for _, spec := range specs {
+		value := strings.TrimSpace(spec.raw)
+		if value == "" {
+			continue
+		}
+
+		option, err := spec.parse(value)
+		if err != nil {
+			return nil, fmt.Errorf("invalid %s: %w", spec.env, err)
+		}
+
+		options = append(options, option)
+	}
+
+	return options, nil
+}
+
+// positiveInt32 parses a connection count that must be at least one. ParseInt
+// with a bit size of 32 is what bounds the value to the int32 pgx expects, so
+// the conversion below cannot overflow.
+func positiveInt32(apply func(int32) db.Option) func(string) (db.Option, error) {
+	return func(value string) (db.Option, error) {
+		parsed, err := strconv.ParseInt(value, 10, 32)
+		if err != nil {
+			return nil, err
+		}
+		if parsed <= 0 {
+			return nil, errMustBeGreaterThanZero
+		}
+
+		return apply(int32(parsed)), nil
+	}
+}
+
+// nonNegativeInt32 parses a connection count where zero is meaningful -- for the
+// pool minimum it means "keep nothing warm", which is pgx's own default.
+func nonNegativeInt32(apply func(int32) db.Option) func(string) (db.Option, error) {
+	return func(value string) (db.Option, error) {
+		parsed, err := strconv.ParseInt(value, 10, 32)
+		if err != nil {
+			return nil, err
+		}
+		if parsed < 0 {
+			return nil, errMustBeNonNegative
+		}
+
+		return apply(int32(parsed)), nil
+	}
+}
+
+// positiveDuration parses a Go duration string (e.g. "30m") that must be above
+// zero. Zero is rejected rather than treated as "unbounded": for the idle and
+// lifetime timeouts it means the health check retires connections on every
+// sweep, which is the opposite of what someone writing 0 usually intends.
+func positiveDuration(apply func(time.Duration) db.Option) func(string) (db.Option, error) {
+	return func(value string) (db.Option, error) {
+		parsed, err := time.ParseDuration(value)
+		if err != nil {
+			return nil, err
+		}
+		if parsed <= 0 {
+			return nil, errMustBeGreaterThanZero
+		}
+
+		return apply(parsed), nil
+	}
+}
+
+// nonNegativeDuration parses a Go duration string where zero is meaningful --
+// for the lifetime jitter it means "no jitter", which is pgx's own default.
+func nonNegativeDuration(apply func(time.Duration) db.Option) func(string) (db.Option, error) {
+	return func(value string) (db.Option, error) {
+		parsed, err := time.ParseDuration(value)
+		if err != nil {
+			return nil, err
+		}
+		if parsed < 0 {
+			return nil, errMustBeNonNegative
+		}
+
+		return apply(parsed), nil
+	}
+}
+
+// logPoolConfig reports the pool settings that ended up in force, whether they
+// came from a DB_POOL_* variable or from pgx. One line at startup is what turns
+// a saturated pool in production into a lookup instead of a guess.
+func logPoolConfig(logger *slog.Logger, cfg *pgxpool.Config) {
+	logger.Info("postgres pool configured",
+		slog.Int64("max_conns", int64(cfg.MaxConns)),
+		slog.Int64("min_conns", int64(cfg.MinConns)),
+		slog.Duration("max_conn_lifetime", cfg.MaxConnLifetime),
+		slog.Duration("max_conn_lifetime_jitter", cfg.MaxConnLifetimeJitter),
+		slog.Duration("max_conn_idle_time", cfg.MaxConnIdleTime),
+		slog.Duration("health_check_period", cfg.HealthCheckPeriod),
+	)
 }

@@ -107,6 +107,12 @@ over the `.env` file.
 | Variable | Required | Description |
 | --- | --- | --- |
 | `DATABASE_URL` | yes | Postgres connection string. |
+| `DB_POOL_MAX_CONNS` | no | Maximum connections the pool may open (pgx default: the greater of `4` and the host's CPU count). See [Connection pool sizing](#connection-pool-sizing). |
+| `DB_POOL_MIN_CONNS` | no | Connections kept open even while idle, so a burst after a quiet period does not pay the handshake (pgx default `0`). Must not exceed `DB_POOL_MAX_CONNS`; the server refuses to start otherwise. |
+| `DB_POOL_MAX_CONN_LIFETIME` | no | How long a connection lives before being retired regardless of use, which is what lets the pool drift back to a healthy database after a failover (pgx default `1h`). |
+| `DB_POOL_MAX_CONN_LIFETIME_JITTER` | no | Random spread added on top of the lifetime so a pool opened at once does not expire at once (pgx default `0`, i.e. no spread). |
+| `DB_POOL_MAX_CONN_IDLE_TIME` | no | How long an unused connection survives before being closed, down to `DB_POOL_MIN_CONNS` (pgx default `30m`). `0` is rejected: to pgx it means retiring the idle pool on every sweep, not "no limit". |
+| `DB_POOL_HEALTH_CHECK_PERIOD` | no | How often the pool sweeps idle connections for expiry and tops itself back up to the minimum (pgx default `1m`). |
 | `ENV` | no | `development` (default) enables dev-friendly settings. |
 | `LOG_LEVEL` | no | `debug` (default), `info`, `warn` or `error`, case-insensitive. |
 | `STORAGE_ENDPOINT` | no | S3-compatible endpoint, e.g. `s3.example.com`. When unset, object storage is disabled. |
@@ -122,6 +128,43 @@ over the `.env` file.
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | no | OTLP/HTTP collector base URL for tracing (e.g. `http://tempo:4318`). When unset, tracing is disabled. |
 | `OTEL_TRACES_SAMPLE_RATIO` | no | Head-based trace sampling probability in `[0,1]` (default `1.0`). Child spans follow their parent's decision. |
 | `OTEL_SERVICE_VERSION` | no | Release identifier attached to spans as `service.version` (default `dev`). |
+
+Every `DB_POOL_*` variable is optional and independent. Leaving one unset (or blank)
+keeps pgx's own default for that setting rather than a default this project picked —
+which is why the effective configuration is logged once at startup, as
+`postgres pool configured`. A variable that *is* set but malformed or out of range
+stops the process instead of falling back.
+
+### Connection pool sizing
+
+For throughput, the number of connections actively working should land near the
+formula from the [PostgreSQL wiki](https://wiki.postgresql.org/wiki/Number_Of_Database_Connections)
+(also used by [HikariCP](https://github.com/brettwooldridge/HikariCP/wiki/About-Pool-Sizing)):
+
+```
+(core_count × 2) + effective_spindle_count
+```
+
+`core_count` is **physical** cores, not hyperthreads. `effective_spindle_count` is ~0
+when the working set fits in RAM and approaches the number of disks as the cache hit
+rate drops — for a single disk, take it as 1.
+
+| Host | `DB_POOL_MAX_CONNS` |
+| --- | --- |
+| 6 physical cores, 1 disk | `(6 × 2) + 1` ≈ **14** |
+| 2 vCPU VPS, 1 disk | `(2 × 2) + 1` = **5** |
+
+On a VPS, "vCPU" usually means a shared hypervisor thread rather than a dedicated
+core, so stay at the conservative end — more so when Postgres runs on the same host as
+the app and the two compete for the same CPUs.
+
+Two things worth knowing before tuning:
+
+- **There is one pool.** The HTTP handlers, both background sweeps, the notification
+  drain and the readiness check all share it. The number above is the total for the
+  process, not a per-component budget.
+- **Everything has to fit in `max_connections`.** Size the server's limit above the sum
+  of every pool pointed at it, leaving room for administrative and monitoring sessions.
 
 ## Monitoring & Observability
 

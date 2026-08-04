@@ -8,4 +8,5 @@ var (
 	ErrInvalidDatabaseURL     = errors.New("invalid database URL")
 	ErrEmptyDatabaseURLScheme = errors.New("empty database URL scheme")
 	ErrUnknownDatabaseScheme  = errors.New("unknown database URL scheme")
+	ErrMinConnsAboveMaxConns  = errors.New("pool min conns above max conns")
 )
