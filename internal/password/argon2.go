@@ -21,7 +21,7 @@ const (
 
 	defaultMemoryKiB    = 64 * 1024
 	defaultIterations   = 3
-	defaultParallelism  = 2
+	defaultParallelism  = 1
 	defaultSaltLenBytes = 16
 	defaultKeyLenBytes  = 32
 
@@ -31,13 +31,12 @@ const (
 	maxHashLenBytes  = 128
 	minimumParamsVal = 1
 
-	// maxConcurrentHashes bounds how many Hash/Compare calls may run at once,
-	// since each one costs defaultMemoryKiB of working memory regardless of
-	// caller. 2 * defaultMemoryKiB = 128MiB peak; keep this proportional to
-	// the container's memory limit (see docker/docker-compose.yml) rather
-	// than raising it for throughput — Argon2id already uses
-	// defaultParallelism internally, so beyond ~2 concurrent hashes on a
-	// single-core budget you get queueing, not more throughput.
+	// maxConcurrentHashes bounds how many Hash/Compare calls may run at once.
+	// Each call costs defaultMemoryKiB of memory and defaultParallelism CPU
+	// threads, so this must stay proportional to the container's cpu/memory
+	// limits (see docker/docker-compose.yml), not raised for throughput:
+	// 2 * defaultMemoryKiB = 128MiB peak, 2 * defaultParallelism = 2 threads,
+	// matching the container's ~2-core budget.
 	maxConcurrentHashes = 2
 )
 
