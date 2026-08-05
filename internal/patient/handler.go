@@ -304,8 +304,8 @@ func (h *Handler) processPatientCreate(ctx context.Context, w http.ResponseWrite
 		req.clinicalNotes,
 	)
 	if err != nil {
-		h.logger.ErrorContext(ctx, "error creating patient from form data", slog.Any("error", err))
-		h.createSnackbarError(ctx, w, http.StatusUnprocessableEntity, failedToCreatePatientMsg, "NewPatient")
+		h.logger.WarnContext(ctx, "invalid patient create form data", slog.Any("error", err))
+		h.createSnackbarError(ctx, w, http.StatusUnprocessableEntity, err.Error(), "NewPatient")
 		return err
 	}
 
@@ -350,7 +350,8 @@ func (h *Handler) processPatientUpdate(ctx context.Context, w http.ResponseWrite
 		req.insuranceNumber,
 		req.clinicalNotes,
 	); err != nil {
-		h.createSnackbarError(ctx, w, http.StatusUnprocessableEntity, "Failed to update patient data", "Patient.Update")
+		h.logger.WarnContext(ctx, "invalid patient update form data", slog.Any("error", err), slog.String("id", patientID.String()))
+		h.createSnackbarError(ctx, w, http.StatusUnprocessableEntity, err.Error(), "Patient.Update")
 		return err
 	}
 

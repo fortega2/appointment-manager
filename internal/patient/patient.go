@@ -2,13 +2,18 @@ package patient
 
 import (
 	"strings"
+	"unicode/utf8"
 
 	"github.com/google/uuid"
 
 	"appointment-manager/internal/domain"
 )
 
-const maxInsuranceNumberLength = 11
+const (
+	insuranceNumberLength = 11
+	maxNameLength         = 255
+	maxEmailLength        = 255
+)
 
 type Patient struct {
 	ID              uuid.UUID `json:"id"`
@@ -27,36 +32,103 @@ func NewPatient(
 	insuranceNumber string,
 	clinicalNotes *string,
 ) (*Patient, error) {
+	fields, err := newPatientFields(firstName, lastName, phone, email, healthInsurance, insuranceNumber, clinicalNotes)
+	if err != nil {
+		return nil, err
+	}
+
+	return &Patient{
+		ID:              domain.NewID(),
+		FirstName:       fields.firstName,
+		LastName:        fields.lastName,
+		Phone:           fields.phone,
+		Email:           fields.email,
+		HealthInsurance: fields.healthInsurance,
+		InsuranceNumber: fields.insuranceNumber,
+		ClinicalNotes:   fields.clinicalNotes,
+	}, nil
+}
+
+func (p *Patient) Update(
+	firstName, lastName, phone, email string,
+	healthInsurance int,
+	insuranceNumber string,
+	clinicalNotes *string,
+) error {
+	fields, err := newPatientFields(firstName, lastName, phone, email, healthInsurance, insuranceNumber, clinicalNotes)
+	if err != nil {
+		return err
+	}
+
+	p.FirstName = fields.firstName
+	p.LastName = fields.lastName
+	p.Phone = fields.phone
+	p.Email = fields.email
+	p.HealthInsurance = fields.healthInsurance
+	p.InsuranceNumber = fields.insuranceNumber
+	p.ClinicalNotes = fields.clinicalNotes
+
+	return nil
+}
+
+type patientFields struct {
+	firstName       string
+	lastName        string
+	phone           string
+	email           string
+	healthInsurance int
+	insuranceNumber string
+	clinicalNotes   *string
+}
+
+// newPatientFields is the single definition of what makes a patient valid:
+// NewPatient and Update both go through it, so an edited record cannot end up
+// held to weaker rules than a newly created one.
+func newPatientFields(
+	firstName, lastName, phone, email string,
+	healthInsurance int,
+	insuranceNumber string,
+	clinicalNotes *string,
+) (patientFields, error) {
 	trimmedFirstName := strings.TrimSpace(firstName)
 	if trimmedFirstName == "" {
-		return nil, ErrFirstNameRequired
+		return patientFields{}, ErrFirstNameRequired
+	}
+	if utf8.RuneCountInString(trimmedFirstName) > maxNameLength {
+		return patientFields{}, ErrFirstNameTooLong
 	}
 
 	trimmedLastName := strings.TrimSpace(lastName)
 	if trimmedLastName == "" {
-		return nil, ErrLastNameRequired
+		return patientFields{}, ErrLastNameRequired
+	}
+	if utf8.RuneCountInString(trimmedLastName) > maxNameLength {
+		return patientFields{}, ErrLastNameTooLong
 	}
 
 	trimmedPhone := strings.TrimSpace(phone)
 	if trimmedPhone == "" {
-		return nil, ErrPhoneRequired
+		return patientFields{}, ErrPhoneRequired
 	}
 
 	parsedEmail := strings.TrimSpace(strings.ToLower(email))
 	if parsedEmail == "" {
-		return nil, ErrEmailRequired
+		return patientFields{}, ErrEmailRequired
+	}
+	if utf8.RuneCountInString(parsedEmail) > maxEmailLength {
+		return patientFields{}, ErrEmailTooLong
 	}
 
 	if healthInsurance <= 0 {
-		return nil, ErrHealthInsuranceRequired
+		return patientFields{}, ErrHealthInsuranceRequired
 	}
 
 	trimmedInsuranceNumber := strings.TrimSpace(insuranceNumber)
 	if trimmedInsuranceNumber == "" {
-		return nil, ErrInsuranceNumberRequired
+		return patientFields{}, ErrInsuranceNumberRequired
 	}
-	if len(trimmedInsuranceNumber) > maxInsuranceNumberLength {
-		return nil, ErrInsuranceNumberTooLong
+	if utf8.RuneCountInString(trimmedInsuranceNumber) != insuranceNumberLength {
+		return patientFields{}, ErrInvalidInsuranceNumberLength
 	}
 
 	if clinicalNotes != nil {
@@ -68,70 +140,13 @@ func NewPatient(
 		}
 	}
 
-	return &Patient{
-		ID:              domain.NewID(),
-		FirstName:       trimmedFirstName,
-		LastName:        trimmedLastName,
-		Phone:           trimmedPhone,
-		Email:           parsedEmail,
-		HealthInsurance: healthInsurance,
-		InsuranceNumber: trimmedInsuranceNumber,
-		ClinicalNotes:   clinicalNotes,
+	return patientFields{
+		firstName:       trimmedFirstName,
+		lastName:        trimmedLastName,
+		phone:           trimmedPhone,
+		email:           parsedEmail,
+		healthInsurance: healthInsurance,
+		insuranceNumber: trimmedInsuranceNumber,
+		clinicalNotes:   clinicalNotes,
 	}, nil
-}
-
-func (p *Patient) Update(
-	firstName, lastName, phone, email string,
-	healthInsurance int,
-	insuranceNumber string,
-	clinicalNotes *string,
-) error {
-	trimmedFirstName := strings.TrimSpace(firstName)
-	if trimmedFirstName == "" {
-		return ErrFirstNameRequired
-	}
-
-	trimmedLastName := strings.TrimSpace(lastName)
-	if trimmedLastName == "" {
-		return ErrLastNameRequired
-	}
-
-	trimmedPhone := strings.TrimSpace(phone)
-	if trimmedPhone == "" {
-		return ErrPhoneRequired
-	}
-
-	parsedEmail := strings.TrimSpace(strings.ToLower(email))
-	if parsedEmail == "" {
-		return ErrEmailRequired
-	}
-
-	if healthInsurance <= 0 {
-		return ErrHealthInsuranceRequired
-	}
-
-	trimmedInsuranceNumber := strings.TrimSpace(insuranceNumber)
-	if trimmedInsuranceNumber == "" {
-		return ErrInsuranceNumberRequired
-	}
-
-	if clinicalNotes != nil {
-		trimmedNotes := strings.TrimSpace(*clinicalNotes)
-		if trimmedNotes != "" {
-			p.ClinicalNotes = &trimmedNotes
-		} else {
-			p.ClinicalNotes = nil
-		}
-	} else {
-		p.ClinicalNotes = nil
-	}
-
-	p.FirstName = trimmedFirstName
-	p.LastName = trimmedLastName
-	p.Phone = trimmedPhone
-	p.Email = parsedEmail
-	p.HealthInsurance = healthInsurance
-	p.InsuranceNumber = trimmedInsuranceNumber
-
-	return nil
 }

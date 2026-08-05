@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -22,11 +23,13 @@ const (
 	constraintAppointmentPatientFK         = "fk_appointment_patient"
 	constraintAppointmentProfessionalFK    = "fk_appointment_professional"
 	constraintAppointmentAssistantFK       = "fk_appointment_assistant"
+	constraintPrescriptionActivePerPatient = "idx_prescription_active_per_patient"
 
-	// Prescription status value used to mark a prescription as fully consumed.
-	// Mirrors prescription.StatusCompleted; kept as a local literal so the
-	// appointment repository stays decoupled from the prescription package,
-	// consistent with how it queries the patient and slot tables directly.
+	// Mirror prescription.StatusActive and prescription.StatusCompleted; kept as
+	// local literals so the appointment repository stays decoupled from the
+	// prescription package, consistent with how it queries the patient and slot
+	// tables directly.
+	prescriptionStatusActive    int16 = 1
 	prescriptionStatusCompleted int16 = 2
 
 	listAppointmentsQuery = `
@@ -88,6 +91,54 @@ const (
 			status = $1
 		WHERE
 			id = $2
+	`
+	// COMPLETED is a cached answer to "are all authorized sessions used up?",
+	// written when a booking consumes the last one. Cancelling that booking
+	// makes the cached answer wrong, so it has to be recomputed from the
+	// appointments themselves -- this statement is the other edge of
+	// completePrescriptionQuery.
+	//
+	// Each guard earns its place:
+	//   - status = $3 (COMPLETED) keeps this off ACTIVE and CANCELLED
+	//     prescriptions, so it is inert on the overwhelmingly common case and a
+	//     no-op when two cancellations race to reopen the same prescription.
+	//   - The NOT EXISTS clause is what forfeits the freed session when the
+	//     patient has already been issued a newer ACTIVE prescription. Reopening
+	//     would violate idx_prescription_active_per_patient (one ACTIVE per
+	//     patient) and cost the cancellation, which matters more than the
+	//     session; the patient has moved on to the newer prescription anyway.
+	//   - The COUNT is the authority on consumption. $4/$5/$6 bind the same
+	//     three statuses as countConsumedSessionsQuery, and the
+	//     patient_session_balance view counts the identical set. Because it
+	//     reads real rows, ABSENT and ATTENDED exclude themselves: they still
+	//     consume, so the count is unchanged and no row matches.
+	reopenPrescriptionQuery = `
+		UPDATE
+			prescription
+		SET
+			status = $1
+		WHERE
+			id = $2
+			AND status = $3
+			AND NOT EXISTS (
+				SELECT
+					1
+				FROM
+					prescription AS other_prescription
+				WHERE
+					other_prescription.patient_id = prescription.patient_id
+					AND other_prescription.status = $1
+					AND other_prescription.id <> prescription.id
+			)
+			AND (
+				SELECT
+					COUNT(*)
+				FROM
+					appointment
+				WHERE
+					appointment.prescription_id = prescription.id
+					AND appointment.status IN ($4, $5, $6)
+			) < prescription.total_sessions
 	`
 	selectPatientForUpdateQuery = `
 		SELECT
@@ -154,6 +205,8 @@ const (
 		WHERE
 			id = $2
 			AND status = $3
+		RETURNING
+			prescription_id
 	`
 	selectAppointmentStatusQuery = `
 		SELECT
@@ -199,6 +252,8 @@ const (
 		WHERE
 			slot_id = $2
 			AND status = 1
+		RETURNING
+			prescription_id
 	`
 	cancelAppointmentsOnBlockedSlotsQuery = `
 		UPDATE
@@ -212,6 +267,8 @@ const (
 			s.id = a.slot_id
 			AND a.status = 1
 			AND s.blocked = TRUE
+		RETURNING
+			a.prescription_id
 	`
 )
 
@@ -335,19 +392,51 @@ func (r *PostgresRepository) GetWindow(ctx context.Context, appointmentID uuid.U
 	}, nil
 }
 
+// UpdateStatus shares a transaction with the reopen because the reopen decision
+// is read from the appointment rows: it has to see this cancellation already
+// applied, and it must not survive on its own if the status change is rolled
+// back.
 func (r *PostgresRepository) UpdateStatus(ctx context.Context, appointmentID uuid.UUID, newStatus, expectedStatus Status) error {
-	result, err := r.pool.Exec(ctx, updateAppointmentStatusQuery, newStatus, appointmentID, expectedStatus)
+	tx, err := r.pool.BeginTx(ctx, pgx.TxOptions{})
 	if err != nil {
-		return fmt.Errorf("update appointment status: %w", err)
+		return fmt.Errorf("begin update appointment status transaction: %w", err)
 	}
+	defer func() {
+		_ = tx.Rollback(ctx)
+	}()
 
-	if result.RowsAffected() == 0 {
-		_, readErr := r.readStatus(ctx, appointmentID)
-		if readErr != nil {
+	var prescriptionID uuid.UUID
+	if err := tx.QueryRow(
+		ctx,
+		updateAppointmentStatusQuery,
+		newStatus,
+		appointmentID,
+		expectedStatus,
+	).Scan(&prescriptionID); err != nil {
+		if !errors.Is(err, pgx.ErrNoRows) {
+			return fmt.Errorf("update appointment status: %w", err)
+		}
+
+		// Read inside this transaction rather than from the pool: taking a
+		// connection from the pool here would self-deadlock a pool sized at one.
+		if _, readErr := readStatus(ctx, tx, appointmentID); readErr != nil {
 			return readErr
 		}
 
 		return ErrAppointmentStatusChanged
+	}
+
+	// Only a cancellation hands the session back. ABSENT and ATTENDED still
+	// consume one, so the reopen would match nothing for them -- skipping it
+	// keeps a correlated count off every attend and every late cancellation.
+	if newStatus.IsCancelled() {
+		if err := reopenFreedPrescriptions(ctx, tx, []uuid.UUID{prescriptionID}); err != nil {
+			return err
+		}
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("commit update appointment status transaction: %w", err)
 	}
 
 	return nil
@@ -378,12 +467,7 @@ func (r *PostgresRepository) ExpireOverdue(ctx context.Context) (int64, error) {
 // concurrently attended or cancelled no longer matches and is skipped. Zero
 // rows is a valid, non-error result (a slot with no bookings).
 func (r *PostgresRepository) CancelBySlot(ctx context.Context, slotID uuid.UUID) (int64, error) {
-	cmd, err := r.pool.Exec(ctx, cancelAppointmentsBySlotQuery, StatusCancelledByClinic, slotID)
-	if err != nil {
-		return 0, fmt.Errorf("cancel appointments by slot: %w", err)
-	}
-
-	return cmd.RowsAffected(), nil
+	return r.cancelAndReopen(ctx, "cancel appointments by slot", cancelAppointmentsBySlotQuery, StatusCancelledByClinic, slotID)
 }
 
 // CancelOnBlockedSlots reconciles appointments left CONFIRMED on a slot that is
@@ -395,17 +479,67 @@ func (r *PostgresRepository) CancelBySlot(ctx context.Context, slotID uuid.UUID)
 // writes the same CANCELLED BY CLINIC status as CancelBySlot, since the rows it
 // converges are ones that cancel should have caught.
 func (r *PostgresRepository) CancelOnBlockedSlots(ctx context.Context) (int64, error) {
-	cmd, err := r.pool.Exec(ctx, cancelAppointmentsOnBlockedSlotsQuery, StatusCancelledByClinic)
-	if err != nil {
-		return 0, fmt.Errorf("cancel appointments on blocked slots: %w", err)
-	}
-
-	return cmd.RowsAffected(), nil
+	return r.cancelAndReopen(ctx, "cancel appointments on blocked slots", cancelAppointmentsOnBlockedSlotsQuery, StatusCancelledByClinic)
 }
 
-func (r *PostgresRepository) readStatus(ctx context.Context, appointmentID uuid.UUID) (Status, error) {
+// cancelAndReopen has no IsCancelled gate like UpdateStatus: both callers always
+// write CANCELLED BY CLINIC, which always frees the session.
+func (r *PostgresRepository) cancelAndReopen(ctx context.Context, operation, query string, args ...any) (int64, error) {
+	tx, err := r.pool.BeginTx(ctx, pgx.TxOptions{})
+	if err != nil {
+		return 0, fmt.Errorf("begin %s transaction: %w", operation, err)
+	}
+	defer func() {
+		_ = tx.Rollback(ctx)
+	}()
+
+	prescriptionIDs, cancelledCount, err := collectCancelledPrescriptions(ctx, tx, query, args...)
+	if err != nil {
+		return 0, fmt.Errorf("%s: %w", operation, err)
+	}
+
+	if err := reopenFreedPrescriptions(ctx, tx, prescriptionIDs); err != nil {
+		return 0, fmt.Errorf("%s: %w", operation, err)
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return 0, fmt.Errorf("commit %s transaction: %w", operation, err)
+	}
+
+	return cancelledCount, nil
+}
+
+// collectCancelledPrescriptions drains the cancellation's RETURNING rows before
+// returning: a connection with an open result set rejects further statements on
+// the same transaction as busy, and the caller runs the reopen right after this.
+func collectCancelledPrescriptions(ctx context.Context, tx pgx.Tx, query string, args ...any) ([]uuid.UUID, int64, error) {
+	rows, err := tx.Query(ctx, query, args...)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+
+	var prescriptionIDs []uuid.UUID
+	var cancelledCount int64
+	for rows.Next() {
+		var prescriptionID uuid.UUID
+		if err := rows.Scan(&prescriptionID); err != nil {
+			return nil, 0, err
+		}
+
+		prescriptionIDs = append(prescriptionIDs, prescriptionID)
+		cancelledCount++
+	}
+	if err := rows.Err(); err != nil {
+		return nil, 0, err
+	}
+
+	return prescriptionIDs, cancelledCount, nil
+}
+
+func readStatus(ctx context.Context, tx pgx.Tx, appointmentID uuid.UUID) (Status, error) {
 	var status Status
-	if err := r.pool.QueryRow(ctx, selectAppointmentStatusQuery, appointmentID).Scan(&status); err != nil {
+	if err := tx.QueryRow(ctx, selectAppointmentStatusQuery, appointmentID).Scan(&status); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return 0, ErrInvalidAppointmentReference
 		}
@@ -516,6 +650,105 @@ func completePrescription(ctx context.Context, tx pgx.Tx, prescriptionID uuid.UU
 	}
 
 	return nil
+}
+
+// reopenFreedPrescriptions gives back prescriptions whose completion stopped
+// being true once a cancellation returned a session.
+//
+// The IDs are deduplicated and sorted so that every caller takes prescription
+// row locks in one global order: two bulk cancellations whose freed sets overlap
+// would otherwise be free to acquire them in opposite orders and deadlock.
+//
+// Issuing one statement per prescription rather than a single set-based update
+// is also what keeps a patient with two candidate prescriptions from violating
+// idx_prescription_active_per_patient. Statements see their predecessors' work,
+// so once the first is ACTIVE the second one's NOT EXISTS finds it and declines
+// -- the same rule the newer-prescription case follows. A single statement would
+// evaluate both against one snapshot, set both ACTIVE, and lose the whole
+// cancellation to a unique violation.
+func reopenFreedPrescriptions(ctx context.Context, tx pgx.Tx, prescriptionIDs []uuid.UUID) error {
+	if len(prescriptionIDs) == 0 {
+		return nil
+	}
+
+	// The reopen runs inside a savepoint so that losing it cannot cost the
+	// cancellation. The NOT EXISTS guard is evaluated against this transaction's
+	// snapshot, so a concurrent transaction issuing a new ACTIVE prescription for
+	// the same patient is invisible to it and surfaces as a unique violation on
+	// the UPDATE itself, once that other transaction commits and this one stops
+	// blocking on it -- which would otherwise abort the cancellation the user
+	// actually asked for. Abandoning the reopen instead leaves the freed session
+	// unreachable, which is the behaviour that existed before it was written and
+	// is plainly better than refusing to cancel.
+	savepoint, err := tx.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("begin prescription reopen savepoint: %w", err)
+	}
+
+	if err := reopenEachPrescription(ctx, savepoint, sortedUniqueIDs(prescriptionIDs)); err != nil {
+		// A failed rollback still fails the caller -- the outer transaction is
+		// aborted and could not commit anyway -- but the statement error is kept
+		// alongside it, since it is the one that says what actually went wrong.
+		if rollbackErr := savepoint.Rollback(ctx); rollbackErr != nil {
+			return errors.Join(err, fmt.Errorf("roll back prescription reopen savepoint: %w", rollbackErr))
+		}
+
+		// Only the race described above is forgiven. Anything else -- a dropped
+		// connection, a broken query -- still fails the caller, so a genuine
+		// fault cannot hide behind a cancellation that reports success.
+		if isConcurrentActivePrescriptionConflict(err) {
+			return nil
+		}
+
+		return err
+	}
+
+	if err := savepoint.Commit(ctx); err != nil {
+		return fmt.Errorf("commit prescription reopen savepoint: %w", err)
+	}
+
+	return nil
+}
+
+func isConcurrentActivePrescriptionConflict(err error) bool {
+	pgErr, ok := errors.AsType[*pgconn.PgError](err)
+	if !ok {
+		return false
+	}
+
+	return pgErr.Code == pgErrUniqueViolation && pgErr.ConstraintName == constraintPrescriptionActivePerPatient
+}
+
+func reopenEachPrescription(ctx context.Context, tx pgx.Tx, prescriptionIDs []uuid.UUID) error {
+	for _, prescriptionID := range prescriptionIDs {
+		if _, err := tx.Exec(
+			ctx,
+			reopenPrescriptionQuery,
+			prescriptionStatusActive,
+			prescriptionID,
+			prescriptionStatusCompleted,
+			StatusConfirmed,
+			StatusAbsent,
+			StatusAttended,
+		); err != nil {
+			return fmt.Errorf("reopen prescription: %w", err)
+		}
+	}
+
+	return nil
+}
+
+// The sort direction is arbitrary as long as every caller shares it; descending
+// is used so that the newest prescription wins when one patient has two
+// candidates, since domain.NewID mints UUIDv7 values that sort by creation time.
+func sortedUniqueIDs(ids []uuid.UUID) []uuid.UUID {
+	sorted := slices.Clone(ids)
+	slices.SortFunc(sorted, func(a, b uuid.UUID) int {
+		return slices.Compare(b[:], a[:])
+	})
+
+	// Sorting puts duplicates next to each other, which is all Compact needs.
+	return slices.Compact(sorted)
 }
 
 func fetchSlotRulesForUpdate(ctx context.Context, tx pgx.Tx, slotID uuid.UUID) (bool, int16, error) {
