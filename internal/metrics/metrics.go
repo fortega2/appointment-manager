@@ -155,7 +155,7 @@ func New() *Metrics {
 		[]string{"operation"},
 	)
 
-	// Dashboard: increase(appt_appointments_created_total[24h])
+	// Dashboard: sum(increase(appt_appointments_created_total[$__range]))
 	// Alert:     rate(appt_appointments_created_total[1h]) == 0
 	apptCreated := factory.NewCounter(
 		prometheus.CounterOpts{
