@@ -303,8 +303,7 @@ func nonNegativeDuration(apply func(time.Duration) db.Option) func(string) (db.O
 }
 
 // logPoolConfig reports the pool settings that ended up in force, whether they
-// came from a DB_POOL_* variable or from pgx. One line at startup is what turns
-// a saturated pool in production into a lookup instead of a guess.
+// came from a DB_POOL_* variable or from pgx
 func logPoolConfig(logger *slog.Logger, cfg *pgxpool.Config) {
 	logger.Info("postgres pool configured",
 		slog.Int64("max_conns", int64(cfg.MaxConns)),

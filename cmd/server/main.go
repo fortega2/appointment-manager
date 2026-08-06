@@ -93,10 +93,6 @@ func run() error {
 		logger.Info("postgres pool closed")
 	}(logger)
 
-	// Every DB_POOL_* variable is optional and the defaults behind them are pgx's,
-	// two of which depend on the host's CPU count. Reading the settings back off
-	// the live pool is the only way to know what a given machine actually ended up
-	// running, rather than inferring it from which variables happened to be set.
 	logPoolConfig(logger, pool.Config())
 
 	appMetrics.RegisterDBPool(pool)
@@ -123,7 +119,12 @@ func run() error {
 	env := strings.TrimSpace(os.Getenv(environmentEnv))
 	isDev := env == "" || strings.EqualFold(env, environmentDevelopment)
 
-	sessionStore := session.NewStore()
+	sessionStore, err := session.NewStore(deps.sessionRepo)
+	if err != nil {
+		logger.Error("failed to initialize session store", slog.Any("error", err))
+		return err
+	}
+
 	handler, err := initializeServerHandlers(
 		logger,
 		sessionStore,
@@ -157,7 +158,7 @@ func run() error {
 	stopNotificationWorker := startNotificationWorker(context.WithoutCancel(ctx), notificationService)
 	defer stopNotificationWorker()
 
-	stopWorkers, err := startBackgroundWorkers(ctx, logger, deps)
+	stopWorkers, err := startBackgroundWorkers(ctx, logger, deps, sessionStore)
 	if err != nil {
 		logger.ErrorContext(ctx, "failed to start background workers", slog.Any("error", err))
 		return err

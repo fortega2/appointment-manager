@@ -36,7 +36,7 @@ const (
 func TestNewHandlerValidation(t *testing.T) {
 	t.Parallel()
 
-	store := session.NewStore()
+	store := newTestSessionStore(t)
 	repo := &assistant.PostgresRepository{}
 	hasher := password.NewArgon2()
 	logger := slog.New(slog.DiscardHandler)
@@ -73,7 +73,7 @@ func TestRegisterHandlersDoesNotPanic(t *testing.T) {
 
 	h, err := NewHandler(
 		slog.New(slog.DiscardHandler),
-		session.NewStore(),
+		newTestSessionStore(t),
 		&assistant.PostgresRepository{},
 		password.NewArgon2(),
 		true,
@@ -162,7 +162,7 @@ func newTestHandler(t *testing.T, hasher *password.Argon2) *Handler {
 
 	h, err := NewHandler(
 		slog.New(slog.DiscardHandler),
-		session.NewStore(),
+		newTestSessionStore(t),
 		&assistant.PostgresRepository{},
 		hasher,
 		true,

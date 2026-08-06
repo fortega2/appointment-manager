@@ -12,6 +12,7 @@ import (
 	"log/slog"
 	"net/http"
 	"testing"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/stretchr/testify/require"
@@ -59,6 +60,58 @@ func newAuthIntegrationRepository(t *testing.T, pool *pgxpool.Pool) *assistant.P
 	require.NoError(t, err)
 
 	return repo
+}
+
+// stubSessionStorer is an in-memory session.Storer. The integration tests here
+// cover the auth handlers, not session persistence, which has its own suite.
+type stubSessionStorer struct {
+	sessions map[string]session.Session
+}
+
+func (s *stubSessionStorer) Create(_ context.Context, value session.Session) error {
+	s.sessions[value.ID] = value
+
+	return nil
+}
+
+func (s *stubSessionStorer) Get(_ context.Context, id string) (*session.Session, error) {
+	value, ok := s.sessions[id]
+	if !ok {
+		return nil, session.ErrSessionNotFound
+	}
+	copied := value
+
+	return &copied, nil
+}
+
+func (s *stubSessionStorer) Delete(_ context.Context, id string) error {
+	if _, ok := s.sessions[id]; !ok {
+		return session.ErrSessionNotFound
+	}
+	delete(s.sessions, id)
+
+	return nil
+}
+
+func (s *stubSessionStorer) DeleteExpired(_ context.Context, before time.Time) (int64, error) {
+	removed := int64(0)
+	for id, value := range s.sessions {
+		if before.After(value.ExpiresAt) {
+			delete(s.sessions, id)
+			removed++
+		}
+	}
+
+	return removed, nil
+}
+
+func newTestSessionStore(t *testing.T) *session.Store {
+	t.Helper()
+
+	store, err := session.NewStore(&stubSessionStorer{sessions: make(map[string]session.Session)})
+	require.NoError(t, err)
+
+	return store
 }
 
 func newAuthIntegrationMux(

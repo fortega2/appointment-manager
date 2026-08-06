@@ -1,6 +1,7 @@
 package main
 
 import (
+	"appointment-manager/internal/session"
 	"appointment-manager/internal/worker"
 	"context"
 	"fmt"
@@ -12,6 +13,7 @@ import (
 const (
 	expireOverdueJobName    = "expire-overdue-appointments"
 	reconcileCancelsJobName = "cancel-appointments-on-blocked-slots"
+	expireSessionsJobName   = "expire-sessions"
 )
 
 // startBackgroundWorkers runs the periodic appointment sweeps in the background
@@ -21,7 +23,12 @@ const (
 //
 // Both jobs are service methods: the sweeps carry business rules and business
 // metrics, so they stay behind the service rather than being assembled here.
-func startBackgroundWorkers(ctx context.Context, logger *slog.Logger, deps *dependencies) (func(), error) {
+func startBackgroundWorkers(
+	ctx context.Context,
+	logger *slog.Logger,
+	deps *dependencies,
+	sessionStore *session.Store,
+) (func(), error) {
 	workerInterval, err := parseWorkerInterval(os.Getenv(workerIntervalEnv))
 	if err != nil {
 		return nil, err
@@ -36,6 +43,7 @@ func startBackgroundWorkers(ctx context.Context, logger *slog.Logger, deps *depe
 	}{
 		{name: expireOverdueJobName, run: deps.appointmentService.ExpireOverdue},
 		{name: reconcileCancelsJobName, run: deps.appointmentService.CancelOnBlockedSlots},
+		{name: expireSessionsJobName, run: sessionStore.DeleteExpired},
 	}
 
 	stops := make([]func(), 0, len(jobs))

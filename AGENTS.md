@@ -142,6 +142,24 @@ Follow existing project conventions first.
   3. local module imports
 - Keep imports minimal; remove unused imports immediately.
 
+### Comments
+
+Do not narrate the code. A comment is warranted in exactly two cases:
+
+1. **Doc comments** on exported (and notable unexported) declarations — types, functions,
+   methods, constants. Follow Go stdlib style: start with the identifier's name, say what it
+   does and what the caller needs to know, and stop. One or two sentences. Not an essay, and
+   not a restatement of the signature.
+2. **A non-obvious decision inside a function**, where the code alone cannot explain *why*.
+   A workaround, a deliberate deviation from the obvious implementation, an ordering that
+   matters, a literal that is load-bearing.
+
+Everything else is noise. In particular, do not add comments that restate the next line, label
+sections of a function, or explain language features.
+
+If the reasoning is long enough to need a paragraph, it does not belong in the code — write an
+ADR in `documents/decisions/` and let the code stay clean.
+
 ### Types and Structs
 
 - Prefer explicit domain types (e.g., `assistant.ID`).

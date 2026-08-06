@@ -12,7 +12,7 @@ import (
 func TestFromContextSuccess(t *testing.T) {
 	t.Parallel()
 
-	expected := &Session{UserID: "assistant-1", Email: "assistant@email.com"}
+	expected := &Session{UserID: "assistant-1"}
 	ctx := context.WithValue(t.Context(), SessionKey, expected)
 
 	actual, err := FromContext(ctx)

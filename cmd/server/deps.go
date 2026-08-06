@@ -10,6 +10,7 @@ import (
 	"appointment-manager/internal/patient"
 	"appointment-manager/internal/prescription"
 	"appointment-manager/internal/professional"
+	"appointment-manager/internal/session"
 	"appointment-manager/internal/slot"
 	"fmt"
 
@@ -37,6 +38,8 @@ type dependencies struct {
 	prescriptionQuery *prescription.Query
 
 	professionalRepo *professional.Repository
+
+	sessionRepo *session.PostgresRepository
 
 	slotRepo  *slot.Repository
 	slotQuery *slot.Query
@@ -88,6 +91,11 @@ func newDependencies(pool *pgxpool.Pool, appointmentMetrics *metrics.Metrics) (*
 		return nil, fmt.Errorf("failed to create professional repository: %w", err)
 	}
 
+	sessionRepo, err := session.NewPostgresRepository(pool)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create session postgres repository: %w", err)
+	}
+
 	slotRepo, err := slot.NewRepository(pool)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create slot repository: %w", err)
@@ -113,6 +121,7 @@ func newDependencies(pool *pgxpool.Pool, appointmentMetrics *metrics.Metrics) (*
 		prescriptionRepo:    prescriptionRepo,
 		prescriptionQuery:   prescriptionQuery,
 		professionalRepo:    professionalRepo,
+		sessionRepo:         sessionRepo,
 		slotRepo:            slotRepo,
 		slotQuery:           slotQuery,
 	}, nil

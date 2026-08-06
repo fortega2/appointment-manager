@@ -62,7 +62,6 @@ func newIntegrationUIMux(t *testing.T, pool *pgxpool.Pool) *http.ServeMux {
 func sessionContext(ctx context.Context, userID uuid.UUID) context.Context {
 	return context.WithValue(ctx, session.SessionKey, &session.Session{
 		UserID: userID.String(),
-		Email:  userID.String() + "@clinic.test",
 	})
 }
 

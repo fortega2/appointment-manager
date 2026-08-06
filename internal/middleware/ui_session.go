@@ -22,7 +22,7 @@ func UISession(store *session.Store, isDevelopment bool) func(http.Handler) http
 				return
 			}
 
-			s, err := store.Get(cookie.Value)
+			s, err := store.Get(r.Context(), cookie.Value)
 			if err != nil {
 				//nolint:gosec // G124 false positive: Secure is dynamically !isDevelopment (true in prod, false only for local HTTP dev); HttpOnly/SameSite are already set.
 				http.SetCookie(w, &http.Cookie{

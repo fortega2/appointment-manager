@@ -15,6 +15,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go"
@@ -46,10 +47,10 @@ func TestLoginEndpointSuccessSetsCookieAndCreatesSession(t *testing.T) {
 
 	pool := newAuthIntegrationPool(ctx, t)
 	repo := newAuthIntegrationRepository(t, pool)
-	store := session.NewStore()
+	store := newTestSessionStore(t)
 	mux := newAuthIntegrationMux(t, repo, store, true)
 
-	seedAssistantForAuth(ctx, t, repo, authEmail, authPassword)
+	assistantID := seedAssistantForAuth(ctx, t, repo, authEmail, authPassword)
 
 	req := newAuthRequest(ctx, http.MethodPost, authPathLogin, authBodyValidLogin)
 	rec := httptest.NewRecorder()
@@ -64,10 +65,10 @@ func TestLoginEndpointSuccessSetsCookieAndCreatesSession(t *testing.T) {
 	assert.NotContains(t, setCookie, authCookieSecureDirective)
 
 	cookie := extractSessionCookie(t, rec)
-	sessionValue, err := store.Get(cookie.Value)
+	sessionValue, err := store.Get(t.Context(), cookie.Value)
 	require.NoError(t, err)
 	require.NotNil(t, sessionValue)
-	assert.Equal(t, authEmail, sessionValue.Email)
+	assert.Equal(t, assistantID.String(), sessionValue.UserID)
 }
 
 func TestLoginEndpointUnauthorizedForWrongPassword(t *testing.T) {
@@ -76,7 +77,7 @@ func TestLoginEndpointUnauthorizedForWrongPassword(t *testing.T) {
 
 	pool := newAuthIntegrationPool(ctx, t)
 	repo := newAuthIntegrationRepository(t, pool)
-	mux := newAuthIntegrationMux(t, repo, session.NewStore(), true)
+	mux := newAuthIntegrationMux(t, repo, newTestSessionStore(t), true)
 
 	seedAssistantForAuth(ctx, t, repo, authEmail, authPassword)
 
@@ -95,7 +96,7 @@ func TestLoginEndpointUnauthorizedForUnknownEmail(t *testing.T) {
 
 	pool := newAuthIntegrationPool(ctx, t)
 	repo := newAuthIntegrationRepository(t, pool)
-	mux := newAuthIntegrationMux(t, repo, session.NewStore(), true)
+	mux := newAuthIntegrationMux(t, repo, newTestSessionStore(t), true)
 
 	req := newAuthRequest(ctx, http.MethodPost, authPathLogin, authBodyUnknownEmail)
 	rec := httptest.NewRecorder()
@@ -111,10 +112,10 @@ func TestLogoutEndpointIsIdempotent(t *testing.T) {
 
 	pool := newAuthIntegrationPool(ctx, t)
 	repo := newAuthIntegrationRepository(t, pool)
-	store := session.NewStore()
+	store := newTestSessionStore(t)
 	mux := newAuthIntegrationMux(t, repo, store, true)
 
-	sessionID, err := store.Create("assistant-1", authEmail)
+	sessionID, err := store.Create(t.Context(), "assistant-1")
 	require.NoError(t, err)
 
 	withCookieReq := httptest.NewRequestWithContext(ctx, http.MethodPost, authPathLogout, nil)
@@ -126,7 +127,7 @@ func TestLogoutEndpointIsIdempotent(t *testing.T) {
 	assert.Equal(t, http.StatusNoContent, withCookieRec.Code)
 	require.NotEmpty(t, withCookieRec.Header().Get(authHeaderSetCookie))
 
-	_, getErr := store.Get(sessionID)
+	_, getErr := store.Get(t.Context(), sessionID)
 	require.Error(t, getErr)
 
 	withoutCookieReq := httptest.NewRequestWithContext(ctx, http.MethodPost, authPathLogout, nil)
@@ -143,7 +144,7 @@ func TestLoginEndpointSetsSecureCookieOutsideDevelopment(t *testing.T) {
 
 	pool := newAuthIntegrationPool(ctx, t)
 	repo := newAuthIntegrationRepository(t, pool)
-	mux := newAuthIntegrationMux(t, repo, session.NewStore(), false)
+	mux := newAuthIntegrationMux(t, repo, newTestSessionStore(t), false)
 
 	seedAssistantForAuth(ctx, t, repo, authEmail, authPassword)
 
@@ -161,7 +162,7 @@ func TestLoginEndpointRejectsWhenTooManyConcurrentPasswordChecks(t *testing.T) {
 
 	pool := newAuthIntegrationPool(ctx, t)
 	repo := newAuthIntegrationRepository(t, pool)
-	mux := newAuthIntegrationMux(t, repo, session.NewStore(), true)
+	mux := newAuthIntegrationMux(t, repo, newTestSessionStore(t), true)
 
 	seedAssistantForAuth(ctx, t, repo, authEmail, authPassword)
 
@@ -201,7 +202,7 @@ func TestProcessLoginUIHandlerRejectsWhenTooManyConcurrentPasswordChecks(t *test
 
 	pool := newAuthIntegrationPool(ctx, t)
 	repo := newAuthIntegrationRepository(t, pool)
-	mux := newAuthIntegrationMux(t, repo, session.NewStore(), true)
+	mux := newAuthIntegrationMux(t, repo, newTestSessionStore(t), true)
 
 	seedAssistantForAuth(ctx, t, repo, authEmail, authPassword)
 
@@ -241,10 +242,10 @@ func TestProcessLoginUIHandlerSuccessSetsCookieAndRedirects(t *testing.T) {
 
 	pool := newAuthIntegrationPool(ctx, t)
 	repo := newAuthIntegrationRepository(t, pool)
-	store := session.NewStore()
+	store := newTestSessionStore(t)
 	mux := newAuthIntegrationMux(t, repo, store, true)
 
-	seedAssistantForAuth(ctx, t, repo, authEmail, authPassword)
+	assistantID := seedAssistantForAuth(ctx, t, repo, authEmail, authPassword)
 
 	req := newAuthFormRequest(ctx, authEmail, authPassword)
 	rec := httptest.NewRecorder()
@@ -258,9 +259,9 @@ func TestProcessLoginUIHandlerSuccessSetsCookieAndRedirects(t *testing.T) {
 	assert.Contains(t, setCookie, session.CookieName+"=")
 
 	cookie := extractSessionCookie(t, rec)
-	sessionValue, err := store.Get(cookie.Value)
+	sessionValue, err := store.Get(t.Context(), cookie.Value)
 	require.NoError(t, err)
-	assert.Equal(t, authEmail, sessionValue.Email)
+	assert.Equal(t, assistantID.String(), sessionValue.UserID)
 }
 
 func TestProcessLoginUIHandlerRendersErrorForWrongPassword(t *testing.T) {
@@ -269,7 +270,7 @@ func TestProcessLoginUIHandlerRendersErrorForWrongPassword(t *testing.T) {
 
 	pool := newAuthIntegrationPool(ctx, t)
 	repo := newAuthIntegrationRepository(t, pool)
-	mux := newAuthIntegrationMux(t, repo, session.NewStore(), true)
+	mux := newAuthIntegrationMux(t, repo, newTestSessionStore(t), true)
 
 	seedAssistantForAuth(ctx, t, repo, authEmail, authPassword)
 
@@ -317,7 +318,7 @@ func seedAssistantForAuth(
 	repo *assistant.PostgresRepository,
 	email string,
 	plainPassword string,
-) {
+) uuid.UUID {
 	t.Helper()
 
 	hasher := password.NewArgon2()
@@ -329,4 +330,6 @@ func seedAssistantForAuth(
 
 	_, err = repo.Create(ctx, *record)
 	require.NoError(t, err)
+
+	return record.ID
 }

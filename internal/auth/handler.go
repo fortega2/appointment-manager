@@ -19,6 +19,7 @@ const (
 	renderLoginErroMsg        string = "error rendering login error"
 	failedGetAssistByEmailMsg string = "failed to get assistant by email"
 	failedCreateSessionMsg    string = "failed to create session"
+	failedDeleteSessionMsg    string = "failed to delete session"
 	serverBusyMsg             string = "Server is busy, please try again"
 	incorrectCredentialsMsg   string = "Incorrect email or password"
 
@@ -88,7 +89,7 @@ func (h *Handler) loginAPIHandler() http.HandlerFunc {
 			return
 		}
 
-		sessionID, err := h.store.Create(a.ID.String(), a.Email)
+		sessionID, err := h.store.Create(r.Context(), a.ID.String())
 		if err != nil {
 			h.logger.ErrorContext(
 				r.Context(),
@@ -114,11 +115,23 @@ func (h *Handler) loginAPIHandler() http.HandlerFunc {
 	}
 }
 
+// clearSession removes the session behind the request's cookie. A failure is
+// logged rather than surfaced: the cookie is cleared either way, and the row
+// left behind expires on its own.
+func (h *Handler) clearSession(r *http.Request) {
+	cookie, err := r.Cookie(session.CookieName)
+	if err != nil {
+		return
+	}
+
+	if err := h.store.Delete(r.Context(), cookie.Value); err != nil && !errors.Is(err, session.ErrSessionNotFound) {
+		h.logger.ErrorContext(r.Context(), failedDeleteSessionMsg, slog.Any("error", err))
+	}
+}
+
 func (h *Handler) logoutAPIHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if cookie, err := r.Cookie(session.CookieName); err == nil {
-			h.store.Delete(cookie.Value)
-		}
+		h.clearSession(r)
 
 		//nolint:gosec // G124 false positive: Secure is dynamically !h.isDevelopment (true in prod, false only for local HTTP dev); HttpOnly/SameSite are already set.
 		http.SetCookie(w, &http.Cookie{
@@ -206,7 +219,7 @@ func (h *Handler) processLoginUIHandler() http.HandlerFunc {
 			return
 		}
 
-		sessionID, err := h.store.Create(a.ID.String(), a.Email)
+		sessionID, err := h.store.Create(r.Context(), a.ID.String())
 		if err != nil {
 			h.logger.ErrorContext(
 				r.Context(),
@@ -255,9 +268,7 @@ func (h *Handler) renderError(w http.ResponseWriter, r *http.Request, status int
 
 func (h *Handler) logoutUIHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if cookie, err := r.Cookie(session.CookieName); err == nil {
-			h.store.Delete(cookie.Value)
-		}
+		h.clearSession(r)
 
 		//nolint:gosec // G124 false positive: Secure is dynamically !h.isDevelopment (true in prod, false only for local HTTP dev); HttpOnly/SameSite are already set.
 		http.SetCookie(w, &http.Cookie{
