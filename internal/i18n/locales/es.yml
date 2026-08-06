@@ -96,6 +96,38 @@ es:
       select_option: "Seleccioná una opción"
       insurance_number: "Número de afiliado"
       clinical_notes: "Notas clínicas"
+  professional:
+    title: "Profesionales"
+    create: "Crear profesional"
+    empty:
+      title: "No hay profesionales"
+      body: "Agregá un profesional para empezar a gestionar sus turnos."
+    filters:
+      search: "Buscar por nombre o apellido..."
+      all: "Todos los profesionales"
+      active: "Activos"
+      inactive: "Inactivos"
+      reset: "Limpiar filtros"
+    table:
+      first_name: "Nombre"
+      last_name: "Apellido"
+      phone: "Teléfono"
+      specialty: "Especialidad"
+      status: "Estado"
+      action: "Acción"
+    status:
+      active: "Activo"
+      inactive: "Inactivo"
+    action:
+      edit: "Editar"
+      edit_label: "Editar profesional"
+    form:
+      create: "Crear profesional"
+      edit: "Editar profesional"
+      first_name: "Nombre"
+      last_name: "Apellido"
+      phone: "Teléfono"
+      active: "Activo"
   appointment:
     remaining_sessions:
       one: "Queda %{count} sesión"

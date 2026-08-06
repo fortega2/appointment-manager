@@ -3,12 +3,13 @@ package professional
 import (
     "fmt"
 
+	"appointment-manager/internal/i18n"
 	"appointment-manager/internal/ui/layout"
 	"appointment-manager/internal/ui/form"
 )
 
 templ Dashboard(professionals []View) {
-    @layout.Base("Professional Dashboard", true) {
+    @layout.Base(i18n.T(ctx, "professional.title"), true) {
         <div class="w-full max-w-5xl mx-auto" x-data="{ statusFilter: 'all', searchQuery: '', modalOpen: false }" @close-modal.window="modalOpen = false">
             @Filters()
             if len(professionals) == 0 {
@@ -16,8 +17,8 @@ templ Dashboard(professionals []View) {
                     <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
                         <path vector-effect="non-scaling-stroke" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
                     </svg>
-                    <h3 class="mt-2 text-sm font-semibold text-gray-900">There are no professionals</h3>
-                    <p class="mt-1 text-sm text-gray-500">Add a professional to start managing their appointments.</p>
+                    <h3 class="mt-2 text-sm font-semibold text-gray-900">{ i18n.T(ctx, "professional.empty.title") }</h3>
+                    <p class="mt-1 text-sm text-gray-500">{ i18n.T(ctx, "professional.empty.body") }</p>
                 </div>
             } else {
                 @Table(professionals)
@@ -32,7 +33,12 @@ templ Dashboard(professionals []View) {
                     class="bg-white rounded-lg shadow-xl w-full max-w-md p-6 relative text-left"
                     @click.away="modalOpen = false"
                 >
-                    <button @click="modalOpen = false" class="absolute top-4 right-4 text-gray-400 hover:text-gray-600">
+                    <button
+                        @click="modalOpen = false"
+                        type="button"
+                        aria-label={ i18n.T(ctx, "common.close") }
+                        class="absolute top-4 right-4 text-gray-400 hover:text-gray-600"
+                    >
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
                     </button>
 
@@ -49,7 +55,7 @@ templ Filters() {
             <input 
                 type="text" 
                 x-model="searchQuery" 
-                placeholder="Search by name or lastname..." 
+                placeholder={ i18n.T(ctx, "professional.filters.search") }
                 class="bg-white border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5"
             />
         </div>
@@ -59,9 +65,9 @@ templ Filters() {
                 x-model="statusFilter" 
                 class="bg-white border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2.5"
             >
-                <option value="all">All Professionals</option>
-                <option value="true">Actives</option>
-                <option value="false">Inactives</option>
+                <option value="all">{ i18n.T(ctx, "professional.filters.all") }</option>
+                <option value="true">{ i18n.T(ctx, "professional.filters.active") }</option>
+                <option value="false">{ i18n.T(ctx, "professional.filters.inactive") }</option>
             </select>
             
             <button 
@@ -69,7 +75,7 @@ templ Filters() {
                 @click="statusFilter = 'all'; searchQuery = ''" 
                 class="text-sm text-blue-600 hover:underline"
             >
-                Reset Filters
+                { i18n.T(ctx, "professional.filters.reset") }
             </button>
 
             <button 
@@ -79,7 +85,7 @@ templ Filters() {
                 @click="modalOpen = true"
                 class="bg-indigo-600 text-white text-sm font-medium px-4 py-2 rounded-md hover:bg-indigo-700 transition-colors"
             >
-                Create Professional
+                { i18n.T(ctx, "professional.create") }
             </button>
         </div>
     </div>
@@ -90,12 +96,12 @@ templ Table(professionals []View) {
         <table class="w-full text-sm text-left border-collapse">
             <thead class="bg-gray-100 text-gray-600 uppercase text-xs">
                 <tr>
-                    <th class="px-4 py-3">First Name</th>
-                    <th class="px-4 py-3">Last Name</th>
-                    <th class="px-4 py-3">Phone</th>
-                    <th class="px-4 py-3">Specialty</th>
-                    <th class="px-4 py-3">Status</th>
-                    <th class="px-4 py-3">Action</th>
+                    <th class="px-4 py-3">{ i18n.T(ctx, "professional.table.first_name") }</th>
+                    <th class="px-4 py-3">{ i18n.T(ctx, "professional.table.last_name") }</th>
+                    <th class="px-4 py-3">{ i18n.T(ctx, "professional.table.phone") }</th>
+                    <th class="px-4 py-3">{ i18n.T(ctx, "professional.table.specialty") }</th>
+                    <th class="px-4 py-3">{ i18n.T(ctx, "professional.table.status") }</th>
+                    <th class="px-4 py-3">{ i18n.T(ctx, "professional.table.action") }</th>
                 </tr>
             </thead>
             <tbody class="divide-y divide-gray-200">
@@ -111,16 +117,16 @@ templ Table(professionals []View) {
                         <td class="px-4 py-3 text-gray-500">{ p.Specialty }</td>
                         <td class="px-4 py-3">
                             if p.Active {
-                                <span class="bg-green-100 text-green-700 text-xs font-medium px-2 py-1 rounded-full">Active</span>
+                                <span class="bg-green-100 text-green-700 text-xs font-medium px-2 py-1 rounded-full">{ i18n.T(ctx, "professional.status.active") }</span>
                             } else {
-                                <span class="bg-red-100 text-red-600 text-xs font-medium px-2 py-1 rounded-full">Inactive</span>
+                                <span class="bg-red-100 text-red-600 text-xs font-medium px-2 py-1 rounded-full">{ i18n.T(ctx, "professional.status.inactive") }</span>
                             }
                         </td>
                         <td class="px-4 py-3 text-center align-middle">
                             <button 
                                 type="button"
-                                title="Edit"
-                                aria-label="Edit Professional"
+                                title={ i18n.T(ctx, "professional.action.edit") }
+                                aria-label={ i18n.T(ctx, "professional.action.edit_label") }
                                 hx-get={ string(templ.URL(fmt.Sprintf("/professionals/%s/edit", p.ID))) } 
                                 hx-target="#modal-content" 
                                 @click="modalOpen = true"
@@ -140,9 +146,9 @@ templ Form(p View, method form.Method, actionURL string) {
     <div>
         <h2 class="text-xl font-bold text-gray-900 mb-4">
             if method == form.MethodPost {
-                Create Professional
+                { i18n.T(ctx, "professional.form.create") }
             } else {
-                Edit Professional
+                { i18n.T(ctx, "professional.form.edit") }
             }
         </h2>
         
@@ -157,7 +163,7 @@ templ Form(p View, method form.Method, actionURL string) {
             class="space-y-4"
         >
             <div>
-                <label for="first_name" class="block text-sm font-medium text-gray-700">First Name</label>
+                <label for="first_name" class="block text-sm font-medium text-gray-700">{ i18n.T(ctx, "professional.form.first_name") }</label>
                 <input 
                     type="text" 
                     id="first_name" 
@@ -169,7 +175,7 @@ templ Form(p View, method form.Method, actionURL string) {
             </div>
             
             <div>
-                <label for="last_name" class="block text-sm font-medium text-gray-700">Last Name</label>
+                <label for="last_name" class="block text-sm font-medium text-gray-700">{ i18n.T(ctx, "professional.form.last_name") }</label>
                 <input 
                     type="text" 
                     id="last_name" 
@@ -181,7 +187,7 @@ templ Form(p View, method form.Method, actionURL string) {
             </div>
 
             <div>
-                <label for="phone" class="block text-sm font-medium text-gray-700">Phone</label>
+                <label for="phone" class="block text-sm font-medium text-gray-700">{ i18n.T(ctx, "professional.form.phone") }</label>
                 <input 
                     type="text" 
                     id="phone" 
@@ -202,7 +208,7 @@ templ Form(p View, method form.Method, actionURL string) {
                         checked?={ p.Active }
                         class="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
                     />
-                    <label for="active" class="text-sm text-gray-700">Active</label>
+                    <label for="active" class="text-sm text-gray-700">{ i18n.T(ctx, "professional.form.active") }</label>
                 </div>
             }
 
@@ -212,13 +218,13 @@ templ Form(p View, method form.Method, actionURL string) {
                     @click="modalOpen = false" 
                     class="bg-white py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
                 >
-                    Cancel
+                    { i18n.T(ctx, "common.cancel") }
                 </button>
                 <button 
                     type="submit" 
                     class="inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
                 >
-                    Save
+                    { i18n.T(ctx, "common.save") }
                 </button>
             </div>
         </form>

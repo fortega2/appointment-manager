@@ -96,6 +96,38 @@ en:
       select_option: "Select an option"
       insurance_number: "Insurance Number"
       clinical_notes: "Clinical Notes"
+  professional:
+    title: "Professional Dashboard"
+    create: "Create Professional"
+    empty:
+      title: "There are no professionals"
+      body: "Add a professional to start managing their appointments."
+    filters:
+      search: "Search by name or lastname..."
+      all: "All Professionals"
+      active: "Actives"
+      inactive: "Inactives"
+      reset: "Reset Filters"
+    table:
+      first_name: "First Name"
+      last_name: "Last Name"
+      phone: "Phone"
+      specialty: "Specialty"
+      status: "Status"
+      action: "Action"
+    status:
+      active: "Active"
+      inactive: "Inactive"
+    action:
+      edit: "Edit"
+      edit_label: "Edit Professional"
+    form:
+      create: "Create Professional"
+      edit: "Edit Professional"
+      first_name: "First Name"
+      last_name: "Last Name"
+      phone: "Phone"
+      active: "Active"
   appointment:
     remaining_sessions:
       one: "%{count} session left"
