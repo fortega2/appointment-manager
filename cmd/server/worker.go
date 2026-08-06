@@ -34,9 +34,6 @@ func startBackgroundWorkers(
 		return nil, err
 	}
 
-	// Sweeping overdue appointments to absent, and cancelling appointments
-	// stranded on an already-blocked slot, are independent jobs: one lagging or
-	// failing must not hold up the other, so each gets its own ticker.
 	jobs := []struct {
 		name string
 		run  worker.JobFunc

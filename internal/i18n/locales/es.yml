@@ -1,0 +1,10 @@
+es:
+  app:
+    name: "Appointment Manager"
+  home:
+    welcome: "Bienvenido a Appointment Manager"
+    tagline: "Gestioná tus turnos de forma simple y eficiente."
+  appointment:
+    remaining_sessions:
+      one: "Queda %{count} sesión"
+      other: "Quedan %{count} sesiones"

@@ -1,0 +1,10 @@
+en:
+  app:
+    name: "Appointment Manager"
+  home:
+    welcome: "Welcome to Appointment Manager"
+    tagline: "Manage your appointments efficiently and effortlessly."
+  appointment:
+    remaining_sessions:
+      one: "%{count} session left"
+      other: "%{count} sessions left"
