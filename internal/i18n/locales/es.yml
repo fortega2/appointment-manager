@@ -66,6 +66,36 @@ es:
       start_time: "Hora de inicio"
       end_time: "Hora de fin"
       max_capacity: "Cupo máximo"
+  patient:
+    title: "Pacientes"
+    create: "Crear paciente"
+    empty:
+      title: "No hay pacientes"
+      body: "Agregá un paciente para empezar a gestionar sus turnos."
+    filters:
+      search: "Buscar por nombre o apellido..."
+      reset: "Limpiar filtros"
+    table:
+      first_name: "Nombre"
+      last_name: "Apellido"
+      phone: "Teléfono"
+      email: "Email"
+      health_insurance: "Obra social"
+      action: "Acción"
+    action:
+      edit: "Editar"
+      edit_label: "Editar paciente"
+    form:
+      create: "Crear paciente"
+      edit: "Editar paciente"
+      first_name: "Nombre"
+      last_name: "Apellido"
+      phone: "Teléfono"
+      email: "Email"
+      health_insurance: "Obra social"
+      select_option: "Seleccioná una opción"
+      insurance_number: "Número de afiliado"
+      clinical_notes: "Notas clínicas"
   appointment:
     remaining_sessions:
       one: "Queda %{count} sesión"

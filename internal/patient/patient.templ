@@ -2,6 +2,7 @@ package patient
 
 import (
 	"fmt"
+	"appointment-manager/internal/i18n"
 	"appointment-manager/internal/ui/layout"
 	"appointment-manager/internal/healthinsurance"
 	"strconv"
@@ -9,7 +10,7 @@ import (
 )
 
 templ Dashboard(patients []View) {
-	@layout.Base("Patient Dashboard", true) {
+	@layout.Base(i18n.T(ctx, "patient.title"), true) {
 		<div class="w-full max-w-5xl mx-auto" x-data="{ searchQuery: '', modalOpen: false }" @close-modal.window="modalOpen = false">
 			@Filters()
 			if len(patients) == 0 {
@@ -17,8 +18,8 @@ templ Dashboard(patients []View) {
 					<svg class="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
 						<path vector-effect="non-scaling-stroke" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
 					</svg>
-					<h3 class="mt-2 text-sm font-semibold text-gray-900">There are no patients</h3>
-					<p class="mt-1 text-sm text-gray-500">Add a patient to start managing their appointments.</p>
+					<h3 class="mt-2 text-sm font-semibold text-gray-900">{ i18n.T(ctx, "patient.empty.title") }</h3>
+					<p class="mt-1 text-sm text-gray-500">{ i18n.T(ctx, "patient.empty.body") }</p>
 				</div>
 			} else {
 				@Table(patients)
@@ -33,7 +34,12 @@ templ Dashboard(patients []View) {
 					class="bg-white rounded-lg shadow-xl w-full max-w-lg p-6 relative text-left"
 					@click.away="modalOpen = false"
 				>
-					<button @click="modalOpen = false" class="absolute top-4 right-4 text-gray-400 hover:text-gray-600">
+					<button
+						@click="modalOpen = false"
+						type="button"
+						aria-label={ i18n.T(ctx, "common.close") }
+						class="absolute top-4 right-4 text-gray-400 hover:text-gray-600"
+					>
 						<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
 					</button>
 
@@ -50,7 +56,7 @@ templ Filters() {
 			<input 
 				type="text" 
 				x-model="searchQuery" 
-				placeholder="Search by name or lastname..." 
+				placeholder={ i18n.T(ctx, "patient.filters.search") }
 				class="bg-white border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5"
 			/>
 		</div>
@@ -61,7 +67,7 @@ templ Filters() {
 				@click="searchQuery = ''" 
 				class="text-sm text-blue-600 hover:underline"
 			>
-				Reset Filters
+				{ i18n.T(ctx, "patient.filters.reset") }
 			</button>
 
 			<button 
@@ -71,7 +77,7 @@ templ Filters() {
 				@click="modalOpen = true"
 				class="bg-indigo-600 text-white text-sm font-medium px-4 py-2 rounded-md hover:bg-indigo-700 transition-colors"
 			>
-				Create Patient
+				{ i18n.T(ctx, "patient.create") }
 			</button>
 		</div>
 	</div>
@@ -82,12 +88,12 @@ templ Table(patients []View) {
 		<table class="w-full text-sm text-left border-collapse">
 			<thead class="bg-gray-100 text-gray-600 uppercase text-xs">
 				<tr>
-					<th class="px-4 py-3">First Name</th>
-					<th class="px-4 py-3">Last Name</th>
-					<th class="px-4 py-3">Phone</th>
-					<th class="px-4 py-3">Email</th>
-					<th class="px-4 py-3">Health Ins.</th>
-					<th class="px-4 py-3">Action</th>
+					<th class="px-4 py-3">{ i18n.T(ctx, "patient.table.first_name") }</th>
+					<th class="px-4 py-3">{ i18n.T(ctx, "patient.table.last_name") }</th>
+					<th class="px-4 py-3">{ i18n.T(ctx, "patient.table.phone") }</th>
+					<th class="px-4 py-3">{ i18n.T(ctx, "patient.table.email") }</th>
+					<th class="px-4 py-3">{ i18n.T(ctx, "patient.table.health_insurance") }</th>
+					<th class="px-4 py-3">{ i18n.T(ctx, "patient.table.action") }</th>
 				</tr>
 			</thead>
 			<tbody class="divide-y divide-gray-200">
@@ -105,8 +111,8 @@ templ Table(patients []View) {
 						<td class="px-4 py-3 text-center align-middle">
 							<button 
 								type="button"
-								title="Edit"
-								aria-label="Edit Patient"
+								title={ i18n.T(ctx, "patient.action.edit") }
+								aria-label={ i18n.T(ctx, "patient.action.edit_label") }
 								hx-get={ string(templ.URL(fmt.Sprintf("/patients/%s/edit", p.ID))) } 
 								hx-target="#modal-content" 
 								@click="modalOpen = true"
@@ -126,9 +132,9 @@ templ Form(p View, method form.Method, actionURL string, insurances []healthinsu
 	<div>
 		<h2 class="text-xl font-bold text-gray-900 mb-4">
 			if method == form.MethodPost {
-				Create Patient
+				{ i18n.T(ctx, "patient.form.create") }
 			} else {
-				Edit Patient
+				{ i18n.T(ctx, "patient.form.edit") }
 			}
 		</h2>
 		
@@ -144,7 +150,7 @@ templ Form(p View, method form.Method, actionURL string, insurances []healthinsu
 		>
 			<div class="grid grid-cols-2 gap-4">
 				<div>
-					<label for="first_name" class="block text-sm font-medium text-gray-700">First Name</label>
+					<label for="first_name" class="block text-sm font-medium text-gray-700">{ i18n.T(ctx, "patient.form.first_name") }</label>
 					<input 
 						type="text" 
 						id="first_name" 
@@ -156,7 +162,7 @@ templ Form(p View, method form.Method, actionURL string, insurances []healthinsu
 				</div>
 				
 				<div>
-					<label for="last_name" class="block text-sm font-medium text-gray-700">Last Name</label>
+					<label for="last_name" class="block text-sm font-medium text-gray-700">{ i18n.T(ctx, "patient.form.last_name") }</label>
 					<input 
 						type="text" 
 						id="last_name" 
@@ -168,7 +174,7 @@ templ Form(p View, method form.Method, actionURL string, insurances []healthinsu
 				</div>
 
 				<div>
-					<label for="phone" class="block text-sm font-medium text-gray-700">Phone</label>
+					<label for="phone" class="block text-sm font-medium text-gray-700">{ i18n.T(ctx, "patient.form.phone") }</label>
 					<input 
 						type="text" 
 						id="phone" 
@@ -180,7 +186,7 @@ templ Form(p View, method form.Method, actionURL string, insurances []healthinsu
 				</div>
 
 				<div>
-					<label for="email" class="block text-sm font-medium text-gray-700">Email</label>
+					<label for="email" class="block text-sm font-medium text-gray-700">{ i18n.T(ctx, "patient.form.email") }</label>
 					<input 
 						type="email" 
 						id="email" 
@@ -192,14 +198,14 @@ templ Form(p View, method form.Method, actionURL string, insurances []healthinsu
 				</div>
 
 				<div>
-					<label for="health_insurance" class="block text-sm font-medium text-gray-700">Health Insurance</label>
+					<label for="health_insurance" class="block text-sm font-medium text-gray-700">{ i18n.T(ctx, "patient.form.health_insurance") }</label>
 					<select 
 						id="health_insurance" 
 						name="health_insurance" 
 						required 
 						class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm bg-white"
 					>
-						<option value="" disabled selected?={ p.HealthInsurance == 0 }>Select an option</option>
+						<option value="" disabled selected?={ p.HealthInsurance == 0 }>{ i18n.T(ctx, "patient.form.select_option") }</option>
 						for _, hi := range insurances {
 							<option value={ strconv.Itoa(hi.ID) } selected?={ p.HealthInsurance == hi.ID }>{ hi.Name }</option>
 						}
@@ -207,7 +213,7 @@ templ Form(p View, method form.Method, actionURL string, insurances []healthinsu
 				</div>
 
 				<div>
-					<label for="insurance_number" class="block text-sm font-medium text-gray-700">Insurance Number</label>
+					<label for="insurance_number" class="block text-sm font-medium text-gray-700">{ i18n.T(ctx, "patient.form.insurance_number") }</label>
 					<input 
 						type="text" 
 						id="insurance_number" 
@@ -222,7 +228,7 @@ templ Form(p View, method form.Method, actionURL string, insurances []healthinsu
 			</div>
 
 			<div>
-				<label for="clinical_notes" class="block text-sm font-medium text-gray-700">Clinical Notes</label>
+				<label for="clinical_notes" class="block text-sm font-medium text-gray-700">{ i18n.T(ctx, "patient.form.clinical_notes") }</label>
 				<textarea 
 					id="clinical_notes" 
 					name="clinical_notes" 
@@ -237,13 +243,13 @@ templ Form(p View, method form.Method, actionURL string, insurances []healthinsu
 					@click="modalOpen = false" 
 					class="bg-white py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
 				>
-					Cancel
+					{ i18n.T(ctx, "common.cancel") }
 				</button>
 				<button 
 					type="submit" 
 					class="inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
 				>
-					Save
+					{ i18n.T(ctx, "common.save") }
 				</button>
 			</div>
 		</form>

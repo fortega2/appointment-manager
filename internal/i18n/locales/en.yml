@@ -66,6 +66,36 @@ en:
       start_time: "Start Time"
       end_time: "End Time"
       max_capacity: "Max Capacity"
+  patient:
+    title: "Patient Dashboard"
+    create: "Create Patient"
+    empty:
+      title: "There are no patients"
+      body: "Add a patient to start managing their appointments."
+    filters:
+      search: "Search by name or lastname..."
+      reset: "Reset Filters"
+    table:
+      first_name: "First Name"
+      last_name: "Last Name"
+      phone: "Phone"
+      email: "Email"
+      health_insurance: "Health Ins."
+      action: "Action"
+    action:
+      edit: "Edit"
+      edit_label: "Edit Patient"
+    form:
+      create: "Create Patient"
+      edit: "Edit Patient"
+      first_name: "First Name"
+      last_name: "Last Name"
+      phone: "Phone"
+      email: "Email"
+      health_insurance: "Health Insurance"
+      select_option: "Select an option"
+      insurance_number: "Insurance Number"
+      clinical_notes: "Clinical Notes"
   appointment:
     remaining_sessions:
       one: "%{count} session left"

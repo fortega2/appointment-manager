@@ -5,9 +5,11 @@ import (
 	"testing"
 
 	"appointment-manager/internal/healthinsurance"
+	"appointment-manager/internal/i18n"
 	"appointment-manager/internal/patient"
 	"appointment-manager/internal/ui/form"
 
+	"github.com/a-h/templ"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -18,43 +20,70 @@ const (
 	patientCaseRenderTable              = "render table with patients"
 	patientCaseRenderFormCreate         = "render form create"
 	patientCaseRenderFormEdit           = "render form edit"
+
+	// Anchored to the tag: the nav link also says "Pacientes", so a bare
+	// substring check would pass even with the title left untranslated.
+	titleES      = "<title>Pacientes"
+	titleEN      = "<title>Patient Dashboard"
+	emptyES      = "No hay pacientes"
+	emptyEN      = "There are no patients"
+	emptyBodyES  = "Agregá un paciente"
+	emptyBodyEN  = "Add a patient to start"
+	formCreateES = "Crear paciente"
+	formCreateEN = "Create Patient"
+	formEditES   = "Editar paciente"
+	formEditEN   = "Edit Patient"
 )
+
+// renderIn renders a component as the given locale would see it.
+func renderIn(t *testing.T, locale i18n.Locale, component templ.Component) string {
+	t.Helper()
+
+	var buf bytes.Buffer
+	require.NoError(t, component.Render(i18n.WithLocale(t.Context(), locale), &buf))
+
+	return buf.String()
+}
 
 func TestPatientDashboard(t *testing.T) {
 	t.Parallel()
 
-	t.Run(patientCaseRenderDashboardEmpty, func(t *testing.T) {
-		t.Parallel()
+	tests := []struct {
+		name      string
+		locale    i18n.Locale
+		title     string
+		empty     string
+		emptyBody string
+	}{
+		{"spanish", i18n.LocaleES, titleES, emptyES, emptyBodyES},
+		{"english", i18n.LocaleEN, titleEN, emptyEN, emptyBodyEN},
+	}
 
-		component := patient.Dashboard(nil)
+	for _, tt := range tests {
+		t.Run(patientCaseRenderDashboardEmpty+" in "+tt.name, func(t *testing.T) {
+			t.Parallel()
 
-		var buf bytes.Buffer
-		err := component.Render(t.Context(), &buf)
-		require.NoError(t, err)
+			output := renderIn(t, tt.locale, patient.Dashboard(nil))
 
-		output := buf.String()
-		assert.Contains(t, output, "Patient Dashboard")
-		assert.Contains(t, output, "There are no patients")
-		assert.Contains(t, output, "Add a patient to start")
-	})
+			assert.Contains(t, output, tt.title)
+			assert.Contains(t, output, tt.empty)
+			assert.Contains(t, output, tt.emptyBody)
+		})
 
-	t.Run(patientCaseRenderDashboardPopulated, func(t *testing.T) {
-		t.Parallel()
+		t.Run(patientCaseRenderDashboardPopulated+" in "+tt.name, func(t *testing.T) {
+			t.Parallel()
 
-		patients := []patient.View{
-			{FirstName: "John", LastName: "Doe"},
-		}
-		component := patient.Dashboard(patients)
+			patients := []patient.View{
+				{FirstName: "John", LastName: "Doe"},
+			}
 
-		var buf bytes.Buffer
-		err := component.Render(t.Context(), &buf)
-		require.NoError(t, err)
+			output := renderIn(t, tt.locale, patient.Dashboard(patients))
 
-		output := buf.String()
-		assert.Contains(t, output, "Patient Dashboard")
-		assert.Contains(t, output, "John")
-		assert.NotContains(t, output, "There are no patients")
-	})
+			assert.Contains(t, output, tt.title)
+			assert.Contains(t, output, "John")
+			assert.NotContains(t, output, tt.empty)
+		})
+	}
 }
 
 func TestPatientTable(t *testing.T) {
@@ -74,13 +103,8 @@ func TestPatientTable(t *testing.T) {
 			},
 		}
 
-		component := patient.Table(patients)
+		output := renderIn(t, i18n.LocaleES, patient.Table(patients))
 
-		var buf bytes.Buffer
-		err := component.Render(t.Context(), &buf)
-		require.NoError(t, err)
-
-		output := buf.String()
 		assert.Contains(t, output, "Jane")
 		assert.Contains(t, output, "Smith")
 		assert.Contains(t, output, "555-1234")
@@ -98,42 +122,44 @@ func TestPatientForm(t *testing.T) {
 		{ID: 2, Name: "Swiss Medical"},
 	}
 
-	t.Run(patientCaseRenderFormCreate, func(t *testing.T) {
-		t.Parallel()
+	tests := []struct {
+		name   string
+		locale i18n.Locale
+		create string
+		edit   string
+	}{
+		{"spanish", i18n.LocaleES, formCreateES, formEditES},
+		{"english", i18n.LocaleEN, formCreateEN, formEditEN},
+	}
 
-		p := patient.View{}
-		component := patient.Form(p, form.MethodPost, "/patients", insurances)
+	for _, tt := range tests {
+		t.Run(patientCaseRenderFormCreate+" in "+tt.name, func(t *testing.T) {
+			t.Parallel()
 
-		var buf bytes.Buffer
-		err := component.Render(t.Context(), &buf)
-		require.NoError(t, err)
+			output := renderIn(t, tt.locale, patient.Form(patient.View{}, form.MethodPost, "/patients", insurances))
 
-		output := buf.String()
-		assert.Contains(t, output, "Create Patient")
-		assert.Contains(t, output, `hx-post="/patients"`)
-		assert.Contains(t, output, "OSDE")
-		assert.Contains(t, output, "Swiss Medical")
-	})
+			assert.Contains(t, output, tt.create)
+			assert.Contains(t, output, `hx-post="/patients"`)
+			assert.Contains(t, output, "OSDE")
+			assert.Contains(t, output, "Swiss Medical")
+		})
 
-	t.Run(patientCaseRenderFormEdit, func(t *testing.T) {
-		t.Parallel()
+		t.Run(patientCaseRenderFormEdit+" in "+tt.name, func(t *testing.T) {
+			t.Parallel()
 
-		p := patient.View{
-			FirstName:       "Alice",
-			HealthInsurance: 2,
-			ClinicalNotes:   "Some notes",
-		}
-		component := patient.Form(p, form.MethodPut, "/patients/123", insurances)
+			p := patient.View{
+				FirstName:       "Alice",
+				HealthInsurance: 2,
+				ClinicalNotes:   "Some notes",
+			}
 
-		var buf bytes.Buffer
-		err := component.Render(t.Context(), &buf)
-		require.NoError(t, err)
+			output := renderIn(t, tt.locale, patient.Form(p, form.MethodPut, "/patients/123", insurances))
 
-		output := buf.String()
-		assert.Contains(t, output, "Edit Patient")
-		assert.Contains(t, output, `hx-put="/patients/123"`)
-		assert.Contains(t, output, `value="Alice"`)
-		assert.Contains(t, output, "Some notes")
-		assert.Contains(t, output, `value="2" selected`) // Swiss Medical selected
-	})
+			assert.Contains(t, output, tt.edit)
+			assert.Contains(t, output, `hx-put="/patients/123"`)
+			assert.Contains(t, output, `value="Alice"`)
+			assert.Contains(t, output, "Some notes")
+			assert.Contains(t, output, `value="2" selected`) // Swiss Medical selected
+		})
+	}
 }
