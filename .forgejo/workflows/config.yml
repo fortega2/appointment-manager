@@ -23,13 +23,13 @@ jobs:
           path: |
             ~/go/pkg/mod
             ~/.cache/go-build
-          key: go-${{ hashFiles('go.sum') }}
+            ~/.cache/golangci-lint
+          key: go-${{ hashFiles('go.sum') }}-${{ github.sha }}
+          restore-keys: |
+            go-${{ hashFiles('go.sum') }}-
 
       - name: Download dependencies
         run: go mod download
-
-      - name: go vet
-        run: go vet ./...
 
       - name: go build
         run: go build ./...
