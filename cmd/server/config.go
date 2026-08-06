@@ -2,6 +2,7 @@ package main
 
 import (
 	"appointment-manager/internal/db"
+	"appointment-manager/internal/i18n"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -22,6 +23,8 @@ const (
 	defaultWorkerTickerInterval = 30 * time.Minute
 	metricsAddrEnv              = "METRICS_ADDR"
 	defaultMetricsAddr          = ":9090"
+	defaultLocaleEnv            = "DEFAULT_LOCALE"
+	defaultLocale               = i18n.LocaleES
 
 	serviceName             = "appointment-manager"
 	otelEndpointEnv         = "OTEL_EXPORTER_OTLP_ENDPOINT"
@@ -128,6 +131,23 @@ func parseSampleRatio(raw string) (float64, error) {
 	}
 
 	return ratio, nil
+}
+
+// parseDefaultLocale reads DEFAULT_LOCALE, the language the UI renders in when a
+// request expresses no preference of its own. When unset it falls back to
+// defaultLocale; an unsupported code is rejected so misconfiguration fails fast.
+func parseDefaultLocale(raw string) (i18n.Locale, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return defaultLocale, nil
+	}
+
+	locale, ok := i18n.Parse(raw)
+	if !ok {
+		return "", fmt.Errorf("invalid %s: %q is not a supported locale", defaultLocaleEnv, raw)
+	}
+
+	return locale, nil
 }
 
 // parseServiceVersion reads OTEL_SERVICE_VERSION, the release identifier

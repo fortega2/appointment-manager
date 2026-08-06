@@ -1,6 +1,7 @@
 package main
 
 import (
+	"appointment-manager/internal/i18n"
 	"appointment-manager/internal/metrics"
 	"appointment-manager/internal/middleware"
 	"appointment-manager/internal/session"
@@ -17,7 +18,7 @@ import (
 // initializeServerHandlers builds every handler and wires it to a mux. Errors
 // are returned wrapped rather than logged here: run logs them once, so the
 // context of the failure is carried by the error chain itself.
-func initializeServerHandlers(logger *slog.Logger, sessionStore *session.Store, deps *dependencies, storageClient *storage.Client, sendNotification func(context.Context, uuid.UUID), isDev bool, m *metrics.Metrics) (http.Handler, error) {
+func initializeServerHandlers(logger *slog.Logger, sessionStore *session.Store, deps *dependencies, storageClient *storage.Client, sendNotification func(context.Context, uuid.UUID), isDev bool, locale i18n.Locale, m *metrics.Metrics) (http.Handler, error) {
 	authHandler, err := initializeAuthHandler(logger, sessionStore, deps, isDev)
 	if err != nil {
 		return nil, err
@@ -57,9 +58,17 @@ func initializeServerHandlers(logger *slog.Logger, sessionStore *session.Store, 
 
 	mux := http.NewServeMux()
 	healthHandler.RegisterHandlers(mux)
-	authHandler.RegisterHandlers(mux)
 
 	mux.Handle("GET /static/", http.StripPrefix("/static/", http.FileServer(http.Dir("internal/ui/static"))))
+
+	// The locale middleware goes in a guard and not in the Chain below: it
+	// replaces the request, which from inside the Chain would hide r.Pattern from
+	// the observability middlewares (see middleware.Guard). The login page needs
+	// it too, hence a guard for the routes that have no session yet.
+	localeMiddleware := middleware.Locale(locale)
+
+	publicUI := middleware.Guard(mux, localeMiddleware)
+	authHandler.RegisterHandlers(publicUI)
 
 	// Protected routes are registered on mux itself through a guard rather than
 	// on a nested mux, so the pattern the observability middlewares observe is
@@ -73,6 +82,7 @@ func initializeServerHandlers(logger *slog.Logger, sessionStore *session.Store, 
 	prescriptionsEnabled := storageClient != nil
 	uiProtected := middleware.Guard(
 		mux,
+		localeMiddleware,
 		middleware.Prescriptions(prescriptionsEnabled),
 		middleware.UISession(sessionStore, isDev),
 	)

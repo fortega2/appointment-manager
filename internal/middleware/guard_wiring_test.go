@@ -16,24 +16,24 @@ const (
 	routeUIFallback  = "/"
 )
 
-// newAppLikeMux mirrors cmd/server/routes.go: unguarded routes on the root mux,
-// two guards whose middlewares replace the request via r.WithContext, and a
-// fallback per guard.
+// newAppLikeMux mirrors cmd/server/routes.go: three guards whose middlewares
+// replace the request via r.WithContext, and a fallback for the two that have
+// one.
 func newAppLikeMux() *http.ServeMux {
 	mux := http.NewServeMux()
-	mux.Handle("GET /login", http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	}))
 
 	okHandler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})
 
+	publicUI := middleware.Guard(mux, injectContext("locale"))
+	publicUI.Handle("GET /login", okHandler)
+
 	apiProtected := middleware.Guard(mux, injectContext("api-session"))
 	apiProtected.Handle("GET /api/v1/appointments", okHandler)
 	apiProtected.Handle("POST /api/v1/appointments", okHandler)
 
-	uiProtected := middleware.Guard(mux, injectContext("ui-prescriptions"), injectContext("ui-session"))
+	uiProtected := middleware.Guard(mux, injectContext("locale"), injectContext("ui-prescriptions"), injectContext("ui-session"))
 	uiProtected.Handle("GET /{$}", okHandler)
 	uiProtected.Handle(patternSlotEdit, okHandler)
 
@@ -69,11 +69,20 @@ func TestGuardWiringReportsRouteAndPreservesStatuses(t *testing.T) {
 			wantCode:  http.StatusOK,
 		},
 		{
-			name:      "unguarded route still reports its own pattern",
+			name:      "public ui route reports its own pattern",
 			method:    http.MethodGet,
 			path:      "/login",
 			wantRoute: "/login",
 			wantCode:  http.StatusOK,
+		},
+		{
+			// 404 rather than the 405 the other guards produce: only the guard that
+			// owns the fallback knows the pattern, and this one belongs to another.
+			name:      "wrong method on a public ui route falls through to 404",
+			method:    http.MethodDelete,
+			path:      "/login",
+			wantRoute: routeUIFallback,
+			wantCode:  http.StatusNotFound,
 		},
 		{
 			name:      "wrong method on a ui route stays 405",

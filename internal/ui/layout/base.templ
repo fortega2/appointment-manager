@@ -1,8 +1,10 @@
 package layout
 
+import "appointment-manager/internal/i18n"
+
 templ Base(title string, isAuthenticated bool) {
 	<!DOCTYPE html>
-	<html lang="en">
+	<html lang={ string(i18n.FromContext(ctx)) }>
 		<head>
 			<meta charset="UTF-8"/>
 			<meta name="viewport" content="width=device-width, initial-scale=1.0"/>

@@ -60,7 +60,9 @@ func NewHandler(logger *slog.Logger, store *session.Store, repo *assistant.Postg
 	}, nil
 }
 
-func (h *Handler) RegisterHandlers(mux *http.ServeMux) {
+// RegisterHandlers mounts the login and logout routes. It takes a web.Mux so
+// they can be registered behind a guard chain rather than on the bare mux.
+func (h *Handler) RegisterHandlers(mux web.Mux) {
 	mux.Handle("POST /api/v1/auth/login", h.loginAPIHandler())
 	mux.Handle("POST /api/v1/auth/logout", h.logoutAPIHandler())
 

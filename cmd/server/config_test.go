@@ -2,6 +2,7 @@ package main
 
 import (
 	"appointment-manager/internal/db"
+	"appointment-manager/internal/i18n"
 	"bytes"
 	"log/slog"
 	"testing"
@@ -59,6 +60,41 @@ func TestParseSampleRatio(t *testing.T) {
 
 			require.NoError(t, err)
 			assert.InDelta(t, tt.want, got, 0)
+		})
+	}
+}
+
+func TestParseDefaultLocale(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		raw     string
+		want    i18n.Locale
+		wantErr bool
+	}{
+		{name: "unset falls back to default", raw: unsetValue, want: defaultLocale},
+		{name: "blank falls back to default", raw: blankValue, want: defaultLocale},
+		{name: "spanish", raw: "es", want: i18n.LocaleES},
+		{name: "english", raw: "en", want: i18n.LocaleEN},
+		{name: "surrounding space is trimmed", raw: "  en  ", want: i18n.LocaleEN},
+		{name: "region is not a supported code", raw: "es-AR", wantErr: true},
+		{name: "unsupported language is rejected", raw: "fr", wantErr: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			got, err := parseDefaultLocale(tt.raw)
+
+			if tt.wantErr {
+				require.Error(t, err)
+				return
+			}
+
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, got)
 		})
 	}
 }

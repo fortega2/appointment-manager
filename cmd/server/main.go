@@ -2,6 +2,7 @@ package main
 
 import (
 	"appointment-manager/internal/db"
+	"appointment-manager/internal/i18n"
 	"appointment-manager/internal/metrics"
 	"appointment-manager/internal/server"
 	"appointment-manager/internal/session"
@@ -45,6 +46,11 @@ func run() error {
 		Level: logLevel,
 	})))
 	logger.Info("starting server")
+
+	if err := i18n.Load(); err != nil {
+		logger.Error("failed to load locale catalogs", slog.Any("error", err))
+		return err
+	}
 
 	appMetrics := metrics.New()
 
@@ -108,8 +114,6 @@ func run() error {
 		return err
 	}
 
-	// Built before the handlers so the slot handler can bind NotifySlotCancelled,
-	// but not started until below: nothing may enqueue before the server is up.
 	notificationService, err := initializeNotificationService(logger, deps, appMetrics)
 	if err != nil {
 		logger.Error("failed to initialize notification service", slog.Any("error", err))
@@ -118,6 +122,12 @@ func run() error {
 
 	env := strings.TrimSpace(os.Getenv(environmentEnv))
 	isDev := env == "" || strings.EqualFold(env, environmentDevelopment)
+
+	locale, err := parseDefaultLocale(os.Getenv(defaultLocaleEnv))
+	if err != nil {
+		logger.Error("failed to parse default locale", slog.Any("error", err))
+		return err
+	}
 
 	sessionStore, err := session.NewStore(deps.sessionRepo)
 	if err != nil {
@@ -132,6 +142,7 @@ func run() error {
 		storageClient,
 		notificationService.NotifySlotCancelled,
 		isDev,
+		locale,
 		appMetrics,
 	)
 	if err != nil {
