@@ -5,6 +5,7 @@ import (
 	"appointment-manager/internal/prescription"
 	"appointment-manager/internal/storage"
 	"appointment-manager/internal/ui/home"
+	"appointment-manager/internal/ui/language"
 	"fmt"
 	"log/slog"
 )
@@ -16,6 +17,15 @@ func initializeUIHomeHandler(logger *slog.Logger) (*home.Handler, error) {
 	}
 
 	return homeHandler, nil
+}
+
+func initializeUILanguageHandler(logger *slog.Logger, isDev bool) (*language.Handler, error) {
+	languageHandler, err := language.NewHandler(logger, isDev)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create language handler: %w", err)
+	}
+
+	return languageHandler, nil
 }
 
 func initializeUIAppointmentHandler(logger *slog.Logger, deps *dependencies) (*appointment.UIHandler, error) {

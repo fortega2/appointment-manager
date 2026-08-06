@@ -57,7 +57,7 @@ func Base(title string, isAuthenticated bool) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, " - Appointment Manager</title><link rel=\"icon\" href=\"/static/favicon.ico\" type=\"image/x-icon\"><link rel=\"stylesheet\" href=\"/static/css/app.css\"><script src=\"/static/vendor/htmx.min.js\"></script><script defer src=\"/static/vendor/alpine.min.js\"></script><script defer src=\"/static/js/timezone.js\"></script><script>\n\t\t\t\tdocument.addEventListener('htmx:beforeSwap', function(evt) {\n\t\t\t\t\tif(evt.detail.xhr.status >= 400){\n\t\t\t\t\t\tevt.detail.shouldSwap = true;\n\t\t\t\t\t\tevt.detail.isError = false;\n\t\t\t\t\t}\n\t\t\t\t});\n\t\t\t\tdocument.addEventListener('htmx:afterSettle', function () {\n\t\t\t\t\tconst container = document.getElementById('snackbar-container');\n\t\t\t\t\tif (!container || !window.Alpine) return;\n\n\t\t\t\t\tcontainer.querySelectorAll('[x-data]').forEach(function (el) {\n\t\t\t\t\t\tif (!el._x_dataStack) {\n\t\t\t\t\t\t\tAlpine.initTree(el);\n\t\t\t\t\t\t}\n\t\t\t\t\t});\n\t\t\t\t});\n\t\t\t</script><style>\n\t\t\t\t[x-cloak] { display: none !important; }\n\t\t\t</style></head><body class=\"bg-gray-50 text-gray-900 font-sans antialiased h-screen flex flex-col\"><header class=\"bg-white shadow-sm border-b border-gray-200\"><div class=\"max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between\"><div class=\"flex items-center\"><span class=\"text-xl font-bold text-indigo-600\">Appointment Manager</span></div>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, " - Appointment Manager</title><link rel=\"icon\" href=\"/static/favicon.ico\" type=\"image/x-icon\"><link rel=\"stylesheet\" href=\"/static/css/app.css\"><script src=\"/static/vendor/htmx.min.js\"></script><script defer src=\"/static/vendor/alpine.min.js\"></script><script defer src=\"/static/js/timezone.js\"></script><script>\n\t\t\t\tdocument.addEventListener('htmx:beforeSwap', function(evt) {\n\t\t\t\t\tif(evt.detail.xhr.status >= 400){\n\t\t\t\t\t\tevt.detail.shouldSwap = true;\n\t\t\t\t\t\tevt.detail.isError = false;\n\t\t\t\t\t}\n\t\t\t\t});\n\t\t\t\tdocument.addEventListener('htmx:afterSettle', function () {\n\t\t\t\t\tconst container = document.getElementById('snackbar-container');\n\t\t\t\t\tif (!container || !window.Alpine) return;\n\n\t\t\t\t\tcontainer.querySelectorAll('[x-data]').forEach(function (el) {\n\t\t\t\t\t\tif (!el._x_dataStack) {\n\t\t\t\t\t\t\tAlpine.initTree(el);\n\t\t\t\t\t\t}\n\t\t\t\t\t});\n\t\t\t\t});\n\t\t\t</script><style>\n\t\t\t\t[x-cloak] { display: none !important; }\n\t\t\t</style></head><body class=\"bg-gray-50 text-gray-900 font-sans antialiased h-screen flex flex-col\"><header class=\"bg-white shadow-sm border-b border-gray-200\"><div class=\"max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between\"><div class=\"flex items-center\"><span class=\"text-xl font-bold text-indigo-600\">Appointment Manager</span></div><div class=\"flex items-center space-x-6\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -77,7 +77,11 @@ func Base(title string, isAuthenticated bool) templ.Component {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 7, "</div></header><main class=\"flex-grow flex flex-col justify-center items-center\">")
+		templ_7745c5c3_Err = languageSwitcher().Render(ctx, templ_7745c5c3_Buffer)
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 7, "</div></div></header><main class=\"flex-grow flex flex-col justify-center items-center\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

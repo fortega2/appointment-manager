@@ -1,6 +1,8 @@
 es:
   app:
     name: "Appointment Manager"
+  layout:
+    language: "Idioma"
   home:
     welcome: "Bienvenido a Appointment Manager"
     tagline: "Gestioná tus turnos de forma simple y eficiente."

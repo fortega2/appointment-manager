@@ -8,10 +8,6 @@ import (
 )
 
 const (
-	// LocaleCookie names the cookie the language switcher writes and this
-	// middleware reads back.
-	LocaleCookie = "lang"
-
 	headerAcceptLanguage = "Accept-Language"
 	headerCookie         = "Cookie"
 )
@@ -38,7 +34,7 @@ func Locale(def i18n.Locale) func(http.Handler) http.Handler {
 // resolveLocale applies the cookie -> Accept-Language -> def precedence, an
 // unparseable cookie degrading to negotiation rather than to nothing.
 func resolveLocale(r *http.Request, def i18n.Locale) i18n.Locale {
-	if cookie, err := r.Cookie(LocaleCookie); err == nil {
+	if cookie, err := r.Cookie(i18n.CookieName); err == nil {
 		if locale, ok := i18n.Parse(strings.TrimSpace(cookie.Value)); ok {
 			return locale
 		}

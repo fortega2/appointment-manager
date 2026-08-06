@@ -1,6 +1,8 @@
 en:
   app:
     name: "Appointment Manager"
+  layout:
+    language: "Language"
   home:
     welcome: "Welcome to Appointment Manager"
     tagline: "Manage your appointments efficiently and effortlessly."

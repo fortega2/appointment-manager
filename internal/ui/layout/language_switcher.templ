@@ -1,0 +1,37 @@
+package layout
+
+import "appointment-manager/internal/i18n"
+
+templ languageSwitcher() {
+	<div
+		class="flex items-center rounded-md border border-gray-200 overflow-hidden"
+		role="group"
+		aria-label={ i18n.T(ctx, "layout.language") }
+	>
+		@languageOption(i18n.LocaleES, "ES")
+		@languageOption(i18n.LocaleEN, "EN")
+	</div>
+}
+
+// languageOption renders one segment: the active locale is inert text, so the
+// only clickable segments are the ones that would actually change something.
+templ languageOption(locale i18n.Locale, label string) {
+	if i18n.FromContext(ctx) == locale {
+		<span
+			class="px-2.5 py-1 text-xs font-semibold bg-indigo-50 text-indigo-700"
+			lang={ string(locale) }
+			aria-current="true"
+		>
+			{ label }
+		</span>
+	} else {
+		<button
+			type="button"
+			hx-post={ "/language/" + string(locale) }
+			lang={ string(locale) }
+			class="px-2.5 py-1 text-xs font-semibold text-gray-500 hover:text-indigo-600 hover:bg-gray-50 transition-colors focus:outline-none focus:ring-2 focus:ring-inset focus:ring-indigo-500"
+		>
+			{ label }
+		</button>
+	}
+}

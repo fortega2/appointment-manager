@@ -42,8 +42,9 @@ templ Base(title string, isAuthenticated bool) {
 					<div class="flex items-center">
 						<span class="text-xl font-bold text-indigo-600">Appointment Manager</span>
 					</div>
-					if isAuthenticated {
-						<nav class="flex items-center space-x-6">
+					<div class="flex items-center space-x-6">
+						if isAuthenticated {
+							<nav class="flex items-center space-x-6">
 							<a href="/" class="text-sm font-medium text-gray-700 hover:text-indigo-600 transition-colors">
 								Home
 							</a>
@@ -96,8 +97,10 @@ templ Base(title string, isAuthenticated bool) {
 							>
 								Log Out
 							</button>
-						</nav>
-					}
+							</nav>
+						}
+						@languageSwitcher()
+					</div>
 				</div>
 			</header>
 

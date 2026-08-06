@@ -25,9 +25,9 @@ const (
 	englishHeader  = "en-US,en;q=0.9"
 	frenchHeader   = "fr-FR"
 	localeTitle    = "Dashboard"
-	cookieEN       = middleware.LocaleCookie + "=en"
-	cookieUnknown  = middleware.LocaleCookie + "=klingon"
-	cookieEmpty    = middleware.LocaleCookie + "="
+	cookieEN       = i18n.CookieName + "=en"
+	cookieUnknown  = i18n.CookieName + "=klingon"
+	cookieEmpty    = i18n.CookieName + "="
 )
 
 // TestMain loads the catalogs, without which i18n.WithLocale cannot resolve a

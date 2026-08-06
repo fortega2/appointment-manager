@@ -10,6 +10,7 @@ import (
 	"context"
 	"embed"
 	"fmt"
+	"sync"
 
 	"github.com/invopop/ctxi18n"
 	catalog "github.com/invopop/ctxi18n/i18n"
@@ -28,6 +29,10 @@ const (
 	// LocaleEN is English.
 	LocaleEN Locale = "en"
 )
+
+// CookieName is the cookie carrying an explicit language choice, written by the
+// language switcher and read back by the locale middleware.
+const CookieName = "lang"
 
 // Fallback is the locale used when nothing else resolves: no catalog loaded, an
 // unknown code, or a request that never passed through the locale middleware.
@@ -49,10 +54,15 @@ var matcher = language.NewMatcher([]language.Tag{
 	language.English,
 })
 
-// Load reads the embedded catalogs. It must be called once at startup, before
-// any request is served.
+var loadCatalogs = sync.OnceValue(func() error {
+	return ctxi18n.LoadWithDefault(localesFS, catalog.Code(LocaleES))
+})
+
+// Load reads the embedded catalogs, and is idempotent. Call it at startup to
+// surface a broken catalog there; every lookup loads on demand anyway, so a
+// rendering path that skipped it still produces copy rather than a marker.
 func Load() error {
-	if err := ctxi18n.LoadWithDefault(localesFS, catalog.Code(LocaleES)); err != nil {
+	if err := loadCatalogs(); err != nil {
 		return fmt.Errorf("loading locale catalogs: %w", err)
 	}
 
@@ -105,6 +115,11 @@ func Negotiate(acceptLanguage string, def Locale) Locale {
 // an unknown locale, or a catalog that failed to load, leaves the context
 // untouched so lookups degrade to Fallback.
 func WithLocale(ctx context.Context, locale Locale) context.Context {
+	// Every path that resolves a locale reaches this, so loading here is what
+	// keeps a caller that skipped Load from rendering ctxi18n's missing-locale
+	// marker into the page.
+	_ = Load()
+
 	loaded := ctxi18n.Get(catalog.Code(locale))
 	if loaded == nil {
 		loaded = ctxi18n.Get(catalog.Code(Fallback))

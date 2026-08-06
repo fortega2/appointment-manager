@@ -55,6 +55,10 @@ func initializeServerHandlers(logger *slog.Logger, sessionStore *session.Store, 
 	if err != nil {
 		return nil, err
 	}
+	uiLanguageHandler, err := initializeUILanguageHandler(logger, isDev)
+	if err != nil {
+		return nil, err
+	}
 
 	mux := http.NewServeMux()
 	healthHandler.RegisterHandlers(mux)
@@ -69,6 +73,7 @@ func initializeServerHandlers(logger *slog.Logger, sessionStore *session.Store, 
 
 	publicUI := middleware.Guard(mux, localeMiddleware)
 	authHandler.RegisterHandlers(publicUI)
+	uiLanguageHandler.RegisterHandlers(publicUI)
 
 	// Protected routes are registered on mux itself through a guard rather than
 	// on a nested mux, so the pattern the observability middlewares observe is
