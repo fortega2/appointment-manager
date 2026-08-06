@@ -2,6 +2,7 @@ package auth
 
 import (
 	"appointment-manager/internal/assistant"
+	"appointment-manager/internal/i18n"
 	"appointment-manager/internal/password"
 	"appointment-manager/internal/session"
 	"appointment-manager/internal/ui/auth"
@@ -20,8 +21,18 @@ const (
 	failedGetAssistByEmailMsg string = "failed to get assistant by email"
 	failedCreateSessionMsg    string = "failed to create session"
 	failedDeleteSessionMsg    string = "failed to delete session"
-	serverBusyMsg             string = "Server is busy, please try again"
-	incorrectCredentialsMsg   string = "Incorrect email or password"
+	// Kept in English: these reach the JSON API through problem_mappings.go, which
+	// is machine-facing. The UI renders the catalog keys below instead.
+	serverBusyMsg           string = "Server is busy, please try again"
+	incorrectCredentialsMsg string = "Incorrect email or password"
+
+	loginErrorFormKey string = "auth.error.form"
+	loginErrorBusyKey string = "auth.error.busy"
+	//nolint:gosec // G101 false positive: a message catalog key, not a credential.
+	loginErrorCredentialsKey string = "auth.error.credentials"
+	//nolint:gosec // G101 false positive: a message catalog key, not a credential.
+	loginErrorPasswordKey string = "auth.error.password"
+	loginErrorSessionKey  string = "auth.error.session"
 
 	// dummyHash is compared against when an email is unknown, so that
 	// path costs the same as a real verification and cannot be used to probe
@@ -204,7 +215,7 @@ func (h *Handler) processLoginUIHandler() http.HandlerFunc {
 		email, pass, err := h.parseLoginForm(r, w)
 		if err != nil {
 			h.logger.ErrorContext(r.Context(), "error parsing login form", slog.Any("error", err))
-			h.renderError(w, r, http.StatusBadRequest, "Error al procesar el formulario")
+			h.renderError(w, r, http.StatusBadRequest, loginErrorFormKey)
 			return
 		}
 
@@ -212,11 +223,11 @@ func (h *Handler) processLoginUIHandler() http.HandlerFunc {
 		if err != nil {
 			switch {
 			case errors.Is(err, password.ErrTooManyConcurrentHashes):
-				h.renderError(w, r, http.StatusServiceUnavailable, serverBusyMsg)
+				h.renderError(w, r, http.StatusServiceUnavailable, loginErrorBusyKey)
 			case errors.Is(err, errInvalidCredentials):
-				h.renderError(w, r, http.StatusUnauthorized, incorrectCredentialsMsg)
+				h.renderError(w, r, http.StatusUnauthorized, loginErrorCredentialsKey)
 			default:
-				h.renderError(w, r, http.StatusInternalServerError, "Error verifying password")
+				h.renderError(w, r, http.StatusInternalServerError, loginErrorPasswordKey)
 			}
 			return
 		}
@@ -229,7 +240,7 @@ func (h *Handler) processLoginUIHandler() http.HandlerFunc {
 				slog.String("assistant_id", a.ID.String()),
 				slog.String("email", a.Email),
 				slog.Any("error", err))
-			h.renderError(w, r, http.StatusInternalServerError, "Error interno al crear sesión")
+			h.renderError(w, r, http.StatusInternalServerError, loginErrorSessionKey)
 			return
 		}
 		//nolint:gosec // G124 false positive: Secure is dynamically !h.isDevelopment (true in prod, false only for local HTTP dev); HttpOnly/SameSite are already set.
@@ -261,9 +272,11 @@ func (h *Handler) parseLoginForm(r *http.Request, w http.ResponseWriter) (string
 	return email, pass, nil
 }
 
-func (h *Handler) renderError(w http.ResponseWriter, r *http.Request, status int, msg string) {
+// renderError writes the login form's inline error. It takes a catalog key
+// rather than a message so the copy follows the request's locale.
+func (h *Handler) renderError(w http.ResponseWriter, r *http.Request, status int, messageKey string) {
 	w.WriteHeader(status)
-	if err := auth.LoginError(msg).Render(r.Context(), w); err != nil {
+	if err := auth.LoginError(i18n.T(r.Context(), messageKey)).Render(r.Context(), w); err != nil {
 		h.logger.ErrorContext(r.Context(), renderLoginErroMsg, slog.Any("error", err))
 	}
 }

@@ -1,9 +1,33 @@
 en:
   app:
     name: "Appointment Manager"
+  common:
+    close: "Close"
   layout:
     language: "Language"
+    nav:
+      home: "Home"
+      management: "Management"
+      appointments: "Appointments"
+      prescriptions: "Prescriptions"
+      patients: "Patients"
+      slots: "Slots"
+      professionals: "Professionals"
+      log_out: "Log Out"
+  auth:
+    login:
+      title: "Log In"
+      email: "Email"
+      password: "Password"
+      submit: "Log In"
+    error:
+      form: "Error processing the form"
+      credentials: "Incorrect email or password"
+      password: "Error verifying password"
+      session: "Internal error creating the session"
+      busy: "Server is busy, please try again"
   home:
+    title: "Dashboard"
     welcome: "Welcome to Appointment Manager"
     tagline: "Manage your appointments efficiently and effortlessly."
   appointment:

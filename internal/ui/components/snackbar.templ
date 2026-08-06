@@ -1,5 +1,7 @@
 package components
 
+import "appointment-manager/internal/i18n"
+
 type SnackbarType string
 
 const (
@@ -44,7 +46,12 @@ templ Snackbar(message string, t SnackbarType) {
                 }
                 <span class="text-sm font-medium">{ message }</span>
             </div>
-            <button @click="show = false" class="opacity-60 hover:opacity-100 focus:outline-none shrink-0">
+            <button
+                @click="show = false"
+                type="button"
+                aria-label={ i18n.T(ctx, "common.close") }
+                class="opacity-60 hover:opacity-100 focus:outline-none shrink-0"
+            >
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
                 </svg>

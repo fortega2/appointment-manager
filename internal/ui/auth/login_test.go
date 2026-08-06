@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"testing"
 
+	"appointment-manager/internal/i18n"
 	"appointment-manager/internal/ui/auth"
 
 	"github.com/stretchr/testify/assert"
@@ -13,27 +14,42 @@ import (
 const (
 	loginCaseRenderForm  = "render login form"
 	loginCaseRenderError = "render login error message"
+	submitES             = "Iniciar sesión"
+	submitEN             = "Log In"
+	//nolint:gosec // G101 false positive: a form label, not a credential.
+	passwordLabelES = "Contraseña"
+	passwordLabelEN = "Password"
 )
 
 func TestLogin(t *testing.T) {
 	t.Parallel()
 
-	t.Run(loginCaseRenderForm, func(t *testing.T) {
-		t.Parallel()
+	tests := []struct {
+		name     string
+		locale   i18n.Locale
+		submit   string
+		password string
+	}{
+		{"spanish", i18n.LocaleES, submitES, passwordLabelES},
+		{"english", i18n.LocaleEN, submitEN, passwordLabelEN},
+	}
 
-		component := auth.Login()
+	for _, tt := range tests {
+		t.Run(loginCaseRenderForm+" in "+tt.name, func(t *testing.T) {
+			t.Parallel()
 
-		var buf bytes.Buffer
-		err := component.Render(t.Context(), &buf)
-		require.NoError(t, err)
+			var buf bytes.Buffer
+			require.NoError(t, auth.Login().Render(i18n.WithLocale(t.Context(), tt.locale), &buf))
 
-		output := buf.String()
+			output := buf.String()
 
-		assert.Contains(t, output, "Log In")
-		assert.Contains(t, output, `hx-post="/login"`)
-		assert.Contains(t, output, `name="email"`)
-		assert.Contains(t, output, `name="password"`)
-	})
+			assert.Contains(t, output, tt.submit)
+			assert.Contains(t, output, tt.password)
+			assert.Contains(t, output, `hx-post="/login"`)
+			assert.Contains(t, output, `name="email"`)
+			assert.Contains(t, output, `name="password"`)
+		})
+	}
 }
 
 func TestLoginError(t *testing.T) {

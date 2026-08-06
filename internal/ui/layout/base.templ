@@ -8,7 +8,7 @@ templ Base(title string, isAuthenticated bool) {
 		<head>
 			<meta charset="UTF-8"/>
 			<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-			<title>{ title } - Appointment Manager</title>
+			<title>{ title } - { i18n.T(ctx, "app.name") }</title>
 			<link rel="icon" href="/static/favicon.ico" type="image/x-icon"/>
 			<link rel="stylesheet" href="/static/css/app.css"/>
 			<script src="/static/vendor/htmx.min.js"></script>
@@ -40,13 +40,13 @@ templ Base(title string, isAuthenticated bool) {
 			<header class="bg-white shadow-sm border-b border-gray-200">
 				<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
 					<div class="flex items-center">
-						<span class="text-xl font-bold text-indigo-600">Appointment Manager</span>
+						<span class="text-xl font-bold text-indigo-600">{ i18n.T(ctx, "app.name") }</span>
 					</div>
 					<div class="flex items-center space-x-6">
 						if isAuthenticated {
 							<nav class="flex items-center space-x-6">
 							<a href="/" class="text-sm font-medium text-gray-700 hover:text-indigo-600 transition-colors">
-								Home
+								{ i18n.T(ctx, "layout.nav.home") }
 							</a>
 
 							<div 
@@ -59,7 +59,7 @@ templ Base(title string, isAuthenticated bool) {
 									@click="open = !open" 
 									class="flex items-center space-x-1 text-sm font-medium text-gray-700 hover:text-indigo-600 transition-colors focus:outline-none"
 								>
-									<span>Management</span>
+									<span>{ i18n.T(ctx, "layout.nav.management") }</span>
 									<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
 										<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
 									</svg>
@@ -77,13 +77,13 @@ templ Base(title string, isAuthenticated bool) {
 									x-cloak
 								>
 									<div class="py-1">
-										<a href="/appointments" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 hover:text-indigo-600">Appointments</a>
+										<a href="/appointments" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 hover:text-indigo-600">{ i18n.T(ctx, "layout.nav.appointments") }</a>
 										if prescriptionsEnabled(ctx) {
-											<a href="/prescriptions" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 hover:text-indigo-600">Prescriptions</a>
+											<a href="/prescriptions" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 hover:text-indigo-600">{ i18n.T(ctx, "layout.nav.prescriptions") }</a>
 										}
-										<a href="/patients" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 hover:text-indigo-600">Patients</a>
-										<a href="/slots" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 hover:text-indigo-600">Slots</a>
-										<a href="/professionals" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 hover:text-indigo-600">Professionals</a>
+										<a href="/patients" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 hover:text-indigo-600">{ i18n.T(ctx, "layout.nav.patients") }</a>
+										<a href="/slots" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 hover:text-indigo-600">{ i18n.T(ctx, "layout.nav.slots") }</a>
+										<a href="/professionals" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 hover:text-indigo-600">{ i18n.T(ctx, "layout.nav.professionals") }</a>
 									</div>
 								</div>
 							</div>
@@ -95,7 +95,7 @@ templ Base(title string, isAuthenticated bool) {
 								hx-target="body" 
 								class="text-sm font-medium text-white bg-red-500 hover:bg-red-600 px-3 py-1.5 rounded-md transition-colors"
 							>
-								Log Out
+								{ i18n.T(ctx, "layout.nav.log_out") }
 							</button>
 							</nav>
 						}
@@ -110,7 +110,7 @@ templ Base(title string, isAuthenticated bool) {
 
 			<footer class="bg-white border-t border-gray-200 mt-auto">
 				<div class="max-w-7xl mx-auto py-4 px-4 sm:px-6 lg:px-8 flex justify-center text-sm text-gray-500">
-					&copy; 2026 Appointment Manager
+					&copy; 2026 { i18n.T(ctx, "app.name") }
 				</div>
 			</footer>
 

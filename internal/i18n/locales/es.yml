@@ -1,9 +1,33 @@
 es:
   app:
     name: "Appointment Manager"
+  common:
+    close: "Cerrar"
   layout:
     language: "Idioma"
+    nav:
+      home: "Inicio"
+      management: "Gestión"
+      appointments: "Turnos"
+      prescriptions: "Recetas"
+      patients: "Pacientes"
+      slots: "Horarios"
+      professionals: "Profesionales"
+      log_out: "Cerrar sesión"
+  auth:
+    login:
+      title: "Iniciar sesión"
+      email: "Email"
+      password: "Contraseña"
+      submit: "Iniciar sesión"
+    error:
+      form: "Error al procesar el formulario"
+      credentials: "Email o contraseña incorrectos"
+      password: "Error al verificar la contraseña"
+      session: "Error interno al crear la sesión"
+      busy: "El servidor está ocupado, probá de nuevo"
   home:
+    title: "Panel"
     welcome: "Bienvenido a Appointment Manager"
     tagline: "Gestioná tus turnos de forma simple y eficiente."
   appointment:
