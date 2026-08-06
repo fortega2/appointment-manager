@@ -3,6 +3,8 @@ en:
     name: "Appointment Manager"
   common:
     close: "Close"
+    cancel: "Cancel"
+    save: "Save"
   layout:
     language: "Language"
     nav:
@@ -30,6 +32,40 @@ en:
     title: "Dashboard"
     welcome: "Welcome to Appointment Manager"
     tagline: "Manage your appointments efficiently and effortlessly."
+  slot:
+    title: "Slot Dashboard"
+    create: "Create Slot"
+    empty:
+      title: "There are no slots"
+      body: "Add a slot to start managing their appointments."
+    filters:
+      week: "Week:"
+      time: "Time:"
+      to: "to"
+      professional: "Professional:"
+      all_professionals: "All Professionals"
+      reset: "Reset Filters"
+    table:
+      date: "Date"
+      time: "Time"
+      professional: "Professional"
+      max_capacity: "Max Cap"
+      status: "Status"
+      action: "Action"
+    status:
+      available: "Available"
+      blocked: "Blocked"
+    action:
+      cancel: "Cancel"
+      cancel_label: "Cancel Slot"
+      confirm: "Cancel this slot? It will no longer be available for booking."
+    form:
+      title: "Create Slot"
+      professional: "Professional"
+      select_professional: "Select professional"
+      start_time: "Start Time"
+      end_time: "End Time"
+      max_capacity: "Max Capacity"
   appointment:
     remaining_sessions:
       one: "%{count} session left"

@@ -3,6 +3,8 @@ es:
     name: "Appointment Manager"
   common:
     close: "Cerrar"
+    cancel: "Cancelar"
+    save: "Guardar"
   layout:
     language: "Idioma"
     nav:
@@ -30,6 +32,40 @@ es:
     title: "Panel"
     welcome: "Bienvenido a Appointment Manager"
     tagline: "Gestioná tus turnos de forma simple y eficiente."
+  slot:
+    title: "Horarios"
+    create: "Crear horario"
+    empty:
+      title: "No hay horarios"
+      body: "Agregá un horario para empezar a gestionar los turnos."
+    filters:
+      week: "Semana:"
+      time: "Hora:"
+      to: "a"
+      professional: "Profesional:"
+      all_professionals: "Todos los profesionales"
+      reset: "Limpiar filtros"
+    table:
+      date: "Fecha"
+      time: "Hora"
+      professional: "Profesional"
+      max_capacity: "Cupo máx."
+      status: "Estado"
+      action: "Acción"
+    status:
+      available: "Disponible"
+      blocked: "Bloqueado"
+    action:
+      cancel: "Cancelar"
+      cancel_label: "Cancelar horario"
+      confirm: "¿Cancelar este horario? Va a dejar de estar disponible para reservar."
+    form:
+      title: "Crear horario"
+      professional: "Profesional"
+      select_professional: "Seleccioná un profesional"
+      start_time: "Hora de inicio"
+      end_time: "Hora de fin"
+      max_capacity: "Cupo máximo"
   appointment:
     remaining_sessions:
       one: "Queda %{count} sesión"
