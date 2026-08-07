@@ -37,6 +37,8 @@ const (
 	formCreateEN    = "Create Professional"
 	formEditES      = "Editar profesional"
 	formEditEN      = "Edit Professional"
+	specialtyES     = "Kinesiología"
+	specialtyEN     = "Kinesiology"
 )
 
 // renderIn renders a component as the given locale would see it.
@@ -59,6 +61,7 @@ type localeCase struct {
 	inactiveBadge string
 	formCreate    string
 	formEdit      string
+	specialty     string
 }
 
 func localeCases() []localeCase {
@@ -68,12 +71,14 @@ func localeCases() []localeCase {
 			title: titleES, empty: emptyES, emptyBody: emptyBodyES,
 			activeBadge: activeBadgeES, inactiveBadge: inactiveBadgeES,
 			formCreate: formCreateES, formEdit: formEditES,
+			specialty: specialtyES,
 		},
 		{
 			name: "english", locale: i18n.LocaleEN,
 			title: titleEN, empty: emptyEN, emptyBody: emptyBodyEN,
 			activeBadge: activeBadgeEN, inactiveBadge: inactiveBadgeEN,
 			formCreate: formCreateEN, formEdit: formEditEN,
+			specialty: specialtyEN,
 		},
 	}
 }
@@ -121,7 +126,7 @@ func TestProfessionalTable(t *testing.T) {
 					FirstName: "Gregory",
 					LastName:  "House",
 					Phone:     "123-456",
-					Specialty: "Diagnostician",
+					Specialty: "kinesiology",
 					Active:    true,
 				},
 			}
@@ -130,7 +135,7 @@ func TestProfessionalTable(t *testing.T) {
 
 			assert.Contains(t, output, "Gregory")
 			assert.Contains(t, output, "House")
-			assert.Contains(t, output, "Diagnostician")
+			assert.Contains(t, output, tt.specialty)
 			assert.Contains(t, output, tt.activeBadge)
 			assert.NotContains(t, output, tt.inactiveBadge)
 			assert.Contains(t, output, `hx-get="/professionals/pro-1/edit"`)
@@ -144,6 +149,7 @@ func TestProfessionalTable(t *testing.T) {
 					ID:        "pro-2",
 					FirstName: "John",
 					LastName:  "Watson",
+					Specialty: "Diagnostician",
 					Active:    false,
 				},
 			}
@@ -152,6 +158,7 @@ func TestProfessionalTable(t *testing.T) {
 
 			assert.Contains(t, output, "John")
 			assert.Contains(t, output, "Watson")
+			assert.Contains(t, output, "Diagnostician")
 			assert.Contains(t, output, tt.inactiveBadge)
 			assert.NotContains(t, output, tt.activeBadge)
 		})

@@ -17,8 +17,7 @@ const (
 			s.end_time,
 			p.first_name || ' ' || p.last_name AS patient_full_name,
 			pr.first_name || ' ' || pr.last_name AS professional_full_name,
-			a.status,
-			INITCAP(ast.name) AS status_name
+			a.status
 		FROM
 			public.appointment AS a
 		INNER JOIN
@@ -27,8 +26,6 @@ const (
 			public.patient AS p ON p.id = a.patient_id
 		INNER JOIN
 			public.professional AS pr ON pr.id = a.professional_id
-		INNER JOIN
-			public.appointment_status AS ast ON ast.id = a.status
 		WHERE
 			a.status = $1
 			AND s.end_time > NOW()
@@ -75,8 +72,7 @@ type List struct {
 	EndTime              time.Time
 	PatientFullName      string
 	ProfessionalFullName string
-	StatusName           string
-	Status               int
+	Status               Status
 }
 
 // SlotCancellationRecipient is one patient the clinic owes a message after
@@ -128,7 +124,6 @@ func (q *Query) List(ctx context.Context) ([]List, error) {
 			&item.PatientFullName,
 			&item.ProfessionalFullName,
 			&item.Status,
-			&item.StatusName,
 		); err != nil {
 			return nil, fmt.Errorf("list: scan appointment: %w", err)
 		}

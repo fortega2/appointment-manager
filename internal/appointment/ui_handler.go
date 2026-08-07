@@ -146,12 +146,14 @@ func (h *UIHandler) loadAvailableSlotOptions(ctx context.Context, lg *slog.Logge
 		return nil, err
 	}
 
+	honorific := i18n.T(ctx, msgKeyHonorific)
+
 	options := make([]SlotOptionDTO, len(slots))
 	for i, s := range slots {
 		options[i] = SlotOptionDTO{
 			ID: s.ID,
-			FallbackLabel: fmt.Sprintf("%s %s-%s · Dr. %s",
-				s.StartTime.UTC().Format("2006-01-02"), s.StartTime.UTC().Format("15:04"), s.EndTime.UTC().Format("15:04"), s.ProfessionalName),
+			FallbackLabel: fmt.Sprintf("%s %s-%s · %s %s",
+				s.StartTime.UTC().Format("2006-01-02"), s.StartTime.UTC().Format("15:04"), s.EndTime.UTC().Format("15:04"), honorific, s.ProfessionalName),
 			StartTime:        s.StartTime.UTC().Format(time.RFC3339),
 			EndTime:          s.EndTime.UTC().Format(time.RFC3339),
 			ProfessionalName: s.ProfessionalName,

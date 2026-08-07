@@ -114,7 +114,7 @@ templ Table(professionals []View) {
                         <td class="px-4 py-3 text-gray-800">{ p.FirstName }</td>
                         <td class="px-4 py-3 text-gray-800">{ p.LastName }</td>
                         <td class="px-4 py-3 text-gray-500">{ p.Phone }</td>
-                        <td class="px-4 py-3 text-gray-500">{ p.Specialty }</td>
+                        <td class="px-4 py-3 text-gray-500">{ p.SpecialtyLabel(ctx) }</td>
                         <td class="px-4 py-3">
                             if p.Active {
                                 <span class="bg-green-100 text-green-700 text-xs font-medium px-2 py-1 rounded-full">{ i18n.T(ctx, "professional.status.active") }</span>

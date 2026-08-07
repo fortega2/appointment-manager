@@ -1,6 +1,11 @@
 package professional
 
-import "fmt"
+import (
+	"context"
+	"fmt"
+
+	"appointment-manager/internal/i18n"
+)
 
 type View struct {
 	ID        string
@@ -9,6 +14,16 @@ type View struct {
 	Phone     string
 	Specialty string
 	Active    bool
+}
+
+// SpecialtyLabel translates the stored specialty, falling back to the raw value.
+func (v View) SpecialtyLabel(ctx context.Context) string {
+	key, ok := specialtyLabelKey(v.Specialty)
+	if !ok {
+		return v.Specialty
+	}
+
+	return i18n.T(ctx, key)
 }
 
 func (v View) AlpineVisibility() string {

@@ -6,8 +6,14 @@
 		return String(n).padStart(2, "0");
 	}
 
+	// The chosen UI language, not the browser's. Only the timezone still
+	// comes from the browser.
+	function uiLocale() {
+		return document.documentElement.lang || navigator.language;
+	}
+
 	function formatDate(d) {
-		return new Intl.DateTimeFormat(navigator.language, {
+		return new Intl.DateTimeFormat(uiLocale(), {
 			year: "numeric",
 			month: "2-digit",
 			day: "2-digit",
@@ -15,7 +21,7 @@
 	}
 
 	function formatTime(d) {
-		return new Intl.DateTimeFormat(navigator.language, {
+		return new Intl.DateTimeFormat(uiLocale(), {
 			hour: "2-digit",
 			minute: "2-digit",
 			hour12: false,
@@ -76,8 +82,9 @@
 			const end = new Date(opt.dataset.utcEnd);
 			if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return;
 
-			const profName = opt.dataset.profName || "";
-			opt.textContent = `${formatDate(start)} ${formatTime(start)}-${formatTime(end)} · Dr. ${profName}`;
+			const honorific = opt.closest("select")?.dataset.honorific || "";
+			const professional = [honorific, opt.dataset.profName].filter(Boolean).join(" ");
+			opt.textContent = `${formatDate(start)} ${formatTime(start)}-${formatTime(end)} · ${professional}`;
 		});
 	}
 

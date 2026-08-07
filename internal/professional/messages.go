@@ -14,4 +14,16 @@ const (
 	errKeyNotFound          = "professional.error.not_found"
 	errKeyCreate            = "professional.error.create"
 	errKeyUpdate            = "professional.error.update"
+
+	specialtyKinesiology    = "kinesiology"
+	specialtyKeyKinesiology = "professional.specialty.kinesiology"
 )
+
+func specialtyLabelKey(specialty string) (string, bool) {
+	switch specialty {
+	case specialtyKinesiology:
+		return specialtyKeyKinesiology, true
+	default:
+		return "", false
+	}
+}

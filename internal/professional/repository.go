@@ -22,6 +22,7 @@ const (
 			phone
 		) VALUES ($1, $2, $3, $4)
 	`
+
 	listProfessionalsQuery string = `
 		SELECT
 			id,
@@ -44,7 +45,7 @@ const (
 			first_name,
 			last_name,
 			phone,
-			INITCAP(specialty) AS specialty,
+			specialty,
 			active
 		FROM
 			professional

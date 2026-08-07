@@ -16,7 +16,9 @@ import (
 const (
 	viewPatientName = "Grace Hopper"
 	viewProfName    = "Alan Turing"
-	viewStatusName  = "Confirmed"
+
+	viewStatusES = "Confirmado"
+	viewStatusEN = "Confirmed"
 
 	viewTitleES  = "<title>Turnos"
 	viewTitleEN  = "<title>Appointment Dashboard"
@@ -49,8 +51,7 @@ func confirmedAppointments() []appointment.List {
 		EndTime:              start.Add(time.Hour),
 		PatientFullName:      viewPatientName,
 		ProfessionalFullName: viewProfName,
-		StatusName:           viewStatusName,
-		Status:               int(appointment.StatusConfirmed),
+		Status:               appointment.StatusConfirmed,
 	}}
 }
 
@@ -63,9 +64,10 @@ func TestAppointmentDashboardCopyFollowsTheLocale(t *testing.T) {
 		title  string
 		create string
 		attend string
+		status string
 	}{
-		{"spanish", i18n.LocaleES, viewTitleES, viewCreateES, viewAttendES},
-		{"english", i18n.LocaleEN, viewTitleEN, viewCreateEN, viewAttendEN},
+		{"spanish", i18n.LocaleES, viewTitleES, viewCreateES, viewAttendES, viewStatusES},
+		{"english", i18n.LocaleEN, viewTitleEN, viewCreateEN, viewAttendEN, viewStatusEN},
 	}
 
 	for _, tt := range tests {
@@ -77,8 +79,36 @@ func TestAppointmentDashboardCopyFollowsTheLocale(t *testing.T) {
 			assert.Contains(t, body, tt.title)
 			assert.Contains(t, body, tt.create)
 			assert.Contains(t, body, tt.attend)
+			assert.Contains(t, body, tt.status)
 			assert.Contains(t, body, viewPatientName, "data must survive translation")
 			assert.Contains(t, body, viewProfName)
+		})
+	}
+}
+
+func TestEveryStatusLabelRendersInEveryLocale(t *testing.T) {
+	t.Parallel()
+
+	statuses := []appointment.Status{
+		appointment.StatusConfirmed,
+		appointment.StatusCancelled,
+		appointment.StatusAbsent,
+		appointment.StatusAttended,
+		appointment.StatusCancelledByClinic,
+		appointment.Status(0),
+	}
+
+	for _, locale := range []i18n.Locale{i18n.LocaleES, i18n.LocaleEN} {
+		t.Run(string(locale), func(t *testing.T) {
+			t.Parallel()
+
+			ctx := i18n.WithLocale(t.Context(), locale)
+			for _, status := range statuses {
+				label := i18n.T(ctx, status.LabelKey())
+
+				assert.NotContains(t, label, "MISSING", "status %d has no copy", status)
+				assert.NotEmpty(t, label)
+			}
 		})
 	}
 }

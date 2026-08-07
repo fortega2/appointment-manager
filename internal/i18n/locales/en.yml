@@ -164,6 +164,8 @@ en:
     status:
       active: "Active"
       inactive: "Inactive"
+    specialty:
+      kinesiology: "Kinesiology"
     action:
       edit: "Edit"
       edit_label: "Edit Professional"
@@ -235,6 +237,13 @@ en:
       professional: "Professional"
       status: "Status"
       actions: "Actions"
+    status:
+      confirmed: "Confirmed"
+      cancelled: "Cancelled"
+      absent: "Absent"
+      attended: "Attended"
+      cancelled_by_clinic: "Cancelled by clinic"
+      unknown: "Unknown"
     action:
       attend: "Attend"
       attend_label: "Mark as Attended"
@@ -248,6 +257,7 @@ en:
       select_patient: "Select a patient"
       remaining_sessions: "Remaining sessions:"
       notes: "Notes"
+      professional_honorific: "Dr."
     message:
       created: "Appointment created successfully"
       attended: "Appointment marked as attended successfully"

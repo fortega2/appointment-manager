@@ -33,6 +33,24 @@ func (s Status) IsCancelled() bool {
 	return s == StatusCancelled || s == StatusCancelledByClinic
 }
 
+// LabelKey is the catalog key for the status name shown on screen.
+func (s Status) LabelKey() string {
+	switch s {
+	case StatusConfirmed:
+		return statusKeyConfirmed
+	case StatusCancelled:
+		return statusKeyCancelled
+	case StatusAbsent:
+		return statusKeyAbsent
+	case StatusAttended:
+		return statusKeyAttended
+	case StatusCancelledByClinic:
+		return statusKeyCancelledByClinic
+	default:
+		return statusKeyUnknown
+	}
+}
+
 func parseStatus(value int) (Status, error) {
 	switch value {
 	case int(StatusConfirmed):

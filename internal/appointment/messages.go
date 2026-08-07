@@ -8,6 +8,15 @@ const (
 	msgKeyAttended  = "appointment.message.attended"
 	msgKeyCancelled = "appointment.message.cancelled"
 
+	msgKeyHonorific = "appointment.form.professional_honorific"
+
+	statusKeyConfirmed         = "appointment.status.confirmed"
+	statusKeyCancelled         = "appointment.status.cancelled"
+	statusKeyAbsent            = "appointment.status.absent"
+	statusKeyAttended          = "appointment.status.attended"
+	statusKeyCancelledByClinic = "appointment.status.cancelled_by_clinic"
+	statusKeyUnknown           = "appointment.status.unknown"
+
 	errKeyLoadSlots            = "appointment.error.load_slots"
 	errKeyLoadPatients         = "appointment.error.load_patients"
 	errKeyInvalidID            = "appointment.error.invalid_id"

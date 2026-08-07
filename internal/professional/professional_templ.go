@@ -402,9 +402,9 @@ func Table(professionals []View) templ.Component {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var25 string
-			templ_7745c5c3_Var25, templ_7745c5c3_Err = templ.JoinStringErrs(p.Specialty)
+			templ_7745c5c3_Var25, templ_7745c5c3_Err = templ.JoinStringErrs(p.SpecialtyLabel(ctx))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/professional/professional.templ`, Line: 117, Col: 73}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/professional/professional.templ`, Line: 117, Col: 83}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var25))
 			if templ_7745c5c3_Err != nil {

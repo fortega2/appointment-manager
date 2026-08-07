@@ -89,11 +89,11 @@ templ Table(appointments []List) {
 						<td class="px-4 py-3 text-gray-500">{ a.ProfessionalFullName }</td>
 						<td class="px-4 py-3 text-gray-500">
 							<span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-gray-100 text-gray-800">
-								{ a.StatusName }
+								{ i18n.T(ctx, a.Status.LabelKey()) }
 							</span>
 						</td>
 						<td class="px-4 py-3 text-center align-middle">
-							if a.Status == int(StatusConfirmed) {
+							if a.Status == StatusConfirmed {
 								<div class="flex items-center justify-center space-x-2">
 									<button
 										type="button"
@@ -148,6 +148,7 @@ templ Form(
 					id="slot_id"
 					name="slot_id"
 					required
+					data-honorific={ i18n.T(ctx, "appointment.form.professional_honorific") }
 					@change="
 						const opt = $event.target.selectedOptions[0];
 						professionalId = opt?.dataset.professionalId || '';

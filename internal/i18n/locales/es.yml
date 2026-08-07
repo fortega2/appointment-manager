@@ -164,6 +164,8 @@ es:
     status:
       active: "Activo"
       inactive: "Inactivo"
+    specialty:
+      kinesiology: "Kinesiología"
     action:
       edit: "Editar"
       edit_label: "Editar profesional"
@@ -235,6 +237,13 @@ es:
       professional: "Profesional"
       status: "Estado"
       actions: "Acciones"
+    status:
+      confirmed: "Confirmado"
+      cancelled: "Cancelado"
+      absent: "Ausente"
+      attended: "Atendido"
+      cancelled_by_clinic: "Cancelado por la clínica"
+      unknown: "Desconocido"
     action:
       attend: "Atender"
       attend_label: "Marcar como atendido"
@@ -248,6 +257,7 @@ es:
       select_patient: "Seleccioná un paciente"
       remaining_sessions: "Sesiones restantes:"
       notes: "Notas"
+      professional_honorific: "Dr."
     message:
       created: "Turno creado"
       attended: "Turno marcado como atendido"
