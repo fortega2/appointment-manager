@@ -1,6 +1,7 @@
 package slot
 
 import (
+	"appointment-manager/internal/i18n"
 	"appointment-manager/internal/professional"
 	"appointment-manager/internal/ui/components"
 	"appointment-manager/internal/web"
@@ -96,7 +97,7 @@ func (h *Handler) showDashboardUIHandler() http.HandlerFunc {
 		dto, err := h.query.List(ctx)
 		if err != nil {
 			h.logger.ErrorContext(ctx, "failed to list slots", slog.Any("error", err))
-			h.createSnackbarError(ctx, w, http.StatusInternalServerError, "Failed to load slots", "slot.Query.List")
+			h.createSnackbarError(ctx, w, http.StatusInternalServerError, errKeyLoadSlots, "slot.Query.List")
 
 			return
 		}
@@ -104,7 +105,7 @@ func (h *Handler) showDashboardUIHandler() http.HandlerFunc {
 		professionals, err := h.pRepo.List(ctx)
 		if err != nil {
 			h.logger.ErrorContext(ctx, "failed to list professionals", slog.Any("error", err))
-			h.createSnackbarError(ctx, w, http.StatusInternalServerError, "Failed to load professionals", "professional.Query.List")
+			h.createSnackbarError(ctx, w, http.StatusInternalServerError, errKeyLoadProfessionals, "professional.Query.List")
 
 			return
 		}
@@ -127,8 +128,11 @@ func (h *Handler) showDashboardUIHandler() http.HandlerFunc {
 	}
 }
 
-func (h *Handler) createSnackbarError(ctx context.Context, w http.ResponseWriter, statusCode int, message, operation string) {
-	if err := components.ShowSnackbarOnly(ctx, components.SnackbarError, w, statusCode, message); err != nil {
+// createSnackbarError renders an error snackbar. It takes a catalog key rather
+// than a message so the copy follows the request locale; the Go error itself
+// stays in English, in the log line above each call.
+func (h *Handler) createSnackbarError(ctx context.Context, w http.ResponseWriter, statusCode int, messageKey, operation string) {
+	if err := components.ShowSnackbarOnly(ctx, components.SnackbarError, w, statusCode, i18n.T(ctx, messageKey)); err != nil {
 		h.logger.ErrorContext(ctx, "error rendering snackbar", slog.Any("error", err), slog.String("package", "slot"), slog.String("operation", operation))
 	}
 }
@@ -140,7 +144,7 @@ func (h *Handler) showCreateFormUIHandler() http.HandlerFunc {
 		professionals, err := h.pRepo.List(ctx)
 		if err != nil {
 			h.logger.ErrorContext(ctx, "failed to list professionals for form", slog.Any("error", err))
-			h.createSnackbarError(ctx, w, http.StatusInternalServerError, "Failed to load professionals", "pRepo.List")
+			h.createSnackbarError(ctx, w, http.StatusInternalServerError, errKeyLoadProfessionals, "pRepo.List")
 			professionals = []professional.Professional{}
 		}
 
@@ -217,28 +221,28 @@ func (h *Handler) createUIHandler() http.HandlerFunc {
 		req, err := h.parseForm(r, w)
 		if err != nil {
 			h.logger.ErrorContext(ctx, "error parsing slot create form", slog.Any("error", err))
-			h.createSnackbarError(ctx, w, http.StatusBadRequest, "Failed to parse form data", "parseForm")
+			h.createSnackbarError(ctx, w, http.StatusBadRequest, errKeyParseForm, "parseForm")
 			return
 		}
 
 		s, err := NewSlot(req.professionalID, req.date(), req.startTime, req.endTime, req.maxCapacity)
 		if err != nil {
 			h.logger.ErrorContext(ctx, "error creating slot from form data", slog.Any("error", err))
-			h.createSnackbarError(ctx, w, http.StatusUnprocessableEntity, err.Error(), "NewSlot")
+			h.createSnackbarError(ctx, w, http.StatusUnprocessableEntity, validationErrorKey(err), "NewSlot")
 			return
 		}
 
 		if err := h.repo.Create(ctx, s); err != nil {
 			h.logger.ErrorContext(ctx, "failed to create slot", slog.Any("error", err))
 			if errors.Is(err, ErrSlotOverlaps) {
-				h.createSnackbarError(ctx, w, http.StatusConflict, "The professional already has an appointment within this time range.", "repo.Create")
+				h.createSnackbarError(ctx, w, http.StatusConflict, errKeyOverlaps, "repo.Create")
 				return
 			}
-			h.createSnackbarError(ctx, w, http.StatusInternalServerError, "Failed to create slot", "repo.Create")
+			h.createSnackbarError(ctx, w, http.StatusInternalServerError, errKeyCreate, "repo.Create")
 			return
 		}
 
-		h.renderUpdatedSlotsTable(ctx, w, "Slot created successfully")
+		h.renderUpdatedSlotsTable(ctx, w, msgKeyCreated)
 	}
 }
 
@@ -249,7 +253,7 @@ func (h *Handler) cancelUIHandler() http.HandlerFunc {
 		idStr := r.PathValue("id")
 		id, err := uuid.Parse(idStr)
 		if err != nil {
-			h.createSnackbarError(ctx, w, http.StatusBadRequest, "Invalid slot ID", "uuid.Parse")
+			h.createSnackbarError(ctx, w, http.StatusBadRequest, errKeyInvalidID, "uuid.Parse")
 			return
 		}
 
@@ -258,11 +262,11 @@ func (h *Handler) cancelUIHandler() http.HandlerFunc {
 			h.logger.ErrorContext(ctx, "failed to cancel slot", slog.Any("error", err), slog.String("id", idStr))
 			switch {
 			case errors.Is(err, ErrSlotNotFound):
-				h.createSnackbarError(ctx, w, http.StatusNotFound, "Slot not found", cancelOperation)
+				h.createSnackbarError(ctx, w, http.StatusNotFound, errKeyNotFound, cancelOperation)
 			case errors.Is(err, ErrSlotAlreadyCancelled):
-				h.createSnackbarError(ctx, w, http.StatusConflict, "This slot has already been cancelled.", cancelOperation)
+				h.createSnackbarError(ctx, w, http.StatusConflict, errKeyAlreadyCancelled, cancelOperation)
 			default:
-				h.createSnackbarError(ctx, w, http.StatusInternalServerError, "Failed to cancel slot", cancelOperation)
+				h.createSnackbarError(ctx, w, http.StatusInternalServerError, errKeyCancel, cancelOperation)
 			}
 			return
 		}
@@ -274,26 +278,26 @@ func (h *Handler) cancelUIHandler() http.HandlerFunc {
 		// The reconciliation sweep converges that state on its next tick.
 		if err := h.cancelAppointments(ctx, id); err != nil {
 			h.logger.ErrorContext(ctx, "failed to cancel appointments for slot", slog.Any("error", err), slog.String("slot_id", idStr))
-			h.createSnackbarError(ctx, w, http.StatusInternalServerError, "Failed to cancel associated appointments", "cancelAppointments")
+			h.createSnackbarError(ctx, w, http.StatusInternalServerError, errKeyCancelAppointments, "cancelAppointments")
 
 			return
 		}
 
 		h.sendNotification(ctx, id)
-		h.renderUpdatedSlotsTable(ctx, w, "Slot canceled successfully")
+		h.renderUpdatedSlotsTable(ctx, w, msgKeyCancelled)
 	}
 }
 
-func (h *Handler) renderUpdatedSlotsTable(ctx context.Context, w http.ResponseWriter, successMsg string) {
+func (h *Handler) renderUpdatedSlotsTable(ctx context.Context, w http.ResponseWriter, successKey string) {
 	dto, err := h.query.List(ctx)
 	if err != nil {
 		h.logger.ErrorContext(ctx, "failed to list slots after operation", slog.Any("error", err))
-		h.createSnackbarError(ctx, w, http.StatusInternalServerError, "Failed to load slots", "query.List")
+		h.createSnackbarError(ctx, w, http.StatusInternalServerError, errKeyLoadSlots, "query.List")
 		return
 	}
 
 	w.Header().Set("HX-Trigger", "close-modal")
-	if err := components.Snackbar(successMsg, components.SnackbarSuccess).Render(ctx, w); err != nil {
+	if err := components.Snackbar(i18n.T(ctx, successKey), components.SnackbarSuccess).Render(ctx, w); err != nil {
 		h.logger.ErrorContext(ctx, "error rendering success snackbar after slot operation", slog.Any("error", err))
 	}
 	if err := Table(dto).Render(ctx, w); err != nil {

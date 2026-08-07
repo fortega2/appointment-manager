@@ -1,6 +1,7 @@
 package slot_test
 
 import (
+	"appointment-manager/internal/i18n"
 	"appointment-manager/internal/professional"
 	"appointment-manager/internal/slot"
 	"context"
@@ -14,7 +15,11 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-const invalidSlotIDURL = "/slots/not-a-uuid"
+const (
+	invalidSlotIDURL   = "/slots/not-a-uuid"
+	invalidSlotIDMsgES = "El identificador del horario no es válido"
+	invalidSlotIDMsgEN = "Invalid slot ID"
+)
 
 func newHandlerLogger() *slog.Logger {
 	return slog.New(slog.DiscardHandler)
@@ -115,25 +120,42 @@ func TestNewHandlerSucceedsWithEveryDependency(t *testing.T) {
 }
 
 // A malformed slot id is rejected before any collaborator runs, so neither the
-// appointments nor the notification side effect is triggered.
+// appointments nor the notification side effect is triggered. The snackbar copy
+// is asserted per locale, since it now comes from the catalog.
 func TestCancelUIHandlerRejectsInvalidSlotID(t *testing.T) {
 	t.Parallel()
 
-	calls := &recordedCalls{}
+	tests := []struct {
+		name   string
+		locale i18n.Locale
+		want   string
+	}{
+		{"spanish", i18n.LocaleES, invalidSlotIDMsgES},
+		{"english", i18n.LocaleEN, invalidSlotIDMsgEN},
+	}
 
-	args := validHandlerArgs()
-	h, err := slot.NewHandler(args.logger, args.repo, args.query, args.pRepo, calls.cancelAppointments, calls.sendNotification)
-	require.NoError(t, err)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 
-	mux := http.NewServeMux()
-	h.RegisterUIHandlers(mux)
+			calls := &recordedCalls{}
 
-	req := httptest.NewRequestWithContext(t.Context(), http.MethodDelete, invalidSlotIDURL, nil)
-	rec := httptest.NewRecorder()
-	mux.ServeHTTP(rec, req)
+			args := validHandlerArgs()
+			h, err := slot.NewHandler(args.logger, args.repo, args.query, args.pRepo, calls.cancelAppointments, calls.sendNotification)
+			require.NoError(t, err)
 
-	assert.Equal(t, http.StatusBadRequest, rec.Code)
-	assert.Contains(t, rec.Body.String(), "Invalid slot ID")
-	assert.Empty(t, calls.cancelledSlotIDs, "appointments must not be cancelled for an unparseable slot id")
-	assert.Empty(t, calls.notifiedSlotIDs, "no notification must be sent for an unparseable slot id")
+			mux := http.NewServeMux()
+			h.RegisterUIHandlers(mux)
+
+			ctx := i18n.WithLocale(t.Context(), tt.locale)
+			req := httptest.NewRequestWithContext(ctx, http.MethodDelete, invalidSlotIDURL, nil)
+			rec := httptest.NewRecorder()
+			mux.ServeHTTP(rec, req)
+
+			assert.Equal(t, http.StatusBadRequest, rec.Code)
+			assert.Contains(t, rec.Body.String(), tt.want)
+			assert.Empty(t, calls.cancelledSlotIDs, "appointments must not be cancelled for an unparseable slot id")
+			assert.Empty(t, calls.notifiedSlotIDs, "no notification must be sent for an unparseable slot id")
+		})
+	}
 }

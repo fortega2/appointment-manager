@@ -7,6 +7,8 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"appointment-manager/internal/i18n"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -20,24 +22,24 @@ func TestResolveUIActionProblem(t *testing.T) {
 		name           string
 		err            error
 		expectedStatus int
-		expectedMsg    string
+		expectedKey    string
 	}{
-		{name: "invalid reference", err: ErrInvalidAppointmentReference, expectedStatus: http.StatusNotFound, expectedMsg: "Appointment not found"},
-		{name: "cannot attend now", err: ErrAppointmentCannotAttendNow, expectedStatus: http.StatusUnprocessableEntity, expectedMsg: "Appointment can only be attended during slot time"},
-		{name: "cannot attend status", err: ErrAppointmentCannotAttendWithStatus, expectedStatus: http.StatusConflict, expectedMsg: "Appointment cannot be attended from current status"},
-		{name: "cannot cancel status", err: ErrAppointmentCannotCancelWithStatus, expectedStatus: http.StatusConflict, expectedMsg: "Appointment cannot be cancelled from current status"},
-		{name: "status changed", err: ErrAppointmentStatusChanged, expectedStatus: http.StatusConflict, expectedMsg: "Appointment status changed, please refresh"},
-		{name: "unmapped error", err: errors.New(boomErrMessage), expectedStatus: http.StatusInternalServerError, expectedMsg: "Failed to process request"},
+		{name: "invalid reference", err: ErrInvalidAppointmentReference, expectedStatus: http.StatusNotFound, expectedKey: errKeyNotFound},
+		{name: "cannot attend now", err: ErrAppointmentCannotAttendNow, expectedStatus: http.StatusUnprocessableEntity, expectedKey: errKeyCannotAttendNow},
+		{name: "cannot attend status", err: ErrAppointmentCannotAttendWithStatus, expectedStatus: http.StatusConflict, expectedKey: errKeyCannotAttendStatus},
+		{name: "cannot cancel status", err: ErrAppointmentCannotCancelWithStatus, expectedStatus: http.StatusConflict, expectedKey: errKeyCannotCancelStatus},
+		{name: "status changed", err: ErrAppointmentStatusChanged, expectedStatus: http.StatusConflict, expectedKey: errKeyStatusChanged},
+		{name: "unmapped error", err: errors.New(boomErrMessage), expectedStatus: http.StatusInternalServerError, expectedKey: errKeyProcess},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			status, msg := resolveUIActionProblem(tt.err)
+			status, key := resolveUIActionProblem(tt.err)
 
 			assert.Equal(t, tt.expectedStatus, status)
-			assert.Equal(t, tt.expectedMsg, msg)
+			assert.Equal(t, tt.expectedKey, key)
 		})
 	}
 }
@@ -49,36 +51,36 @@ func TestResolveUICreateProblem(t *testing.T) {
 		name           string
 		err            error
 		expectedStatus int
-		expectedMsg    string
+		expectedKey    string
 	}{
-		{name: "slot required", err: ErrSlotIDRequired, expectedStatus: http.StatusBadRequest, expectedMsg: "Slot is required"},
-		{name: "invalid slot", err: ErrInvalidSlotID, expectedStatus: http.StatusBadRequest, expectedMsg: "Invalid slot selected"},
-		{name: "patient required", err: ErrPatientIDRequired, expectedStatus: http.StatusBadRequest, expectedMsg: "Patient is required"},
-		{name: "invalid patient", err: ErrInvalidPatientID, expectedStatus: http.StatusBadRequest, expectedMsg: "Invalid patient selected"},
-		{name: "professional required", err: ErrProfessionalIDRequired, expectedStatus: http.StatusBadRequest, expectedMsg: "Professional is required"},
-		{name: "invalid professional", err: ErrInvalidProfessionalID, expectedStatus: http.StatusBadRequest, expectedMsg: "Invalid professional selected"},
-		{name: "multiple active detected", err: ErrMultipleActiveAppointmentsDetected, expectedStatus: http.StatusConflict, expectedMsg: "Patient already has an active appointment in that time slot"},
-		{name: "slot blocked", err: ErrSlotBlocked, expectedStatus: http.StatusConflict, expectedMsg: "Selected slot is blocked"},
-		{name: "slot without availability", err: ErrSlotWithoutAvailability, expectedStatus: http.StatusConflict, expectedMsg: "Selected slot has no available spots"},
-		{name: "no active prescription", err: ErrNoActivePrescription, expectedStatus: http.StatusConflict, expectedMsg: "Patient has no active prescription"},
-		{name: "no remaining sessions", err: ErrNoRemainingSessions, expectedStatus: http.StatusConflict, expectedMsg: "Patient's prescription has no remaining sessions"},
-		{name: "invalid reference", err: ErrInvalidAppointmentReference, expectedStatus: http.StatusNotFound, expectedMsg: "Referenced entity not found"},
+		{name: "slot required", err: ErrSlotIDRequired, expectedStatus: http.StatusBadRequest, expectedKey: errKeySlotRequired},
+		{name: "invalid slot", err: ErrInvalidSlotID, expectedStatus: http.StatusBadRequest, expectedKey: errKeyInvalidSlot},
+		{name: "patient required", err: ErrPatientIDRequired, expectedStatus: http.StatusBadRequest, expectedKey: errKeyPatientRequired},
+		{name: "invalid patient", err: ErrInvalidPatientID, expectedStatus: http.StatusBadRequest, expectedKey: errKeyInvalidPatient},
+		{name: "professional required", err: ErrProfessionalIDRequired, expectedStatus: http.StatusBadRequest, expectedKey: errKeyProfessionalRequired},
+		{name: "invalid professional", err: ErrInvalidProfessionalID, expectedStatus: http.StatusBadRequest, expectedKey: errKeyInvalidProfessional},
+		{name: "multiple active detected", err: ErrMultipleActiveAppointmentsDetected, expectedStatus: http.StatusConflict, expectedKey: errKeyAlreadyActive},
+		{name: "slot blocked", err: ErrSlotBlocked, expectedStatus: http.StatusConflict, expectedKey: errKeySlotBlocked},
+		{name: "slot without availability", err: ErrSlotWithoutAvailability, expectedStatus: http.StatusConflict, expectedKey: errKeySlotNoAvailability},
+		{name: "no active prescription", err: ErrNoActivePrescription, expectedStatus: http.StatusConflict, expectedKey: errKeyNoPrescription},
+		{name: "no remaining sessions", err: ErrNoRemainingSessions, expectedStatus: http.StatusConflict, expectedKey: errKeyNoRemainingSessions},
+		{name: "invalid reference", err: ErrInvalidAppointmentReference, expectedStatus: http.StatusNotFound, expectedKey: errKeyReferenceNotFound},
 		// AssistantID is always derived from the session in the UI create flow (never from user
 		// input), so these two errors can no longer be produced there; they now fall through to
 		// the default case below instead of the dedicated 400 branches the JSON API still has.
-		{name: "assistant id required no longer has a dedicated branch", err: ErrAssistantIDRequired, expectedStatus: http.StatusInternalServerError, expectedMsg: "Failed to create appointment"},
-		{name: "invalid assistant id no longer has a dedicated branch", err: ErrInvalidAssistantID, expectedStatus: http.StatusInternalServerError, expectedMsg: "Failed to create appointment"},
-		{name: "unmapped error", err: errors.New(boomErrMessage), expectedStatus: http.StatusInternalServerError, expectedMsg: "Failed to create appointment"},
+		{name: "assistant id required no longer has a dedicated branch", err: ErrAssistantIDRequired, expectedStatus: http.StatusInternalServerError, expectedKey: errKeyCreate},
+		{name: "invalid assistant id no longer has a dedicated branch", err: ErrInvalidAssistantID, expectedStatus: http.StatusInternalServerError, expectedKey: errKeyCreate},
+		{name: "unmapped error", err: errors.New(boomErrMessage), expectedStatus: http.StatusInternalServerError, expectedKey: errKeyCreate},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			status, msg := resolveUICreateProblem(tt.err)
+			status, key := resolveUICreateProblem(tt.err)
 
 			assert.Equal(t, tt.expectedStatus, status)
-			assert.Equal(t, tt.expectedMsg, msg)
+			assert.Equal(t, tt.expectedKey, key)
 		})
 	}
 }
@@ -119,3 +121,41 @@ func TestUIHandlerParseForm(t *testing.T) {
 		assert.Nil(t, parsed)
 	})
 }
+
+// The resolvers return keys, so a key that is missing from a catalog would
+// reach the user as ctxi18n's marker rather than as copy. This walks every
+// branch of both resolvers and proves each one renders in both languages.
+func TestResolvedProblemKeysRenderInEveryLocale(t *testing.T) {
+	t.Parallel()
+
+	errs := []error{
+		ErrInvalidAppointmentReference, ErrAppointmentCannotAttendNow,
+		ErrAppointmentCannotAttendWithStatus, ErrAppointmentCannotCancelWithStatus,
+		ErrAppointmentStatusChanged, ErrSlotIDRequired, ErrInvalidSlotID,
+		ErrPatientIDRequired, ErrInvalidPatientID, ErrProfessionalIDRequired,
+		ErrInvalidProfessionalID, ErrMultipleActiveAppointmentsDetected,
+		ErrSlotBlocked, ErrSlotWithoutAvailability, ErrNoActivePrescription,
+		ErrNoRemainingSessions, errors.New(boomErrMessage),
+	}
+
+	for _, locale := range []i18n.Locale{i18n.LocaleES, i18n.LocaleEN} {
+		t.Run(string(locale), func(t *testing.T) {
+			t.Parallel()
+
+			ctx := i18n.WithLocale(t.Context(), locale)
+			for _, err := range errs {
+				for _, key := range []string{
+					mustKey(resolveUIActionProblem(err)),
+					mustKey(resolveUICreateProblem(err)),
+				} {
+					rendered := i18n.T(ctx, key)
+					assert.NotContains(t, rendered, "MISSING", "key %q has no copy", key)
+					assert.NotEmpty(t, rendered)
+				}
+			}
+		})
+	}
+}
+
+// mustKey drops the status a resolver returns alongside its key.
+func mustKey(_ int, key string) string { return key }

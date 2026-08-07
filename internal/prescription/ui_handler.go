@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"appointment-manager/internal/domain"
+	"appointment-manager/internal/i18n"
 	"appointment-manager/internal/ui/components"
 	"appointment-manager/internal/web"
 
@@ -105,7 +106,7 @@ func (h *UIHandler) createUIHandler() http.HandlerFunc {
 		req, err := h.parseCreateForm(r, w)
 		if err != nil {
 			h.logger.WarnContext(ctx, "invalid prescription create form", slog.Any("error", err))
-			h.renderTableWithSnackbarError(ctx, w, http.StatusBadRequest, "Invalid form data")
+			h.renderTableWithSnackbarError(ctx, w, http.StatusBadRequest, errKeyInvalidForm)
 			return
 		}
 		defer req.file.Close()
@@ -120,7 +121,7 @@ func (h *UIHandler) createUIHandler() http.HandlerFunc {
 		}
 
 		w.Header().Set("HX-Trigger", "close-modal")
-		if err := components.Snackbar("Prescription created successfully", components.SnackbarSuccess).Render(ctx, w); err != nil {
+		if err := components.Snackbar(i18n.T(ctx, msgKeyCreated), components.SnackbarSuccess).Render(ctx, w); err != nil {
 			h.logger.ErrorContext(ctx, renderSnackbarErrMsg, slog.Any("error", err))
 		}
 		if err := h.renderUpdatedTable(ctx, w); err != nil {
@@ -135,7 +136,7 @@ func (h *UIHandler) cancelUIHandler() http.HandlerFunc {
 
 		id, err := parsePrescriptionID(r)
 		if err != nil {
-			h.renderTableWithSnackbarError(ctx, w, http.StatusBadRequest, "Invalid prescription ID")
+			h.renderTableWithSnackbarError(ctx, w, http.StatusBadRequest, errKeyInvalidID)
 			return
 		}
 
@@ -148,7 +149,7 @@ func (h *UIHandler) cancelUIHandler() http.HandlerFunc {
 			return
 		}
 
-		if err := components.Snackbar("Prescription cancelled successfully", components.SnackbarSuccess).Render(ctx, w); err != nil {
+		if err := components.Snackbar(i18n.T(ctx, msgKeyCancelled), components.SnackbarSuccess).Render(ctx, w); err != nil {
 			h.logger.ErrorContext(ctx, renderSnackbarErrMsg, slog.Any("error", err))
 		}
 		if err := h.renderUpdatedTable(ctx, w); err != nil {
@@ -228,8 +229,10 @@ func (h *UIHandler) renderUpdatedTable(ctx context.Context, w http.ResponseWrite
 	return Table(balances).Render(ctx, w)
 }
 
-func (h *UIHandler) renderTableWithSnackbarError(ctx context.Context, w http.ResponseWriter, status int, msg string) {
-	if err := components.ShowSnackbar(ctx, components.SnackbarError, w, status, msg); err != nil {
+// renderTableWithSnackbarError takes a catalog key rather than a message so the
+// copy follows the request locale; the Go error stays in English, in the log.
+func (h *UIHandler) renderTableWithSnackbarError(ctx context.Context, w http.ResponseWriter, status int, messageKey string) {
+	if err := components.ShowSnackbar(ctx, components.SnackbarError, w, status, i18n.T(ctx, messageKey)); err != nil {
 		h.logger.ErrorContext(ctx, renderSnackbarErrMsg, slog.Any("error", err))
 	}
 	if err := h.renderUpdatedTable(ctx, w); err != nil {
@@ -258,23 +261,23 @@ func parsePrescriptionID(r *http.Request) (uuid.UUID, error) {
 func resolveCreateProblem(err error) (int, string) {
 	switch {
 	case errors.Is(err, ErrNilPatientID), errors.Is(err, ErrEmptyFilePath), errors.Is(err, ErrInvalidTotalSessions):
-		return http.StatusBadRequest, "Invalid form data"
+		return http.StatusBadRequest, errKeyInvalidForm
 	case errors.Is(err, ErrUnsupportedFileType):
-		return http.StatusUnprocessableEntity, "Unsupported file type"
+		return http.StatusUnprocessableEntity, errKeyUnsupportedFile
 	case errors.Is(err, ErrInvalidPatient):
-		return http.StatusUnprocessableEntity, "Invalid patient selected"
+		return http.StatusUnprocessableEntity, errKeyInvalidPatient
 	case errors.Is(err, ErrActivePrescriptionExists):
-		return http.StatusConflict, "Patient already has an active prescription"
+		return http.StatusConflict, errKeyAlreadyActive
 	default:
-		return http.StatusInternalServerError, "Failed to create prescription"
+		return http.StatusInternalServerError, errKeyCreate
 	}
 }
 
 func resolveCancelProblem(err error) (int, string) {
 	switch {
 	case errors.Is(err, ErrPrescriptionNotFound):
-		return http.StatusNotFound, "Prescription not found"
+		return http.StatusNotFound, errKeyNotFound
 	default:
-		return http.StatusInternalServerError, "Failed to cancel prescription"
+		return http.StatusInternalServerError, errKeyCancel
 	}
 }

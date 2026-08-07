@@ -2,6 +2,7 @@ package professional
 
 import (
 	"appointment-manager/internal/domain"
+	"appointment-manager/internal/i18n"
 	"appointment-manager/internal/ui/components"
 	"appointment-manager/internal/ui/form"
 	"appointment-manager/internal/web"
@@ -190,21 +191,21 @@ func (h *Handler) createUIHandler() http.HandlerFunc {
 		formRequest, err := h.parseCreateForm(r, w)
 		if err != nil {
 			h.logger.ErrorContext(ctx, "error parsing professional create form", slog.Any("error", err))
-			h.createSnackbarError(ctx, w, http.StatusBadRequest, failedToCreateProfessionalMessage, "parseCreateForm")
+			h.createSnackbarError(ctx, w, http.StatusBadRequest, errKeyParseForm, "parseCreateForm")
 			return
 		}
 
 		p, err := NewProfessional(formRequest.firstName, formRequest.lastName, formRequest.phone)
 		if err != nil {
 			h.logger.ErrorContext(ctx, "error creating professional from form data", slog.Any("error", err))
-			h.createSnackbarError(ctx, w, http.StatusUnprocessableEntity, failedToCreateProfessionalMessage, "NewProfessional")
+			h.createSnackbarError(ctx, w, http.StatusUnprocessableEntity, errKeyCreate, "NewProfessional")
 			return
 		}
 
 		if err := h.repo.Create(ctx, p); err != nil {
 			if !errors.Is(err, ErrInvalidProfessionalSpecialty) {
 				h.logger.ErrorContext(ctx, "failed to create professional", slog.Any("error", err))
-				h.createSnackbarError(ctx, w, http.StatusInternalServerError, failedToCreateProfessionalMessage, "repo.Create")
+				h.createSnackbarError(ctx, w, http.StatusInternalServerError, errKeyCreate, "repo.Create")
 				return
 			}
 		}
@@ -212,12 +213,12 @@ func (h *Handler) createUIHandler() http.HandlerFunc {
 		professionals, err := h.repo.ListAll(ctx)
 		if err != nil {
 			h.logger.ErrorContext(ctx, "failed to list professionals after creating new one", slog.Any("error", err))
-			h.createSnackbarError(ctx, w, http.StatusInternalServerError, "Failed to load professionals", "repo.ListAll")
+			h.createSnackbarError(ctx, w, http.StatusInternalServerError, errKeyLoadProfessionals, "repo.ListAll")
 			return
 		}
 
 		w.Header().Set("HX-Trigger", "close-modal")
-		if err := components.Snackbar("Professional created successfully", components.SnackbarSuccess).Render(ctx, w); err != nil {
+		if err := components.Snackbar(i18n.T(ctx, msgKeyCreated), components.SnackbarSuccess).Render(ctx, w); err != nil {
 			h.logger.ErrorContext(ctx, "error rendering success snackbar after creating professional", slog.Any("error", err))
 		}
 		if err := Table(professionalsToViews(professionals)).Render(ctx, w); err != nil {
@@ -245,7 +246,7 @@ func (h *Handler) updateUIHandler() http.HandlerFunc {
 		updateReq, err := h.parseUpdateForm(r, w)
 		if err != nil {
 			h.logger.ErrorContext(ctx, "error parsing professional update form", slog.Any("error", err))
-			h.createSnackbarError(ctx, w, http.StatusBadRequest, "Failed to parse form data", "parseUpdateForm")
+			h.createSnackbarError(ctx, w, http.StatusBadRequest, errKeyParseForm, "parseUpdateForm")
 			return
 		}
 
@@ -262,14 +263,14 @@ func (h *Handler) parseProfessionalIDFromPath(r *http.Request, w http.ResponseWr
 	pathValueID := r.PathValue("id")
 	if pathValueID == "" {
 		h.logger.WarnContext(ctx, missingIDInPathMessage)
-		h.createSnackbarError(ctx, w, http.StatusBadRequest, missingIDInPathMessage, "missingIDInPath")
+		h.createSnackbarError(ctx, w, http.StatusBadRequest, errKeyMissingID, "missingIDInPath")
 		return uuid.Nil, errors.New(missingIDInPathMessage)
 	}
 
 	professionalID, err := domain.ParseID(pathValueID)
 	if err != nil {
 		h.logger.WarnContext(ctx, "invalid professional id in path", slog.Any("error", err), slog.String("id", pathValueID))
-		h.createSnackbarError(ctx, w, http.StatusBadRequest, "Invalid professional ID in path", "invalidIDInPath")
+		h.createSnackbarError(ctx, w, http.StatusBadRequest, errKeyInvalidID, "invalidIDInPath")
 		return uuid.Nil, err
 	}
 	return professionalID, nil
@@ -280,26 +281,26 @@ func (h *Handler) processProfessionalUpdate(ctx context.Context, w http.Response
 	if err != nil {
 		if errors.Is(err, ErrProfessionalNotFound) {
 			h.logger.WarnContext(ctx, "professional not found for update", slog.String("id", professionalID.String()))
-			h.createSnackbarError(ctx, w, http.StatusNotFound, "Professional not found", "professionalNotFound")
+			h.createSnackbarError(ctx, w, http.StatusNotFound, errKeyNotFound, "professionalNotFound")
 			return err
 		}
 		h.logger.ErrorContext(ctx, "failed to get professional by id for update form", slog.Any("error", err), slog.String("id", professionalID.String()))
-		h.createSnackbarError(ctx, w, http.StatusInternalServerError, "Failed to load professional data", "repo.GetByID")
+		h.createSnackbarError(ctx, w, http.StatusInternalServerError, errKeyLoadProfessional, "repo.GetByID")
 		return err
 	}
 
 	if err := p.Update(updateReq.firstName, updateReq.lastName, updateReq.phone, updateReq.active); err != nil {
-		h.createSnackbarError(ctx, w, http.StatusInternalServerError, "Failed to update professional", "Professional.Update")
+		h.createSnackbarError(ctx, w, http.StatusInternalServerError, errKeyUpdate, "Professional.Update")
 		return err
 	}
 
 	if err := h.repo.Update(ctx, p); err != nil {
 		if errors.Is(err, ErrProfessionalNotFound) {
-			h.createSnackbarError(ctx, w, http.StatusNotFound, "Professional not found", "professionalNotFoundOnUpdate")
+			h.createSnackbarError(ctx, w, http.StatusNotFound, errKeyNotFound, "professionalNotFoundOnUpdate")
 			return err
 		}
 		h.logger.ErrorContext(ctx, "failed to update professional", slog.Any("error", err), slog.String("id", professionalID.String()))
-		h.createSnackbarError(ctx, w, http.StatusInternalServerError, "Failed to update professional", "repo.Update")
+		h.createSnackbarError(ctx, w, http.StatusInternalServerError, errKeyUpdate, "repo.Update")
 		return err
 	}
 
@@ -310,12 +311,12 @@ func (h *Handler) renderUpdatedProfessionalsTable(ctx context.Context, w http.Re
 	professionals, err := h.repo.ListAll(ctx)
 	if err != nil {
 		h.logger.ErrorContext(ctx, "failed to list professionals after updating one", slog.Any("error", err))
-		h.createSnackbarError(ctx, w, http.StatusInternalServerError, "Failed to load professionals", "repo.ListAll")
+		h.createSnackbarError(ctx, w, http.StatusInternalServerError, errKeyLoadProfessionals, "repo.ListAll")
 		return
 	}
 
 	w.Header().Set("HX-Trigger", "close-modal")
-	if err := components.Snackbar("Professional updated successfully", components.SnackbarSuccess).Render(ctx, w); err != nil {
+	if err := components.Snackbar(i18n.T(ctx, msgKeyUpdated), components.SnackbarSuccess).Render(ctx, w); err != nil {
 		h.logger.ErrorContext(ctx, "error rendering success snackbar after updating professional", slog.Any("error", err))
 	}
 	if err := Table(professionalsToViews(professionals)).Render(ctx, w); err != nil {
@@ -360,8 +361,11 @@ func (h *Handler) parseUpdateForm(r *http.Request, w http.ResponseWriter) (*upda
 	}, nil
 }
 
-func (h *Handler) createSnackbarError(ctx context.Context, w http.ResponseWriter, statusCode int, message, operation string) {
-	if err := components.ShowSnackbarOnly(ctx, components.SnackbarError, w, statusCode, message); err != nil {
+// createSnackbarError renders an error snackbar. It takes a catalog key rather
+// than a message so the copy follows the request locale; the Go error itself
+// stays in English, in the log line above each call.
+func (h *Handler) createSnackbarError(ctx context.Context, w http.ResponseWriter, statusCode int, messageKey, operation string) {
+	if err := components.ShowSnackbarOnly(ctx, components.SnackbarError, w, statusCode, i18n.T(ctx, messageKey)); err != nil {
 		h.logger.ErrorContext(ctx, "error rendering snackbar", slog.Any("error", err), slog.String("package", "professional"), slog.String("operation", operation))
 	}
 }

@@ -3,6 +3,7 @@ package patient
 import (
 	"appointment-manager/internal/domain"
 	"appointment-manager/internal/healthinsurance"
+	"appointment-manager/internal/i18n"
 	"appointment-manager/internal/ui/components"
 	"appointment-manager/internal/ui/form"
 	"appointment-manager/internal/web"
@@ -130,7 +131,7 @@ func (h *Handler) showDashboardUIHandler() http.HandlerFunc {
 		patientsView, err := h.repo.List(ctx)
 		if err != nil {
 			h.logger.ErrorContext(ctx, "failed to list patients for dashboard", slog.Any("error", err))
-			h.createSnackbarError(ctx, w, http.StatusInternalServerError, "Failed to load patients", "repo.List")
+			h.createSnackbarError(ctx, w, http.StatusInternalServerError, errKeyLoadPatients, "repo.List")
 			return
 		}
 
@@ -147,7 +148,7 @@ func (h *Handler) showCreateFormUIHandler() http.HandlerFunc {
 		insurances, err := h.healthInsuranceRepo.List(ctx)
 		if err != nil {
 			h.logger.ErrorContext(ctx, "failed to list health insurances for form", slog.Any("error", err))
-			h.createSnackbarError(ctx, w, http.StatusInternalServerError, "Failed to load health insurances", "healthInsuranceRepo.List")
+			h.createSnackbarError(ctx, w, http.StatusInternalServerError, errKeyLoadInsurances, "healthInsuranceRepo.List")
 			insurances = []healthinsurance.HealthInsurance{}
 		}
 
@@ -204,7 +205,7 @@ func (h *Handler) createUIHandler() http.HandlerFunc {
 		req, err := h.parseForm(r, w)
 		if err != nil {
 			h.logger.ErrorContext(ctx, "error parsing patient create form", slog.Any("error", err))
-			h.createSnackbarError(ctx, w, http.StatusBadRequest, failedToCreatePatientMsg, "parseForm")
+			h.createSnackbarError(ctx, w, http.StatusBadRequest, errKeyParseForm, "parseForm")
 			return
 		}
 
@@ -212,7 +213,7 @@ func (h *Handler) createUIHandler() http.HandlerFunc {
 			return
 		}
 
-		h.renderUpdatedPatientsTable(ctx, w, "Patient created successfully")
+		h.renderUpdatedPatientsTable(ctx, w, msgKeyCreated)
 	}
 }
 
@@ -228,7 +229,7 @@ func (h *Handler) updateUIHandler() http.HandlerFunc {
 		req, err := h.parseForm(r, w)
 		if err != nil {
 			h.logger.ErrorContext(ctx, "error parsing patient update form", slog.Any("error", err))
-			h.createSnackbarError(ctx, w, http.StatusBadRequest, "Failed to parse form data", "parseForm")
+			h.createSnackbarError(ctx, w, http.StatusBadRequest, errKeyParseForm, "parseForm")
 			return
 		}
 
@@ -236,7 +237,7 @@ func (h *Handler) updateUIHandler() http.HandlerFunc {
 			return
 		}
 
-		h.renderUpdatedPatientsTable(ctx, w, "Patient updated successfully")
+		h.renderUpdatedPatientsTable(ctx, w, msgKeyUpdated)
 	}
 }
 
@@ -245,14 +246,14 @@ func (h *Handler) parsePatientIDFromPath(r *http.Request, w http.ResponseWriter)
 	pathValueID := r.PathValue("id")
 	if pathValueID == "" {
 		h.logger.WarnContext(ctx, missingIDInPathMsg)
-		h.createSnackbarError(ctx, w, http.StatusBadRequest, missingIDInPathMsg, "missingIDInPath")
+		h.createSnackbarError(ctx, w, http.StatusBadRequest, errKeyMissingID, "missingIDInPath")
 		return uuid.Nil, errors.New(missingIDInPathMsg)
 	}
 
 	patientID, err := domain.ParseID(pathValueID)
 	if err != nil {
 		h.logger.WarnContext(ctx, "invalid patient id in path", slog.Any("error", err), slog.String("id", pathValueID))
-		h.createSnackbarError(ctx, w, http.StatusBadRequest, "Invalid patient ID in path", "invalidIDInPath")
+		h.createSnackbarError(ctx, w, http.StatusBadRequest, errKeyInvalidID, "invalidIDInPath")
 		return uuid.Nil, err
 	}
 	return patientID, nil
@@ -305,17 +306,19 @@ func (h *Handler) processPatientCreate(ctx context.Context, w http.ResponseWrite
 	)
 	if err != nil {
 		h.logger.WarnContext(ctx, "invalid patient create form data", slog.Any("error", err))
-		h.createSnackbarError(ctx, w, http.StatusUnprocessableEntity, err.Error(), "NewPatient")
+		messageKey, args := validationErrorKey(err)
+		h.createSnackbarError(ctx, w, http.StatusUnprocessableEntity, messageKey, "NewPatient", args)
+
 		return err
 	}
 
 	if err := h.repo.Create(ctx, p); err != nil {
 		if errors.Is(err, ErrInvalidHealthInsurance) {
-			h.createSnackbarError(ctx, w, http.StatusUnprocessableEntity, "Invalid health insurance selected", "repo.Create")
+			h.createSnackbarError(ctx, w, http.StatusUnprocessableEntity, errKeyInvalidInsurance, "repo.Create")
 			return err
 		}
 		h.logger.ErrorContext(ctx, failedToCreatePatientLowerMsg, slog.Any("error", err))
-		h.createSnackbarError(ctx, w, http.StatusInternalServerError, failedToCreatePatientMsg, "repo.Create")
+		h.createSnackbarError(ctx, w, http.StatusInternalServerError, errKeyCreate, "repo.Create")
 		return err
 	}
 
@@ -327,18 +330,18 @@ func (h *Handler) processPatientUpdate(ctx context.Context, w http.ResponseWrite
 	if err != nil {
 		if errors.Is(err, ErrPatientNotFound) {
 			h.logger.WarnContext(ctx, "patient not found for update", slog.String("id", patientID.String()))
-			h.createSnackbarError(ctx, w, http.StatusNotFound, "Patient not found", "patientNotFound")
+			h.createSnackbarError(ctx, w, http.StatusNotFound, errKeyNotFound, "patientNotFound")
 			return err
 		}
 		h.logger.ErrorContext(ctx, "failed to get patient by id for update", slog.Any("error", err), slog.String("id", patientID.String()))
-		h.createSnackbarError(ctx, w, http.StatusInternalServerError, "Failed to load patient data", "repo.GetByID")
+		h.createSnackbarError(ctx, w, http.StatusInternalServerError, errKeyLoadPatient, "repo.GetByID")
 		return err
 	}
 
 	p, err := view.ToPatient()
 	if err != nil {
 		h.logger.ErrorContext(ctx, "error converting patient view to patient model for update", slog.Any("error", err), slog.String("id", patientID.String()))
-		h.createSnackbarError(ctx, w, http.StatusInternalServerError, "Failed to process patient data", "view.ToPatient")
+		h.createSnackbarError(ctx, w, http.StatusInternalServerError, errKeyProcessPatient, "view.ToPatient")
 		return err
 	}
 	if err := p.Update(
@@ -351,37 +354,39 @@ func (h *Handler) processPatientUpdate(ctx context.Context, w http.ResponseWrite
 		req.clinicalNotes,
 	); err != nil {
 		h.logger.WarnContext(ctx, "invalid patient update form data", slog.Any("error", err), slog.String("id", patientID.String()))
-		h.createSnackbarError(ctx, w, http.StatusUnprocessableEntity, err.Error(), "Patient.Update")
+		messageKey, args := validationErrorKey(err)
+		h.createSnackbarError(ctx, w, http.StatusUnprocessableEntity, messageKey, "Patient.Update", args)
+
 		return err
 	}
 
 	if err := h.repo.Update(ctx, &p); err != nil {
 		if errors.Is(err, ErrPatientNotFound) {
-			h.createSnackbarError(ctx, w, http.StatusNotFound, "Patient not found", "patientNotFoundOnUpdate")
+			h.createSnackbarError(ctx, w, http.StatusNotFound, errKeyNotFound, "patientNotFoundOnUpdate")
 			return err
 		}
 		if errors.Is(err, ErrInvalidHealthInsurance) {
-			h.createSnackbarError(ctx, w, http.StatusUnprocessableEntity, "Invalid health insurance selected", "repo.Update")
+			h.createSnackbarError(ctx, w, http.StatusUnprocessableEntity, errKeyInvalidInsurance, "repo.Update")
 			return err
 		}
 		h.logger.ErrorContext(ctx, "failed to update patient", slog.Any("error", err), slog.String("id", patientID.String()))
-		h.createSnackbarError(ctx, w, http.StatusInternalServerError, "Failed to update patient", "repo.Update")
+		h.createSnackbarError(ctx, w, http.StatusInternalServerError, errKeyUpdate, "repo.Update")
 		return err
 	}
 
 	return nil
 }
 
-func (h *Handler) renderUpdatedPatientsTable(ctx context.Context, w http.ResponseWriter, successMsg string) {
+func (h *Handler) renderUpdatedPatientsTable(ctx context.Context, w http.ResponseWriter, successKey string) {
 	patientsViews, err := h.repo.List(ctx)
 	if err != nil {
 		h.logger.ErrorContext(ctx, "failed to list patients after operation", slog.Any("error", err))
-		h.createSnackbarError(ctx, w, http.StatusInternalServerError, "Failed to load patients", "repo.List")
+		h.createSnackbarError(ctx, w, http.StatusInternalServerError, errKeyLoadPatients, "repo.List")
 		return
 	}
 
 	w.Header().Set("HX-Trigger", "close-modal")
-	if err := components.Snackbar(successMsg, components.SnackbarSuccess).Render(ctx, w); err != nil {
+	if err := components.Snackbar(i18n.T(ctx, successKey), components.SnackbarSuccess).Render(ctx, w); err != nil {
 		h.logger.ErrorContext(ctx, "error rendering success snackbar after patient operation", slog.Any("error", err))
 	}
 	if err := Table(patientsViews).Render(ctx, w); err != nil {
@@ -389,8 +394,11 @@ func (h *Handler) renderUpdatedPatientsTable(ctx context.Context, w http.Respons
 	}
 }
 
-func (h *Handler) createSnackbarError(ctx context.Context, w http.ResponseWriter, statusCode int, message, operation string) {
-	if err := components.ShowSnackbarOnly(ctx, components.SnackbarError, w, statusCode, message); err != nil {
+// createSnackbarError renders an error snackbar. It takes a catalog key rather
+// than a message so the copy follows the request locale; args fill the key's
+// placeholders, as the length-limit messages need.
+func (h *Handler) createSnackbarError(ctx context.Context, w http.ResponseWriter, statusCode int, messageKey, operation string, args ...any) {
+	if err := components.ShowSnackbarOnly(ctx, components.SnackbarError, w, statusCode, i18n.T(ctx, messageKey, args...)); err != nil {
 		h.logger.ErrorContext(ctx, "error rendering snackbar", slog.Any("error", err), slog.String("package", "patient"), slog.String("operation", operation))
 	}
 }

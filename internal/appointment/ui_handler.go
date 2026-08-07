@@ -1,6 +1,7 @@
 package appointment
 
 import (
+	"appointment-manager/internal/i18n"
 	"appointment-manager/internal/prescription"
 	"appointment-manager/internal/professional"
 	"appointment-manager/internal/session"
@@ -117,13 +118,13 @@ func (h *UIHandler) showCreateFormUIHandler() http.HandlerFunc {
 
 		slotOpts, err := h.loadAvailableSlotOptions(ctx, lg)
 		if err != nil {
-			h.showSnackbarOnly(ctx, lg, components.SnackbarError, w, http.StatusInternalServerError, "Failed to load available slots")
+			h.showSnackbarOnly(ctx, lg, components.SnackbarError, w, http.StatusInternalServerError, errKeyLoadSlots)
 			return
 		}
 
 		patientOpts, err := h.loadPatientOptions(ctx, lg)
 		if err != nil {
-			h.showSnackbarOnly(ctx, lg, components.SnackbarError, w, http.StatusInternalServerError, "Failed to load patients")
+			h.showSnackbarOnly(ctx, lg, components.SnackbarError, w, http.StatusInternalServerError, errKeyLoadPatients)
 			return
 		}
 
@@ -197,14 +198,14 @@ func (h *UIHandler) createUIHandler() http.HandlerFunc {
 
 		req, err := h.parseForm(r, w)
 		if err != nil {
-			h.respondUI(ctx, lg, w, components.SnackbarError, http.StatusBadRequest, "Invalid form data", "parse error")
+			h.respondUI(ctx, lg, w, components.SnackbarError, http.StatusBadRequest, errKeyInvalidForm, "parse error")
 			return
 		}
 
 		s, err := session.FromContext(ctx)
 		if err != nil {
 			lg.ErrorContext(ctx, "failed to retrieve session", slog.Any("error", err))
-			h.respondUI(ctx, lg, w, components.SnackbarError, http.StatusInternalServerError, "Failed to retrieve session", "session error")
+			h.respondUI(ctx, lg, w, components.SnackbarError, http.StatusInternalServerError, errKeySession, "session error")
 			return
 		}
 		req.AssistantID = s.UserID
@@ -223,7 +224,7 @@ func (h *UIHandler) createUIHandler() http.HandlerFunc {
 
 		w.Header().Set("HX-Trigger", "close-modal")
 		w.WriteHeader(http.StatusCreated)
-		if err := components.Snackbar("Appointment created successfully", components.SnackbarSuccess).Render(ctx, w); err != nil {
+		if err := components.Snackbar(i18n.T(ctx, msgKeyCreated), components.SnackbarSuccess).Render(ctx, w); err != nil {
 			lg.ErrorContext(ctx, renderSnackbarErrMsg, slog.Any("error", err))
 		}
 		if err := h.renderUpdatedAppointmentsTable(ctx, w); err != nil {
@@ -232,8 +233,8 @@ func (h *UIHandler) createUIHandler() http.HandlerFunc {
 	}
 }
 
-func (h *UIHandler) respondUI(ctx context.Context, lg *slog.Logger, w http.ResponseWriter, kind components.SnackbarType, status int, msg, stage string) {
-	h.showSnackbar(ctx, lg, kind, w, status, msg)
+func (h *UIHandler) respondUI(ctx context.Context, lg *slog.Logger, w http.ResponseWriter, kind components.SnackbarType, status int, messageKey, stage string) {
+	h.showSnackbar(ctx, lg, kind, w, status, messageKey)
 	if renderErr := h.renderUpdatedAppointmentsTable(ctx, w); renderErr != nil {
 		lg.ErrorContext(ctx, "error rendering appointments table after "+stage, slog.Any("error", renderErr))
 	}
@@ -272,7 +273,7 @@ func (h *UIHandler) attendUIAppointment() http.HandlerFunc {
 
 		ID, err := parseAppointmentID(r)
 		if err != nil {
-			h.showSnackbarOnly(ctx, lg, components.SnackbarError, w, http.StatusBadRequest, "Invalid appointment ID")
+			h.showSnackbarOnly(ctx, lg, components.SnackbarError, w, http.StatusBadRequest, errKeyInvalidID)
 			return
 		}
 
@@ -286,7 +287,7 @@ func (h *UIHandler) attendUIAppointment() http.HandlerFunc {
 			return
 		}
 
-		h.respondUI(ctx, lg, w, components.SnackbarSuccess, http.StatusOK, "Appointment marked as attended successfully", "attend operation")
+		h.respondUI(ctx, lg, w, components.SnackbarSuccess, http.StatusOK, msgKeyAttended, "attend operation")
 	}
 }
 
@@ -301,7 +302,7 @@ func (h *UIHandler) cancelUIAppointment() http.HandlerFunc {
 
 		ID, err := parseAppointmentID(r)
 		if err != nil {
-			h.showSnackbarOnly(ctx, lg, components.SnackbarError, w, http.StatusBadRequest, "Invalid appointment ID")
+			h.showSnackbarOnly(ctx, lg, components.SnackbarError, w, http.StatusBadRequest, errKeyInvalidID)
 			return
 		}
 
@@ -315,20 +316,22 @@ func (h *UIHandler) cancelUIAppointment() http.HandlerFunc {
 			return
 		}
 
-		h.respondUI(ctx, lg, w, components.SnackbarSuccess, http.StatusOK, "Appointment cancelled successfully", "cancel operation")
+		h.respondUI(ctx, lg, w, components.SnackbarSuccess, http.StatusOK, msgKeyCancelled, "cancel operation")
 	}
 }
 
-func (h *UIHandler) showSnackbar(ctx context.Context, lg *slog.Logger, kind components.SnackbarType, w http.ResponseWriter, status int, msg string) {
-	if err := components.ShowSnackbar(ctx, kind, w, status, msg); err != nil {
+// showSnackbar takes a catalog key rather than a message so the copy follows
+// the request locale; the Go error stays in English, in the log line.
+func (h *UIHandler) showSnackbar(ctx context.Context, lg *slog.Logger, kind components.SnackbarType, w http.ResponseWriter, status int, messageKey string) {
+	if err := components.ShowSnackbar(ctx, kind, w, status, i18n.T(ctx, messageKey)); err != nil {
 		lg.ErrorContext(ctx, renderSnackbarErrMsg, slog.Any("error", err), slog.String("operation", "ShowSnackbar"))
 	}
 }
 
 // showSnackbarOnly reports a failure that produces no replacement content for
 // the target, so htmx must be told to leave the target alone.
-func (h *UIHandler) showSnackbarOnly(ctx context.Context, lg *slog.Logger, kind components.SnackbarType, w http.ResponseWriter, status int, msg string) {
-	if err := components.ShowSnackbarOnly(ctx, kind, w, status, msg); err != nil {
+func (h *UIHandler) showSnackbarOnly(ctx context.Context, lg *slog.Logger, kind components.SnackbarType, w http.ResponseWriter, status int, messageKey string) {
+	if err := components.ShowSnackbarOnly(ctx, kind, w, status, i18n.T(ctx, messageKey)); err != nil {
 		lg.ErrorContext(ctx, renderSnackbarErrMsg, slog.Any("error", err), slog.String("operation", "ShowSnackbarOnly"))
 	}
 }
@@ -352,47 +355,47 @@ func (h *UIHandler) renderUpdatedAppointmentsTable(ctx context.Context, w http.R
 func resolveUIActionProblem(err error) (int, string) {
 	switch {
 	case errors.Is(err, ErrInvalidAppointmentReference):
-		return http.StatusNotFound, "Appointment not found"
+		return http.StatusNotFound, errKeyNotFound
 	case errors.Is(err, ErrAppointmentCannotAttendNow):
-		return http.StatusUnprocessableEntity, "Appointment can only be attended during slot time"
+		return http.StatusUnprocessableEntity, errKeyCannotAttendNow
 	case errors.Is(err, ErrAppointmentCannotAttendWithStatus):
-		return http.StatusConflict, "Appointment cannot be attended from current status"
+		return http.StatusConflict, errKeyCannotAttendStatus
 	case errors.Is(err, ErrAppointmentCannotCancelWithStatus):
-		return http.StatusConflict, "Appointment cannot be cancelled from current status"
+		return http.StatusConflict, errKeyCannotCancelStatus
 	case errors.Is(err, ErrAppointmentStatusChanged):
-		return http.StatusConflict, "Appointment status changed, please refresh"
+		return http.StatusConflict, errKeyStatusChanged
 	default:
-		return http.StatusInternalServerError, "Failed to process request"
+		return http.StatusInternalServerError, errKeyProcess
 	}
 }
 
 func resolveUICreateProblem(err error) (int, string) {
 	switch {
 	case errors.Is(err, ErrSlotIDRequired):
-		return http.StatusBadRequest, "Slot is required"
+		return http.StatusBadRequest, errKeySlotRequired
 	case errors.Is(err, ErrInvalidSlotID):
-		return http.StatusBadRequest, "Invalid slot selected"
+		return http.StatusBadRequest, errKeyInvalidSlot
 	case errors.Is(err, ErrPatientIDRequired):
-		return http.StatusBadRequest, "Patient is required"
+		return http.StatusBadRequest, errKeyPatientRequired
 	case errors.Is(err, ErrInvalidPatientID):
-		return http.StatusBadRequest, "Invalid patient selected"
+		return http.StatusBadRequest, errKeyInvalidPatient
 	case errors.Is(err, ErrProfessionalIDRequired):
-		return http.StatusBadRequest, "Professional is required"
+		return http.StatusBadRequest, errKeyProfessionalRequired
 	case errors.Is(err, ErrInvalidProfessionalID):
-		return http.StatusBadRequest, "Invalid professional selected"
+		return http.StatusBadRequest, errKeyInvalidProfessional
 	case errors.Is(err, ErrMultipleActiveAppointmentsDetected):
-		return http.StatusConflict, "Patient already has an active appointment in that time slot"
+		return http.StatusConflict, errKeyAlreadyActive
 	case errors.Is(err, ErrSlotBlocked):
-		return http.StatusConflict, "Selected slot is blocked"
+		return http.StatusConflict, errKeySlotBlocked
 	case errors.Is(err, ErrSlotWithoutAvailability):
-		return http.StatusConflict, "Selected slot has no available spots"
+		return http.StatusConflict, errKeySlotNoAvailability
 	case errors.Is(err, ErrNoActivePrescription):
-		return http.StatusConflict, "Patient has no active prescription"
+		return http.StatusConflict, errKeyNoPrescription
 	case errors.Is(err, ErrNoRemainingSessions):
-		return http.StatusConflict, "Patient's prescription has no remaining sessions"
+		return http.StatusConflict, errKeyNoRemainingSessions
 	case errors.Is(err, ErrInvalidAppointmentReference):
-		return http.StatusNotFound, "Referenced entity not found"
+		return http.StatusNotFound, errKeyReferenceNotFound
 	default:
-		return http.StatusInternalServerError, "Failed to create appointment"
+		return http.StatusInternalServerError, errKeyCreate
 	}
 }
