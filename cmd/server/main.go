@@ -5,7 +5,6 @@ import (
 	"appointment-manager/internal/i18n"
 	"appointment-manager/internal/metrics"
 	"appointment-manager/internal/server"
-	"appointment-manager/internal/session"
 	"appointment-manager/internal/tracing"
 	"context"
 	"fmt"
@@ -108,43 +107,22 @@ func run() error {
 		return err
 	}
 
-	deps, err := newDependencies(pool, appMetrics)
+	components, err := initializeAppComponents(logger, pool, appMetrics)
 	if err != nil {
-		logger.Error("failed to initialize dependencies", slog.Any("error", err))
+		logger.Error("failed to initialize application components", slog.Any("error", err))
 		return err
 	}
 
-	notificationService, err := initializeNotificationService(logger, deps, appMetrics)
-	if err != nil {
-		logger.Error("failed to initialize notification service", slog.Any("error", err))
-		return err
-	}
-
-	env := strings.TrimSpace(os.Getenv(environmentEnv))
-	isDev := env == "" || strings.EqualFold(env, environmentDevelopment)
-
-	locale, err := parseDefaultLocale(os.Getenv(defaultLocaleEnv))
-	if err != nil {
-		logger.Error("failed to parse default locale", slog.Any("error", err))
-		return err
-	}
-
-	sessionStore, err := session.NewStore(deps.sessionRepo)
-	if err != nil {
-		logger.Error("failed to initialize session store", slog.Any("error", err))
-		return err
-	}
-
-	handler, err := initializeServerHandlers(
-		logger,
-		sessionStore,
-		deps,
-		storageClient,
-		notificationService.NotifySlotCancelled,
-		isDev,
-		locale,
-		appMetrics,
-	)
+	handler, err := initializeServerHandlers(handlerConfig{
+		logger:           logger,
+		sessionStore:     components.sessionStore,
+		deps:             components.deps,
+		storageClient:    storageClient,
+		metrics:          appMetrics,
+		sendNotification: components.notificationService.NotifySlotCancelled,
+		locale:           components.locale,
+		isDev:            components.isDev,
+	})
 	if err != nil {
 		logger.Error("failed to initialize server handlers", slog.Any("error", err))
 		return err
@@ -156,20 +134,10 @@ func run() error {
 	stopMetricsServer := startMetricsServer(ctx, logger, appMetrics, parseMetricsAddr(os.Getenv(metricsAddrEnv)))
 	defer stopMetricsServer()
 
-	// Deferred before the sweeps so it stops after them, and after the pool so it
-	// stops before the pool closes: the shutdown flush still needs to query for
-	// recipients.
-	//
-	// It runs on a context detached from the shutdown signal on purpose. Sharing
-	// ctx would end the drain the moment SIGTERM arrives, while the HTTP server
-	// is still finishing in-flight requests -- a slot cancelled during those last
-	// seconds would queue a notification into a queue nobody drains any more, and
-	// it would be lost silently. Stopping it here instead, once server.Start has
-	// returned, is what makes the final flush actually final.
-	stopNotificationWorker := startNotificationWorker(context.WithoutCancel(ctx), notificationService)
+	stopNotificationWorker := startNotificationWorker(context.WithoutCancel(ctx), components.notificationService)
 	defer stopNotificationWorker()
 
-	stopWorkers, err := startBackgroundWorkers(ctx, logger, deps, sessionStore)
+	stopWorkers, err := startBackgroundWorkers(ctx, logger, components.deps, components.sessionStore)
 	if err != nil {
 		logger.ErrorContext(ctx, "failed to start background workers", slog.Any("error", err))
 		return err

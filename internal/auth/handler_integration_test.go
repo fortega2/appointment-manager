@@ -4,6 +4,7 @@ package auth_test
 
 import (
 	"appointment-manager/internal/assistant"
+	"appointment-manager/internal/i18n"
 	"appointment-manager/internal/password"
 	"appointment-manager/internal/session"
 	"bytes"
@@ -274,7 +275,9 @@ func TestProcessLoginUIHandlerRendersErrorForWrongPassword(t *testing.T) {
 
 	seedAssistantForAuth(ctx, t, repo, authEmail, authPassword)
 
-	req := newAuthFormRequest(ctx, authEmail, "wrong-password")
+	// The locale middleware is not in this mux, so the language is pinned here:
+	// the assertion below is on English copy.
+	req := newAuthFormRequest(i18n.WithLocale(ctx, i18n.LocaleEN), authEmail, "wrong-password")
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
 

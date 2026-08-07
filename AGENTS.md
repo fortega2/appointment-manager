@@ -18,6 +18,11 @@ Guidance for coding agents working in `appointment-manager`.
   - cancel: if now is before start-24h -> `cancelled`; otherwise -> `absent`.
   - attend: only allowed when now is within [start, end].
 - Appointment status updates must be concurrency-safe (atomic update with expected current status, or equivalent locking).
+- UI localization: `github.com/invopop/ctxi18n` v0.9.0, always behind the `internal/i18n` facade —
+  no `.templ` file or handler imports `ctxi18n` directly. Catalogs are `internal/i18n/locales/*.yml`
+  (`es` default, `en`), the choice lives in the `lang` cookie, and `/api/v1/*` responses stay in
+  English. Go error strings are never translated: the UI maps sentinels to catalog keys in each
+  package's `messages.go`. See ADR 0007.
 - Frontend assets (Tailwind CSS, htmx, Alpine.js) are self-hosted and pinned — no CDN `<script src="https://...">` tags in `.templ` files. Pinned versions: Tailwind CSS v4.3.2, htmx v2.0.10, Alpine.js v3.15.12. Regenerating/bumping these is covered by the `frontend-asset-update` skill.
 
 ### Architecture Decision Records

@@ -9,6 +9,8 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"appointment-manager/internal/i18n"
+
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -19,6 +21,9 @@ func doCancel(ctx context.Context, t *testing.T, mux *http.ServeMux, slotID uuid
 	t.Helper()
 
 	rec := httptest.NewRecorder()
+	// The locale middleware is not in this mux, so the language is pinned here:
+	// the assertions below are on English copy.
+	ctx = i18n.WithLocale(ctx, i18n.LocaleEN)
 	mux.ServeHTTP(rec, httptest.NewRequestWithContext(ctx, http.MethodDelete, integrationSlotsPath+slotID.String(), nil))
 
 	return rec
@@ -37,7 +42,7 @@ func TestCancelUIHandlerCancelsSlotAndItsAppointments(t *testing.T) {
 	rec := doCancel(ctx, t, newSlotIntegrationMux(t, pool, calls), slotID)
 
 	assert.Equal(t, http.StatusOK, rec.Code)
-	assert.Contains(t, rec.Body.String(), "Slot canceled successfully")
+	assert.Contains(t, rec.Body.String(), "Slot cancelled successfully")
 
 	assert.True(t, fetchSlotRecord(ctx, t, pool, slotID).Blocked, "slot must be blocked")
 	assert.Equal(t, []uuid.UUID{slotID}, calls.cancelledSlotIDs)

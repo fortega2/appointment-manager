@@ -5,7 +5,9 @@ import (
 	"appointment-manager/internal/assistant"
 	"appointment-manager/internal/health"
 	"appointment-manager/internal/healthinsurance"
+	"appointment-manager/internal/i18n"
 	"appointment-manager/internal/metrics"
+	"appointment-manager/internal/notification"
 	"appointment-manager/internal/password"
 	"appointment-manager/internal/patient"
 	"appointment-manager/internal/prescription"
@@ -13,6 +15,9 @@ import (
 	"appointment-manager/internal/session"
 	"appointment-manager/internal/slot"
 	"fmt"
+	"log/slog"
+	"os"
+	"strings"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -124,5 +129,49 @@ func newDependencies(pool *pgxpool.Pool, appointmentMetrics *metrics.Metrics) (*
 		sessionRepo:         sessionRepo,
 		slotRepo:            slotRepo,
 		slotQuery:           slotQuery,
+	}, nil
+}
+
+// appComponents holds what run builds once the pool is up and hands to the
+// handlers and the workers.
+type appComponents struct {
+	deps                *dependencies
+	notificationService *notification.Service
+	sessionStore        *session.Store
+	locale              i18n.Locale
+	isDev               bool
+}
+
+// initializeAppComponents builds everything between the pool and the handlers.
+// Errors are wrapped rather than logged: run logs them once.
+func initializeAppComponents(logger *slog.Logger, pool *pgxpool.Pool, appMetrics *metrics.Metrics) (*appComponents, error) {
+	deps, err := newDependencies(pool, appMetrics)
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize dependencies: %w", err)
+	}
+
+	notificationService, err := initializeNotificationService(logger, deps, appMetrics)
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize notification service: %w", err)
+	}
+
+	locale, err := parseDefaultLocale(os.Getenv(defaultLocaleEnv))
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse default locale: %w", err)
+	}
+
+	sessionStore, err := session.NewStore(deps.sessionRepo)
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize session store: %w", err)
+	}
+
+	env := strings.TrimSpace(os.Getenv(environmentEnv))
+
+	return &appComponents{
+		deps:                deps,
+		notificationService: notificationService,
+		sessionStore:        sessionStore,
+		locale:              locale,
+		isDev:               env == "" || strings.EqualFold(env, environmentDevelopment),
 	}, nil
 }

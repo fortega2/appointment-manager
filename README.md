@@ -68,6 +68,7 @@ A production-grade medical appointment scheduling system built entirely in Go. D
 │   ├── slot/                 # Entity, UI handler, repository, queries
 │   ├── healthinsurance/      # Lookup repository
 │   ├── auth/                 # Login/logout handlers (JSON + form)
+│   ├── i18n/                 # Message catalogs, locale resolution (es/en)
 │   ├── health/               # Liveness + readiness probes
 │   ├── session/              # In-memory session store
 │   ├── password/             # Argon2id hashing
@@ -113,6 +114,7 @@ over the `.env` file.
 | `DB_POOL_MAX_CONN_LIFETIME_JITTER` | no | Random spread added on top of the lifetime so a pool opened at once does not expire at once (pgx default `0`, i.e. no spread). |
 | `DB_POOL_MAX_CONN_IDLE_TIME` | no | How long an unused connection survives before being closed, down to `DB_POOL_MIN_CONNS` (pgx default `30m`). `0` is rejected: to pgx it means retiring the idle pool on every sweep, not "no limit". |
 | `DB_POOL_HEALTH_CHECK_PERIOD` | no | How often the pool sweeps idle connections for expiry and tops itself back up to the minimum (pgx default `1m`). |
+| `DEFAULT_LOCALE` | no | Language the UI renders in when a request expresses no preference of its own: `es` (default) or `en`. A visitor's `lang` cookie wins over it, and their `Accept-Language` header comes next. An unsupported value stops the process. |
 | `ENV` | no | `development` (default) enables dev-friendly settings. |
 | `LOG_LEVEL` | no | `debug` (default), `info`, `warn` or `error`, case-insensitive. |
 | `STORAGE_ENDPOINT` | no | S3-compatible endpoint, e.g. `s3.example.com`. When unset, object storage is disabled. |
