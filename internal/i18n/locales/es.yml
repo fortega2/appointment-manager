@@ -128,6 +128,29 @@ es:
       last_name: "Apellido"
       phone: "Teléfono"
       active: "Activo"
+  prescription:
+    title: "Recetas"
+    create: "Cargar receta"
+    empty:
+      title: "No hay recetas activas"
+      body: "Cargá una receta para autorizar sesiones a un paciente."
+    table:
+      patient: "Paciente"
+      total_sessions: "Sesiones totales"
+      remaining_sessions: "Sesiones restantes"
+      document: "Documento"
+      action: "Acción"
+      view: "Ver"
+    action:
+      cancel: "Cancelar"
+      cancel_label: "Cancelar receta"
+      confirm: "¿Cancelar esta receta? Va a hacer falta cargar una nueva antes de que el paciente pueda sacar turno otra vez."
+    form:
+      title: "Cargar receta"
+      patient: "Paciente"
+      select_patient: "Seleccioná un paciente"
+      total_sessions: "Sesiones totales"
+      document: "Documento"
   appointment:
     title: "Turnos"
     heading: "Turnos"

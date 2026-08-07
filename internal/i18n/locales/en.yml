@@ -128,6 +128,29 @@ en:
       last_name: "Last Name"
       phone: "Phone"
       active: "Active"
+  prescription:
+    title: "Prescriptions"
+    create: "Load Prescription"
+    empty:
+      title: "There are no active prescriptions"
+      body: "Load a prescription to authorize sessions for a patient."
+    table:
+      patient: "Patient"
+      total_sessions: "Total Sessions"
+      remaining_sessions: "Remaining Sessions"
+      document: "Document"
+      action: "Action"
+      view: "View"
+    action:
+      cancel: "Cancel"
+      cancel_label: "Cancel Prescription"
+      confirm: "Cancel this prescription? The patient will need a new one loaded before booking again."
+    form:
+      title: "Load Prescription"
+      patient: "Patient"
+      select_patient: "Select a patient"
+      total_sessions: "Total Sessions"
+      document: "Document"
   appointment:
     title: "Appointment Dashboard"
     heading: "Appointments"

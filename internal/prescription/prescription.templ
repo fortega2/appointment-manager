@@ -4,11 +4,12 @@ import (
 	"fmt"
 	"strconv"
 
+	"appointment-manager/internal/i18n"
 	"appointment-manager/internal/ui/layout"
 )
 
 templ Dashboard(balances []Balance) {
-	@layout.Base("Prescriptions", true) {
+	@layout.Base(i18n.T(ctx, "prescription.title"), true) {
 		<div class="w-full max-w-5xl mx-auto" x-data="{ modalOpen: false }" @close-modal.window="modalOpen = false">
 			<div class="mb-4 flex items-center justify-end">
 				<button
@@ -18,7 +19,7 @@ templ Dashboard(balances []Balance) {
 					@click="modalOpen = true"
 					class="bg-indigo-600 text-white text-sm font-medium px-4 py-2 rounded-md hover:bg-indigo-700 transition-colors"
 				>
-					Load Prescription
+					{ i18n.T(ctx, "prescription.create") }
 				</button>
 			</div>
 
@@ -27,8 +28,8 @@ templ Dashboard(balances []Balance) {
 					<svg class="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
 						<path vector-effect="non-scaling-stroke" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
 					</svg>
-					<h3 class="mt-2 text-sm font-semibold text-gray-900">There are no active prescriptions</h3>
-					<p class="mt-1 text-sm text-gray-500">Load a prescription to authorize sessions for a patient.</p>
+					<h3 class="mt-2 text-sm font-semibold text-gray-900">{ i18n.T(ctx, "prescription.empty.title") }</h3>
+					<p class="mt-1 text-sm text-gray-500">{ i18n.T(ctx, "prescription.empty.body") }</p>
 				</div>
 			} else {
 				@Table(balances)
@@ -43,7 +44,12 @@ templ Dashboard(balances []Balance) {
 					class="bg-white rounded-lg shadow-xl w-full max-w-lg p-6 relative text-left"
 					@click.away="modalOpen = false"
 				>
-					<button @click="modalOpen = false" class="absolute top-4 right-4 text-gray-400 hover:text-gray-600">
+					<button
+						@click="modalOpen = false"
+						type="button"
+						aria-label={ i18n.T(ctx, "common.close") }
+						class="absolute top-4 right-4 text-gray-400 hover:text-gray-600"
+					>
 						<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
 					</button>
 
@@ -59,11 +65,11 @@ templ Table(balances []Balance) {
 		<table class="w-full text-sm text-left border-collapse">
 			<thead class="bg-gray-100 text-gray-600 uppercase text-xs">
 				<tr>
-					<th class="px-4 py-3">Patient</th>
-					<th class="px-4 py-3">Total Sessions</th>
-					<th class="px-4 py-3">Remaining Sessions</th>
-					<th class="px-4 py-3">Document</th>
-					<th class="px-4 py-3">Action</th>
+					<th class="px-4 py-3">{ i18n.T(ctx, "prescription.table.patient") }</th>
+					<th class="px-4 py-3">{ i18n.T(ctx, "prescription.table.total_sessions") }</th>
+					<th class="px-4 py-3">{ i18n.T(ctx, "prescription.table.remaining_sessions") }</th>
+					<th class="px-4 py-3">{ i18n.T(ctx, "prescription.table.document") }</th>
+					<th class="px-4 py-3">{ i18n.T(ctx, "prescription.table.action") }</th>
 				</tr>
 			</thead>
 			<tbody class="divide-y divide-gray-200">
@@ -79,18 +85,18 @@ templ Table(balances []Balance) {
 								rel="noopener noreferrer"
 								class="text-indigo-600 hover:text-indigo-900"
 							>
-								View
+								{ i18n.T(ctx, "prescription.table.view") }
 							</a>
 						</td>
 						<td class="px-4 py-3 text-center align-middle">
 							<button
 								type="button"
-								title="Cancel"
-								aria-label="Cancel Prescription"
+								title={ i18n.T(ctx, "prescription.action.cancel") }
+								aria-label={ i18n.T(ctx, "prescription.action.cancel_label") }
 								hx-post={ string(templ.URL(fmt.Sprintf("/prescriptions/%s/cancel", b.PrescriptionID))) }
 								hx-target="#prescriptions-table"
 								hx-swap="outerHTML"
-								hx-confirm="Cancel this prescription? The patient will need a new one loaded before booking again."
+								hx-confirm={ i18n.T(ctx, "prescription.action.confirm") }
 								class="text-red-600 hover:text-red-900"
 							>
 								✖
@@ -105,7 +111,7 @@ templ Table(balances []Balance) {
 
 templ Form(patients []PatientOption, actionURL string) {
 	<div>
-		<h2 class="text-xl font-bold text-gray-900 mb-4">Load Prescription</h2>
+		<h2 class="text-xl font-bold text-gray-900 mb-4">{ i18n.T(ctx, "prescription.form.title") }</h2>
 
 		<form
 			hx-post={ actionURL }
@@ -115,14 +121,14 @@ templ Form(patients []PatientOption, actionURL string) {
 			class="space-y-4"
 		>
 			<div>
-				<label for="patient_id" class="block text-sm font-medium text-gray-700">Patient</label>
+				<label for="patient_id" class="block text-sm font-medium text-gray-700">{ i18n.T(ctx, "prescription.form.patient") }</label>
 				<select
 					id="patient_id"
 					name="patient_id"
 					required
 					class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm bg-white"
 				>
-					<option value="" disabled selected>Select a patient</option>
+					<option value="" disabled selected>{ i18n.T(ctx, "prescription.form.select_patient") }</option>
 					for _, p := range patients {
 						<option value={ p.ID }>{ p.Label }</option>
 					}
@@ -130,7 +136,7 @@ templ Form(patients []PatientOption, actionURL string) {
 			</div>
 
 			<div>
-				<label for="total_sessions" class="block text-sm font-medium text-gray-700">Total Sessions</label>
+				<label for="total_sessions" class="block text-sm font-medium text-gray-700">{ i18n.T(ctx, "prescription.form.total_sessions") }</label>
 				<input
 					type="number"
 					id="total_sessions"
@@ -143,7 +149,7 @@ templ Form(patients []PatientOption, actionURL string) {
 			</div>
 
 			<div>
-				<label for="document" class="block text-sm font-medium text-gray-700">Document</label>
+				<label for="document" class="block text-sm font-medium text-gray-700">{ i18n.T(ctx, "prescription.form.document") }</label>
 				<input
 					type="file"
 					id="document"
@@ -160,13 +166,13 @@ templ Form(patients []PatientOption, actionURL string) {
 					@click="modalOpen = false"
 					class="bg-white py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
 				>
-					Cancel
+					{ i18n.T(ctx, "common.cancel") }
 				</button>
 				<button
 					type="submit"
 					class="inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
 				>
-					Save
+					{ i18n.T(ctx, "common.save") }
 				</button>
 			</div>
 		</form>
