@@ -129,6 +129,33 @@ en:
       phone: "Phone"
       active: "Active"
   appointment:
+    title: "Appointment Dashboard"
+    heading: "Appointments"
+    create: "Create Appointment"
+    empty:
+      title: "There are no appointments"
+      body: "Create an appointment to get started."
+    table:
+      datetime: "Date / Time"
+      until: "to"
+      patient: "Patient"
+      professional: "Professional"
+      status: "Status"
+      actions: "Actions"
+    action:
+      attend: "Attend"
+      attend_label: "Mark as Attended"
+      cancel: "Cancel"
+      cancel_label: "Cancel Appointment"
+    form:
+      title: "Create Appointment"
+      slot: "Slot"
+      select_slot: "Select a slot"
+      patient: "Patient"
+      select_patient: "Select a patient"
+      remaining_sessions: "Remaining sessions:"
+      notes: "Notes"
+    # See the note in es.yml: kept as the fixture for i18n.N's plural selection.
     remaining_sessions:
       one: "%{count} session left"
       other: "%{count} sessions left"

@@ -129,6 +129,35 @@ es:
       phone: "Teléfono"
       active: "Activo"
   appointment:
+    title: "Turnos"
+    heading: "Turnos"
+    create: "Crear turno"
+    empty:
+      title: "No hay turnos"
+      body: "Creá un turno para empezar."
+    table:
+      datetime: "Fecha / Hora"
+      until: "hasta"
+      patient: "Paciente"
+      professional: "Profesional"
+      status: "Estado"
+      actions: "Acciones"
+    action:
+      attend: "Atender"
+      attend_label: "Marcar como atendido"
+      cancel: "Cancelar"
+      cancel_label: "Cancelar turno"
+    form:
+      title: "Crear turno"
+      slot: "Horario"
+      select_slot: "Seleccioná un horario"
+      patient: "Paciente"
+      select_patient: "Seleccioná un paciente"
+      remaining_sessions: "Sesiones restantes:"
+      notes: "Notas"
+    # Not rendered anywhere yet: the only place showing a session count fills it
+    # from Alpine at runtime, so the number never reaches Go. Kept as the fixture
+    # that exercises i18n.N's plural selection.
     remaining_sessions:
       one: "Queda %{count} sesión"
       other: "Quedan %{count} sesiones"
