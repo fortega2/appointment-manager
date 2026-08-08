@@ -22,7 +22,7 @@ const (
 	professionalCaseRenderFormEdit           = "render form edit"
 
 	titleES     = "<title>Profesionales"
-	titleEN     = "<title>Professional Dashboard"
+	titleEN     = "<title>Professionals"
 	emptyES     = "No hay profesionales"
 	emptyEN     = "There are no professionals"
 	emptyBodyES = "Agregá un profesional"

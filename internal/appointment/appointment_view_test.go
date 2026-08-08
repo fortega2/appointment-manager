@@ -21,7 +21,7 @@ const (
 	viewStatusEN = "Confirmed"
 
 	viewTitleES  = "<title>Turnos"
-	viewTitleEN  = "<title>Appointment Dashboard"
+	viewTitleEN  = "<title>Appointments"
 	viewEmptyES  = "No hay turnos"
 	viewEmptyEN  = "There are no appointments"
 	viewCreateES = "Crear turno"

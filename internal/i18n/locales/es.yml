@@ -188,6 +188,9 @@ es:
       not_found: "No se encontró el profesional"
       create: "No se pudo crear el profesional"
       update: "No se pudo actualizar el profesional"
+      first_name_required: "El nombre es obligatorio"
+      last_name_required: "El apellido es obligatorio"
+      phone_required: "El teléfono es obligatorio"
   prescription:
     title: "Recetas"
     create: "Cargar receta"
@@ -287,9 +290,3 @@ es:
       no_remaining_sessions: "A la receta del paciente no le quedan sesiones"
       reference_not_found: "No se encontró la entidad referenciada"
       create: "No se pudo crear el turno"
-    # Not rendered anywhere yet: the only place showing a session count fills it
-    # from Alpine at runtime, so the number never reaches Go. Kept as the fixture
-    # that exercises i18n.N's plural selection.
-    remaining_sessions:
-      one: "Queda %{count} sesión"
-      other: "Quedan %{count} sesiones"

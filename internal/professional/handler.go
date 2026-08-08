@@ -198,7 +198,7 @@ func (h *Handler) createUIHandler() http.HandlerFunc {
 		p, err := NewProfessional(formRequest.firstName, formRequest.lastName, formRequest.phone)
 		if err != nil {
 			h.logger.ErrorContext(ctx, "error creating professional from form data", slog.Any("error", err))
-			h.createSnackbarError(ctx, w, http.StatusUnprocessableEntity, errKeyCreate, "NewProfessional")
+			h.createSnackbarError(ctx, w, http.StatusUnprocessableEntity, validationErrorKey(err, errKeyCreate), "NewProfessional")
 			return
 		}
 
@@ -290,7 +290,7 @@ func (h *Handler) processProfessionalUpdate(ctx context.Context, w http.Response
 	}
 
 	if err := p.Update(updateReq.firstName, updateReq.lastName, updateReq.phone, updateReq.active); err != nil {
-		h.createSnackbarError(ctx, w, http.StatusInternalServerError, errKeyUpdate, "Professional.Update")
+		h.createSnackbarError(ctx, w, http.StatusUnprocessableEntity, validationErrorKey(err, errKeyUpdate), "Professional.Update")
 		return err
 	}
 

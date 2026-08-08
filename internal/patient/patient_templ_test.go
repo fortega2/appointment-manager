@@ -24,7 +24,7 @@ const (
 	// Anchored to the tag: the nav link also says "Pacientes", so a bare
 	// substring check would pass even with the title left untranslated.
 	titleES      = "<title>Pacientes"
-	titleEN      = "<title>Patient Dashboard"
+	titleEN      = "<title>Patients"
 	emptyES      = "No hay pacientes"
 	emptyEN      = "There are no patients"
 	emptyBodyES  = "Agregá un paciente"

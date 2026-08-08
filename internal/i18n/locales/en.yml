@@ -35,11 +35,11 @@ en:
     welcome: "Welcome to Appointment Manager"
     tagline: "Manage your appointments efficiently and effortlessly."
   slot:
-    title: "Slot Dashboard"
+    title: "Slots"
     create: "Create Slot"
     empty:
       title: "There are no slots"
-      body: "Add a slot to start managing their appointments."
+      body: "Add a slot to start scheduling appointments."
     filters:
       week: "Week:"
       time: "Time:"
@@ -51,7 +51,7 @@ en:
       date: "Date"
       time: "Time"
       professional: "Professional"
-      max_capacity: "Max Cap"
+      max_capacity: "Capacity"
       status: "Status"
       action: "Action"
     status:
@@ -88,7 +88,7 @@ en:
       invalid_date: "A date is required"
       date_time_inconsistency: "The date does not match the start time"
   patient:
-    title: "Patient Dashboard"
+    title: "Patients"
     create: "Create Patient"
     empty:
       title: "There are no patients"
@@ -101,7 +101,7 @@ en:
       last_name: "Last Name"
       phone: "Phone"
       email: "Email"
-      health_insurance: "Health Ins."
+      health_insurance: "Insurance"
       action: "Action"
     action:
       edit: "Edit"
@@ -143,7 +143,7 @@ en:
       insurance_number_required: "Insurance number is required"
       insurance_number_length: "Insurance number must be exactly %{count} characters"
   professional:
-    title: "Professional Dashboard"
+    title: "Professionals"
     create: "Create Professional"
     empty:
       title: "There are no professionals"
@@ -151,8 +151,8 @@ en:
     filters:
       search: "Search by name or lastname..."
       all: "All Professionals"
-      active: "Actives"
-      inactive: "Inactives"
+      active: "Active"
+      inactive: "Inactive"
       reset: "Reset Filters"
     table:
       first_name: "First Name"
@@ -188,6 +188,9 @@ en:
       not_found: "Professional not found"
       create: "Failed to create professional"
       update: "Failed to update professional"
+      first_name_required: "First name is required"
+      last_name_required: "Last name is required"
+      phone_required: "Phone number is required"
   prescription:
     title: "Prescriptions"
     create: "Load Prescription"
@@ -224,7 +227,7 @@ en:
       not_found: "Prescription not found"
       cancel: "Failed to cancel prescription"
   appointment:
-    title: "Appointment Dashboard"
+    title: "Appointments"
     heading: "Appointments"
     create: "Create Appointment"
     empty:
@@ -287,7 +290,3 @@ en:
       no_remaining_sessions: "Patient's prescription has no remaining sessions"
       reference_not_found: "Referenced entity not found"
       create: "Failed to create appointment"
-    # See the note in es.yml: kept as the fixture for i18n.N's plural selection.
-    remaining_sessions:
-      one: "%{count} session left"
-      other: "%{count} sessions left"
