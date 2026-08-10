@@ -4,6 +4,7 @@ import (
     "fmt"
 
 	"appointment-manager/internal/i18n"
+	"appointment-manager/internal/ui/components"
 	"appointment-manager/internal/ui/layout"
 	"appointment-manager/internal/ui/form"
 )
@@ -33,14 +34,7 @@ templ Dashboard(professionals []View) {
                     class="bg-white rounded-lg shadow-xl w-full max-w-md p-6 relative text-left"
                     @click.away="modalOpen = false"
                 >
-                    <button
-                        @click="modalOpen = false"
-                        type="button"
-                        aria-label={ i18n.T(ctx, "common.close") }
-                        class="absolute top-4 right-4 text-gray-400 hover:text-gray-600"
-                    >
-                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
-                    </button>
+                    @components.ModalCloseButton()
 
                     <div id="modal-content"></div>
                 </div>
@@ -92,6 +86,12 @@ templ Filters() {
 }
 
 templ Table(professionals []View) {
+    {{
+        activeLabel := i18n.T(ctx, "professional.status.active")
+        inactiveLabel := i18n.T(ctx, "professional.status.inactive")
+        editTitle := i18n.T(ctx, "professional.action.edit")
+        editLabel := i18n.T(ctx, "professional.action.edit_label")
+    }}
     <div id="professionals-table" class="overflow-x-auto shadow-sm border border-gray-200 rounded-lg">
         <table class="w-full text-sm text-left border-collapse">
             <thead class="bg-gray-100 text-gray-600 uppercase text-xs">
@@ -117,16 +117,16 @@ templ Table(professionals []View) {
                         <td class="px-4 py-3 text-gray-500">{ p.SpecialtyLabel(ctx) }</td>
                         <td class="px-4 py-3">
                             if p.Active {
-                                <span class="bg-green-100 text-green-700 text-xs font-medium px-2 py-1 rounded-full">{ i18n.T(ctx, "professional.status.active") }</span>
+                                <span class="bg-green-100 text-green-700 text-xs font-medium px-2 py-1 rounded-full">{ activeLabel }</span>
                             } else {
-                                <span class="bg-red-100 text-red-600 text-xs font-medium px-2 py-1 rounded-full">{ i18n.T(ctx, "professional.status.inactive") }</span>
+                                <span class="bg-red-100 text-red-600 text-xs font-medium px-2 py-1 rounded-full">{ inactiveLabel }</span>
                             }
                         </td>
                         <td class="px-4 py-3 text-center align-middle">
                             <button 
                                 type="button"
-                                title={ i18n.T(ctx, "professional.action.edit") }
-                                aria-label={ i18n.T(ctx, "professional.action.edit_label") }
+                                title={ editTitle }
+                                aria-label={ editLabel }
                                 hx-get={ string(templ.URL(fmt.Sprintf("/professionals/%s/edit", p.ID))) } 
                                 hx-target="#modal-content" 
                                 @click="modalOpen = true"
@@ -212,21 +212,7 @@ templ Form(p View, method form.Method, actionURL string) {
                 </div>
             }
 
-            <div class="mt-6 flex justify-end space-x-3">
-                <button 
-                    type="button" 
-                    @click="modalOpen = false" 
-                    class="bg-white py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-                >
-                    { i18n.T(ctx, "common.cancel") }
-                </button>
-                <button 
-                    type="submit" 
-                    class="inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-                >
-                    { i18n.T(ctx, "common.save") }
-                </button>
-            </div>
+            @components.FormActions()
         </form>
     </div>
 }

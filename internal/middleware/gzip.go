@@ -305,7 +305,12 @@ func isUpgradeRequest(r *http.Request) bool {
 	return strings.Contains(connection, "upgrade") || r.Header.Get(headerUpgrade) != ""
 }
 
-func addVary(header http.Header, value string) {
+func addVary(header http.Header, values ...string) {
+	canonical := make(map[string]string, len(values))
+	for _, value := range values {
+		canonical[strings.ToLower(value)] = value
+	}
+
 	tokens := make([]string, 0)
 	seen := map[string]struct{}{}
 
@@ -322,17 +327,21 @@ func addVary(header http.Header, value string) {
 			}
 
 			seen[normalized] = struct{}{}
-			if strings.EqualFold(trimmedToken, value) {
-				tokens = append(tokens, value)
-				continue
+			if spelling, ok := canonical[normalized]; ok {
+				trimmedToken = spelling
 			}
 
 			tokens = append(tokens, trimmedToken)
 		}
 	}
 
-	normalizedValue := strings.ToLower(value)
-	if _, ok := seen[normalizedValue]; !ok {
+	for _, value := range values {
+		normalized := strings.ToLower(value)
+		if _, ok := seen[normalized]; ok {
+			continue
+		}
+
+		seen[normalized] = struct{}{}
 		tokens = append(tokens, value)
 	}
 

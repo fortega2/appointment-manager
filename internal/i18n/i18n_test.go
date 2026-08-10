@@ -137,26 +137,25 @@ func TestT(t *testing.T) {
 	})
 }
 
-func TestN(t *testing.T) {
+// No catalog entry is pluralized yet, so N has nothing to choose between and
+// renders ctxi18n's missing marker for every count. That is pinned rather than
+// asserted NotEmpty: NotEmpty passes on the marker, so it proved nothing and
+// hid the fact that N has no exercised call path. The day a `one`/`other` entry
+// is added, this fails and the assertion becomes a real one.
+func TestNHasNoPluralizedEntryYet(t *testing.T) {
 	t.Parallel()
 
-	const pluralKey = "layout.nav.log_out"
+	const flatKey = "layout.nav.log_out"
 
-	tests := []struct {
-		name   string
-		locale i18n.Locale
-		count  int
-	}{
-		{"english", i18n.LocaleEN, 1},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
+	for _, locale := range []i18n.Locale{i18n.LocaleES, i18n.LocaleEN} {
+		t.Run(string(locale), func(t *testing.T) {
 			t.Parallel()
 
-			ctx := i18n.WithLocale(t.Context(), tt.locale)
+			ctx := i18n.WithLocale(t.Context(), locale)
 
-			assert.NotEmpty(t, i18n.N(ctx, pluralKey, tt.count))
+			for _, count := range []int{0, 1, 2} {
+				assert.Equal(t, "!(MISSING: "+flatKey+")", i18n.N(ctx, flatKey, count))
+			}
 		})
 	}
 }

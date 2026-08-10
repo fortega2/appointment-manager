@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"appointment-manager/internal/domain"
-	"appointment-manager/internal/i18n"
 	"appointment-manager/internal/ui/components"
 	"appointment-manager/internal/web"
 
@@ -121,7 +120,7 @@ func (h *UIHandler) createUIHandler() http.HandlerFunc {
 		}
 
 		w.Header().Set("HX-Trigger", "close-modal")
-		if err := components.Snackbar(i18n.T(ctx, msgKeyCreated), components.SnackbarSuccess).Render(ctx, w); err != nil {
+		if err := components.RenderSnackbar(ctx, w, components.SnackbarSuccess, msgKeyCreated); err != nil {
 			h.logger.ErrorContext(ctx, renderSnackbarErrMsg, slog.Any("error", err))
 		}
 		if err := h.renderUpdatedTable(ctx, w); err != nil {
@@ -149,7 +148,7 @@ func (h *UIHandler) cancelUIHandler() http.HandlerFunc {
 			return
 		}
 
-		if err := components.Snackbar(i18n.T(ctx, msgKeyCancelled), components.SnackbarSuccess).Render(ctx, w); err != nil {
+		if err := components.RenderSnackbar(ctx, w, components.SnackbarSuccess, msgKeyCancelled); err != nil {
 			h.logger.ErrorContext(ctx, renderSnackbarErrMsg, slog.Any("error", err))
 		}
 		if err := h.renderUpdatedTable(ctx, w); err != nil {
@@ -232,7 +231,7 @@ func (h *UIHandler) renderUpdatedTable(ctx context.Context, w http.ResponseWrite
 // renderTableWithSnackbarError takes a catalog key rather than a message so the
 // copy follows the request locale; the Go error stays in English, in the log.
 func (h *UIHandler) renderTableWithSnackbarError(ctx context.Context, w http.ResponseWriter, status int, messageKey string) {
-	if err := components.ShowSnackbar(ctx, components.SnackbarError, w, status, i18n.T(ctx, messageKey)); err != nil {
+	if err := components.ShowSnackbar(ctx, components.SnackbarError, w, status, messageKey); err != nil {
 		h.logger.ErrorContext(ctx, renderSnackbarErrMsg, slog.Any("error", err))
 	}
 	if err := h.renderUpdatedTable(ctx, w); err != nil {

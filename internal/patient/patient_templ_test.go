@@ -1,17 +1,15 @@
 package patient_test
 
 import (
-	"bytes"
 	"testing"
 
 	"appointment-manager/internal/healthinsurance"
 	"appointment-manager/internal/i18n"
+	"appointment-manager/internal/i18n/i18ntest"
 	"appointment-manager/internal/patient"
 	"appointment-manager/internal/ui/form"
 
-	"github.com/a-h/templ"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 const (
@@ -36,14 +34,6 @@ const (
 )
 
 // renderIn renders a component as the given locale would see it.
-func renderIn(t *testing.T, locale i18n.Locale, component templ.Component) string {
-	t.Helper()
-
-	var buf bytes.Buffer
-	require.NoError(t, component.Render(i18n.WithLocale(t.Context(), locale), &buf))
-
-	return buf.String()
-}
 
 func TestPatientDashboard(t *testing.T) {
 	t.Parallel()
@@ -63,7 +53,7 @@ func TestPatientDashboard(t *testing.T) {
 		t.Run(patientCaseRenderDashboardEmpty+" in "+tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			output := renderIn(t, tt.locale, patient.Dashboard(nil))
+			output := i18ntest.Render(t, tt.locale, patient.Dashboard(nil))
 
 			assert.Contains(t, output, tt.title)
 			assert.Contains(t, output, tt.empty)
@@ -77,7 +67,7 @@ func TestPatientDashboard(t *testing.T) {
 				{FirstName: "John", LastName: "Doe"},
 			}
 
-			output := renderIn(t, tt.locale, patient.Dashboard(patients))
+			output := i18ntest.Render(t, tt.locale, patient.Dashboard(patients))
 
 			assert.Contains(t, output, tt.title)
 			assert.Contains(t, output, "John")
@@ -103,7 +93,7 @@ func TestPatientTable(t *testing.T) {
 			},
 		}
 
-		output := renderIn(t, i18n.LocaleES, patient.Table(patients))
+		output := i18ntest.Render(t, i18n.LocaleES, patient.Table(patients))
 
 		assert.Contains(t, output, "Jane")
 		assert.Contains(t, output, "Smith")
@@ -136,7 +126,7 @@ func TestPatientForm(t *testing.T) {
 		t.Run(patientCaseRenderFormCreate+" in "+tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			output := renderIn(t, tt.locale, patient.Form(patient.View{}, form.MethodPost, "/patients", insurances))
+			output := i18ntest.Render(t, tt.locale, patient.Form(patient.View{}, form.MethodPost, "/patients", insurances))
 
 			assert.Contains(t, output, tt.create)
 			assert.Contains(t, output, `hx-post="/patients"`)
@@ -153,7 +143,7 @@ func TestPatientForm(t *testing.T) {
 				ClinicalNotes:   "Some notes",
 			}
 
-			output := renderIn(t, tt.locale, patient.Form(p, form.MethodPut, "/patients/123", insurances))
+			output := i18ntest.Render(t, tt.locale, patient.Form(p, form.MethodPut, "/patients/123", insurances))
 
 			assert.Contains(t, output, tt.edit)
 			assert.Contains(t, output, `hx-put="/patients/123"`)

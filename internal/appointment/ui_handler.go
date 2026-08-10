@@ -226,7 +226,7 @@ func (h *UIHandler) createUIHandler() http.HandlerFunc {
 
 		w.Header().Set("HX-Trigger", "close-modal")
 		w.WriteHeader(http.StatusCreated)
-		if err := components.Snackbar(i18n.T(ctx, msgKeyCreated), components.SnackbarSuccess).Render(ctx, w); err != nil {
+		if err := components.RenderSnackbar(ctx, w, components.SnackbarSuccess, msgKeyCreated); err != nil {
 			lg.ErrorContext(ctx, renderSnackbarErrMsg, slog.Any("error", err))
 		}
 		if err := h.renderUpdatedAppointmentsTable(ctx, w); err != nil {
@@ -325,7 +325,7 @@ func (h *UIHandler) cancelUIAppointment() http.HandlerFunc {
 // showSnackbar takes a catalog key rather than a message so the copy follows
 // the request locale; the Go error stays in English, in the log line.
 func (h *UIHandler) showSnackbar(ctx context.Context, lg *slog.Logger, kind components.SnackbarType, w http.ResponseWriter, status int, messageKey string) {
-	if err := components.ShowSnackbar(ctx, kind, w, status, i18n.T(ctx, messageKey)); err != nil {
+	if err := components.ShowSnackbar(ctx, kind, w, status, messageKey); err != nil {
 		lg.ErrorContext(ctx, renderSnackbarErrMsg, slog.Any("error", err), slog.String("operation", "ShowSnackbar"))
 	}
 }
@@ -333,7 +333,7 @@ func (h *UIHandler) showSnackbar(ctx context.Context, lg *slog.Logger, kind comp
 // showSnackbarOnly reports a failure that produces no replacement content for
 // the target, so htmx must be told to leave the target alone.
 func (h *UIHandler) showSnackbarOnly(ctx context.Context, lg *slog.Logger, kind components.SnackbarType, w http.ResponseWriter, status int, messageKey string) {
-	if err := components.ShowSnackbarOnly(ctx, kind, w, status, i18n.T(ctx, messageKey)); err != nil {
+	if err := components.ShowSnackbarOnly(ctx, kind, w, status, messageKey); err != nil {
 		lg.ErrorContext(ctx, renderSnackbarErrMsg, slog.Any("error", err), slog.String("operation", "ShowSnackbarOnly"))
 	}
 }

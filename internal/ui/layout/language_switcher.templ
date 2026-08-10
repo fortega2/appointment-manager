@@ -1,6 +1,10 @@
 package layout
 
-import "appointment-manager/internal/i18n"
+import (
+	"strings"
+
+	"appointment-manager/internal/i18n"
+)
 
 templ languageSwitcher() {
 	<div
@@ -8,14 +12,15 @@ templ languageSwitcher() {
 		role="group"
 		aria-label={ i18n.T(ctx, "layout.language") }
 	>
-		@languageOption(i18n.LocaleES, "ES")
-		@languageOption(i18n.LocaleEN, "EN")
+		@languageOption(i18n.LocaleES)
+		@languageOption(i18n.LocaleEN)
 	</div>
 }
 
 // languageOption renders one segment: the active locale is inert text, so the
 // only clickable segments are the ones that would actually change something.
-templ languageOption(locale i18n.Locale, label string) {
+templ languageOption(locale i18n.Locale) {
+	{{ label := strings.ToUpper(string(locale)) }}
 	if i18n.FromContext(ctx) == locale {
 		<span
 			class="px-2.5 py-1 text-xs font-semibold bg-indigo-50 text-indigo-700"

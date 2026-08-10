@@ -1,14 +1,12 @@
 package prescription_test
 
 import (
-	"strings"
 	"testing"
 
-	"github.com/a-h/templ"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 
 	"appointment-manager/internal/i18n"
+	"appointment-manager/internal/i18n/i18ntest"
 	"appointment-manager/internal/prescription"
 )
 
@@ -29,15 +27,6 @@ const (
 	viewDocES = ">Documento<"
 	viewDocEN = ">Document<"
 )
-
-func renderIn(t *testing.T, locale i18n.Locale, component templ.Component) string {
-	t.Helper()
-
-	var body strings.Builder
-	require.NoError(t, component.Render(i18n.WithLocale(t.Context(), locale), &body))
-
-	return body.String()
-}
 
 func sampleBalances() []prescription.Balance {
 	return []prescription.Balance{{
@@ -67,7 +56,7 @@ func TestPrescriptionDashboardCopyFollowsTheLocale(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			body := renderIn(t, tt.locale, prescription.Dashboard(sampleBalances()))
+			body := i18ntest.Render(t, tt.locale, prescription.Dashboard(sampleBalances()))
 
 			assert.Contains(t, body, tt.title)
 			assert.Contains(t, body, tt.create)
@@ -82,8 +71,8 @@ func TestPrescriptionDashboardCopyFollowsTheLocale(t *testing.T) {
 func TestPrescriptionEmptyStateFollowsTheLocale(t *testing.T) {
 	t.Parallel()
 
-	assert.Contains(t, renderIn(t, i18n.LocaleES, prescription.Dashboard(nil)), viewEmptyES)
-	assert.Contains(t, renderIn(t, i18n.LocaleEN, prescription.Dashboard(nil)), viewEmptyEN)
+	assert.Contains(t, i18ntest.Render(t, i18n.LocaleES, prescription.Dashboard(nil)), viewEmptyES)
+	assert.Contains(t, i18ntest.Render(t, i18n.LocaleEN, prescription.Dashboard(nil)), viewEmptyEN)
 }
 
 func TestPrescriptionFormCopyFollowsTheLocale(t *testing.T) {
@@ -92,7 +81,7 @@ func TestPrescriptionFormCopyFollowsTheLocale(t *testing.T) {
 	patients := []prescription.PatientOption{{ID: "pat-1", Label: viewPatientName}}
 
 	form := func(locale i18n.Locale) string {
-		return renderIn(t, locale, prescription.Form(patients, "/prescriptions"))
+		return i18ntest.Render(t, locale, prescription.Form(patients, "/prescriptions"))
 	}
 
 	assert.Contains(t, form(i18n.LocaleES), viewDocES)

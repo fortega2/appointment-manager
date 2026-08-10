@@ -2,7 +2,6 @@ package professional
 
 import (
 	"appointment-manager/internal/domain"
-	"appointment-manager/internal/i18n"
 	"appointment-manager/internal/ui/components"
 	"appointment-manager/internal/ui/form"
 	"appointment-manager/internal/web"
@@ -22,8 +21,7 @@ const (
 
 	requestBodyMaxBytes int64 = 1 << 20
 
-	failedToCreateProfessionalMessage = "Failed to create professional"
-	missingIDInPathMessage            = "missing professional id in path"
+	missingIDInPathMessage = "missing professional id in path"
 )
 
 type Handler struct {
@@ -218,7 +216,7 @@ func (h *Handler) createUIHandler() http.HandlerFunc {
 		}
 
 		w.Header().Set("HX-Trigger", "close-modal")
-		if err := components.Snackbar(i18n.T(ctx, msgKeyCreated), components.SnackbarSuccess).Render(ctx, w); err != nil {
+		if err := components.RenderSnackbar(ctx, w, components.SnackbarSuccess, msgKeyCreated); err != nil {
 			h.logger.ErrorContext(ctx, "error rendering success snackbar after creating professional", slog.Any("error", err))
 		}
 		if err := Table(professionalsToViews(professionals)).Render(ctx, w); err != nil {
@@ -316,7 +314,7 @@ func (h *Handler) renderUpdatedProfessionalsTable(ctx context.Context, w http.Re
 	}
 
 	w.Header().Set("HX-Trigger", "close-modal")
-	if err := components.Snackbar(i18n.T(ctx, msgKeyUpdated), components.SnackbarSuccess).Render(ctx, w); err != nil {
+	if err := components.RenderSnackbar(ctx, w, components.SnackbarSuccess, msgKeyUpdated); err != nil {
 		h.logger.ErrorContext(ctx, "error rendering success snackbar after updating professional", slog.Any("error", err))
 	}
 	if err := Table(professionalsToViews(professionals)).Render(ctx, w); err != nil {
@@ -365,7 +363,7 @@ func (h *Handler) parseUpdateForm(r *http.Request, w http.ResponseWriter) (*upda
 // than a message so the copy follows the request locale; the Go error itself
 // stays in English, in the log line above each call.
 func (h *Handler) createSnackbarError(ctx context.Context, w http.ResponseWriter, statusCode int, messageKey, operation string) {
-	if err := components.ShowSnackbarOnly(ctx, components.SnackbarError, w, statusCode, i18n.T(ctx, messageKey)); err != nil {
+	if err := components.ShowSnackbarOnly(ctx, components.SnackbarError, w, statusCode, messageKey); err != nil {
 		h.logger.ErrorContext(ctx, "error rendering snackbar", slog.Any("error", err), slog.String("package", "professional"), slog.String("operation", operation))
 	}
 }

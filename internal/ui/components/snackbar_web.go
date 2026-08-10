@@ -2,16 +2,29 @@ package components
 
 import (
 	"context"
+	"io"
 	"net/http"
+
+	"appointment-manager/internal/i18n"
 )
+
+// RenderSnackbar renders a snackbar whose copy is messageKey resolved in the
+// request locale. Pass an i18n.M to fill %{name} placeholders.
+//
+// The key, rather than finished text, is the parameter on purpose: every caller
+// was translating immediately before calling in, so the wrap belongs here.
+func RenderSnackbar(ctx context.Context, w io.Writer, st SnackbarType, messageKey string, args ...any) error {
+	return Snackbar(i18n.T(ctx, messageKey, args...), st).Render(ctx, w)
+}
 
 // ShowSnackbar writes a snackbar as the start of an htmx response. The snackbar
 // is delivered out of band, so callers are expected to keep writing the content
 // that belongs in the triggering element's target. Use ShowSnackbarOnly when the
 // snackbar is the whole response.
-func ShowSnackbar(ctx context.Context, st SnackbarType, w http.ResponseWriter, stCode int, msg string) error {
+func ShowSnackbar(ctx context.Context, st SnackbarType, w http.ResponseWriter, stCode int, messageKey string, args ...any) error {
 	w.WriteHeader(stCode)
-	return Snackbar(msg, st).Render(ctx, w)
+
+	return RenderSnackbar(ctx, w, st, messageKey, args...)
 }
 
 // ShowSnackbarOnly writes a response whose entire body is an out-of-band
@@ -24,8 +37,8 @@ func ShowSnackbar(ctx context.Context, st SnackbarType, w http.ResponseWriter, s
 // deleting an hx-swap="outerHTML" one outright. The "none" strategy skips the
 // target swap while still processing out-of-band content, so the snackbar
 // still appears.
-func ShowSnackbarOnly(ctx context.Context, st SnackbarType, w http.ResponseWriter, stCode int, msg string) error {
+func ShowSnackbarOnly(ctx context.Context, st SnackbarType, w http.ResponseWriter, stCode int, messageKey string, args ...any) error {
 	w.Header().Set("HX-Reswap", "none")
 
-	return ShowSnackbar(ctx, st, w, stCode, msg)
+	return ShowSnackbar(ctx, st, w, stCode, messageKey, args...)
 }

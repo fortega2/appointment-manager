@@ -1,16 +1,14 @@
 package professional_test
 
 import (
-	"bytes"
 	"testing"
 
 	"appointment-manager/internal/i18n"
+	"appointment-manager/internal/i18n/i18ntest"
 	"appointment-manager/internal/professional"
 	"appointment-manager/internal/ui/form"
 
-	"github.com/a-h/templ"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 const (
@@ -42,14 +40,6 @@ const (
 )
 
 // renderIn renders a component as the given locale would see it.
-func renderIn(t *testing.T, locale i18n.Locale, component templ.Component) string {
-	t.Helper()
-
-	var buf bytes.Buffer
-	require.NoError(t, component.Render(i18n.WithLocale(t.Context(), locale), &buf))
-
-	return buf.String()
-}
 
 type localeCase struct {
 	name          string
@@ -90,7 +80,7 @@ func TestProfessionalDashboard(t *testing.T) {
 		t.Run(professionalCaseRenderDashboardEmpty+" in "+tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			output := renderIn(t, tt.locale, professional.Dashboard(nil))
+			output := i18ntest.Render(t, tt.locale, professional.Dashboard(nil))
 
 			assert.Contains(t, output, tt.title)
 			assert.Contains(t, output, tt.empty)
@@ -104,7 +94,7 @@ func TestProfessionalDashboard(t *testing.T) {
 				{FirstName: "Dr. Smith", Active: true},
 			}
 
-			output := renderIn(t, tt.locale, professional.Dashboard(professionals))
+			output := i18ntest.Render(t, tt.locale, professional.Dashboard(professionals))
 
 			assert.Contains(t, output, tt.title)
 			assert.Contains(t, output, "Dr. Smith")
@@ -131,7 +121,7 @@ func TestProfessionalTable(t *testing.T) {
 				},
 			}
 
-			output := renderIn(t, tt.locale, professional.Table(professionals))
+			output := i18ntest.Render(t, tt.locale, professional.Table(professionals))
 
 			assert.Contains(t, output, "Gregory")
 			assert.Contains(t, output, "House")
@@ -154,7 +144,7 @@ func TestProfessionalTable(t *testing.T) {
 				},
 			}
 
-			output := renderIn(t, tt.locale, professional.Table(professionals))
+			output := i18ntest.Render(t, tt.locale, professional.Table(professionals))
 
 			assert.Contains(t, output, "John")
 			assert.Contains(t, output, "Watson")
@@ -172,7 +162,7 @@ func TestProfessionalForm(t *testing.T) {
 		t.Run(professionalCaseRenderFormCreate+" in "+tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			output := renderIn(t, tt.locale, professional.Form(professional.View{}, form.MethodPost, "/professionals"))
+			output := i18ntest.Render(t, tt.locale, professional.Form(professional.View{}, form.MethodPost, "/professionals"))
 
 			assert.Contains(t, output, tt.formCreate)
 			assert.Contains(t, output, `hx-post="/professionals"`)
@@ -189,7 +179,7 @@ func TestProfessionalForm(t *testing.T) {
 				Active:    true,
 			}
 
-			output := renderIn(t, tt.locale, professional.Form(p, form.MethodPut, "/professionals/pro-1"))
+			output := i18ntest.Render(t, tt.locale, professional.Form(p, form.MethodPut, "/professionals/pro-1"))
 
 			assert.Contains(t, output, tt.formEdit)
 			assert.Contains(t, output, `hx-put="/professionals/pro-1"`)

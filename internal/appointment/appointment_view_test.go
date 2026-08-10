@@ -1,16 +1,14 @@
 package appointment_test
 
 import (
-	"strings"
 	"testing"
 	"time"
 
-	"github.com/a-h/templ"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 
 	"appointment-manager/internal/appointment"
 	"appointment-manager/internal/i18n"
+	"appointment-manager/internal/i18n/i18ntest"
 )
 
 const (
@@ -32,15 +30,6 @@ const (
 	viewNotesES  = "Notas"
 	viewNotesEN  = "Notes"
 )
-
-func renderIn(t *testing.T, locale i18n.Locale, component templ.Component) string {
-	t.Helper()
-
-	var body strings.Builder
-	require.NoError(t, component.Render(i18n.WithLocale(t.Context(), locale), &body))
-
-	return body.String()
-}
 
 func confirmedAppointments() []appointment.List {
 	start := time.Date(2026, time.May, 25, 10, 0, 0, 0, time.UTC)
@@ -74,7 +63,7 @@ func TestAppointmentDashboardCopyFollowsTheLocale(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			body := renderIn(t, tt.locale, appointment.Dashboard(confirmedAppointments()))
+			body := i18ntest.Render(t, tt.locale, appointment.Dashboard(confirmedAppointments()))
 
 			assert.Contains(t, body, tt.title)
 			assert.Contains(t, body, tt.create)
@@ -116,8 +105,8 @@ func TestEveryStatusLabelRendersInEveryLocale(t *testing.T) {
 func TestAppointmentEmptyStateFollowsTheLocale(t *testing.T) {
 	t.Parallel()
 
-	assert.Contains(t, renderIn(t, i18n.LocaleES, appointment.Dashboard(nil)), viewEmptyES)
-	assert.Contains(t, renderIn(t, i18n.LocaleEN, appointment.Dashboard(nil)), viewEmptyEN)
+	assert.Contains(t, i18ntest.Render(t, i18n.LocaleES, appointment.Dashboard(nil)), viewEmptyES)
+	assert.Contains(t, i18ntest.Render(t, i18n.LocaleEN, appointment.Dashboard(nil)), viewEmptyEN)
 }
 
 func TestAppointmentFormCopyFollowsTheLocale(t *testing.T) {
@@ -127,7 +116,7 @@ func TestAppointmentFormCopyFollowsTheLocale(t *testing.T) {
 	patients := []appointment.PatientOptionDTO{{ID: "pat-1", Label: viewPatientName, RemainingSessions: 3}}
 
 	form := func(locale i18n.Locale) string {
-		return renderIn(t, locale, appointment.Form(appointment.FormRequest{}, "/appointments", slots, patients))
+		return i18ntest.Render(t, locale, appointment.Form(appointment.FormRequest{}, "/appointments", slots, patients))
 	}
 
 	assert.Contains(t, form(i18n.LocaleES), viewNotesES)

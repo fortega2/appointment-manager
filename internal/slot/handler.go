@@ -1,7 +1,6 @@
 package slot
 
 import (
-	"appointment-manager/internal/i18n"
 	"appointment-manager/internal/professional"
 	"appointment-manager/internal/ui/components"
 	"appointment-manager/internal/web"
@@ -132,7 +131,7 @@ func (h *Handler) showDashboardUIHandler() http.HandlerFunc {
 // than a message so the copy follows the request locale; the Go error itself
 // stays in English, in the log line above each call.
 func (h *Handler) createSnackbarError(ctx context.Context, w http.ResponseWriter, statusCode int, messageKey, operation string) {
-	if err := components.ShowSnackbarOnly(ctx, components.SnackbarError, w, statusCode, i18n.T(ctx, messageKey)); err != nil {
+	if err := components.ShowSnackbarOnly(ctx, components.SnackbarError, w, statusCode, messageKey); err != nil {
 		h.logger.ErrorContext(ctx, "error rendering snackbar", slog.Any("error", err), slog.String("package", "slot"), slog.String("operation", operation))
 	}
 }
@@ -297,7 +296,7 @@ func (h *Handler) renderUpdatedSlotsTable(ctx context.Context, w http.ResponseWr
 	}
 
 	w.Header().Set("HX-Trigger", "close-modal")
-	if err := components.Snackbar(i18n.T(ctx, successKey), components.SnackbarSuccess).Render(ctx, w); err != nil {
+	if err := components.RenderSnackbar(ctx, w, components.SnackbarSuccess, successKey); err != nil {
 		h.logger.ErrorContext(ctx, "error rendering success snackbar after slot operation", slog.Any("error", err))
 	}
 	if err := Table(dto).Render(ctx, w); err != nil {

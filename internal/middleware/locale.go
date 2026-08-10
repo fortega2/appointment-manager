@@ -22,8 +22,7 @@ func Locale(def i18n.Locale) func(http.Handler) http.Handler {
 		}
 
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			addVary(w.Header(), headerCookie)
-			addVary(w.Header(), headerAcceptLanguage)
+			addVary(w.Header(), headerCookie, headerAcceptLanguage)
 
 			ctx := i18n.WithLocale(r.Context(), resolveLocale(r, def))
 			next.ServeHTTP(w, r.WithContext(ctx))

@@ -5,6 +5,7 @@ import (
 	"strconv"
 	"time"
 	"appointment-manager/internal/i18n"
+	"appointment-manager/internal/ui/components"
 	"appointment-manager/internal/ui/layout"
 )
 
@@ -46,14 +47,7 @@ templ Dashboard(appointments []List) {
 					class="bg-white rounded-lg shadow-xl w-full max-w-lg p-6 relative text-left"
 					@click.away="modalOpen = false"
 				>
-					<button
-						@click="modalOpen = false"
-						type="button"
-						aria-label={ i18n.T(ctx, "common.close") }
-						class="absolute top-4 right-4 text-gray-400 hover:text-gray-600"
-					>
-						<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
-					</button>
+					@components.ModalCloseButton()
 
 					<div id="modal-content"></div>
 				</div>
@@ -63,6 +57,13 @@ templ Dashboard(appointments []List) {
 }
 
 templ Table(appointments []List) {
+	{{
+		untilLabel := i18n.T(ctx, "appointment.table.until")
+		attendTitle := i18n.T(ctx, "appointment.action.attend")
+		attendLabel := i18n.T(ctx, "appointment.action.attend_label")
+		cancelTitle := i18n.T(ctx, "appointment.action.cancel")
+		cancelLabel := i18n.T(ctx, "appointment.action.cancel_label")
+	}}
 	<div id="appointments-table" class="overflow-x-auto shadow-sm border border-gray-200 rounded-lg">
 		<table class="w-full text-sm text-left border-collapse">
 			<thead class="bg-gray-100 text-gray-600 uppercase text-xs">
@@ -83,7 +84,7 @@ templ Table(appointments []List) {
 					>
 						<td class="px-4 py-3 text-gray-800">
 							<div data-role="datetime">{ a.StartTime.UTC().Format("2006-01-02 15:04") }</div>
-							<div class="text-xs text-gray-500">{ i18n.T(ctx, "appointment.table.until") } <span data-role="end-time">{ a.EndTime.UTC().Format("15:04") }</span></div>
+							<div class="text-xs text-gray-500">{ untilLabel } <span data-role="end-time">{ a.EndTime.UTC().Format("15:04") }</span></div>
 						</td>
 						<td class="px-4 py-3 text-gray-800">{ a.PatientFullName }</td>
 						<td class="px-4 py-3 text-gray-500">{ a.ProfessionalFullName }</td>
@@ -97,8 +98,8 @@ templ Table(appointments []List) {
 								<div class="flex items-center justify-center space-x-2">
 									<button
 										type="button"
-										title={ i18n.T(ctx, "appointment.action.attend") }
-										aria-label={ i18n.T(ctx, "appointment.action.attend_label") }
+										title={ attendTitle }
+										aria-label={ attendLabel }
 										hx-post={ string(templ.URL(fmt.Sprintf("/appointments/%s/attend", a.ID))) }
 										hx-target="#appointments-table"
 										hx-swap="outerHTML"
@@ -108,8 +109,8 @@ templ Table(appointments []List) {
 									</button>
 									<button
 										type="button"
-										title={ i18n.T(ctx, "appointment.action.cancel") }
-										aria-label={ i18n.T(ctx, "appointment.action.cancel_label") }
+										title={ cancelTitle }
+										aria-label={ cancelLabel }
 										hx-post={ string(templ.URL(fmt.Sprintf("/appointments/%s/cancel", a.ID))) }
 										hx-target="#appointments-table"
 										hx-swap="outerHTML"
@@ -148,7 +149,7 @@ templ Form(
 					id="slot_id"
 					name="slot_id"
 					required
-					data-honorific={ i18n.T(ctx, "appointment.form.professional_honorific") }
+					data-honorific={ i18n.T(ctx, msgKeyHonorific) }
 					@change="
 						const opt = $event.target.selectedOptions[0];
 						professionalId = opt?.dataset.professionalId || '';
@@ -200,21 +201,7 @@ templ Form(
 				>{ req.Notes }</textarea>
 			</div>
 
-			<div class="mt-6 flex justify-end space-x-3">
-				<button
-					type="button"
-					@click="modalOpen = false"
-					class="bg-white py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-				>
-					{ i18n.T(ctx, "common.cancel") }
-				</button>
-				<button
-					type="submit"
-					class="inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-				>
-					{ i18n.T(ctx, "common.save") }
-				</button>
-			</div>
+			@components.FormActions()
 		</form>
 	</div>
 }

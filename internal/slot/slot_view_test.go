@@ -1,15 +1,13 @@
 package slot_test
 
 import (
-	"strings"
 	"testing"
 	"time"
 
-	"github.com/a-h/templ"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 
 	"appointment-manager/internal/i18n"
+	"appointment-manager/internal/i18n/i18ntest"
 	"appointment-manager/internal/slot"
 )
 
@@ -27,15 +25,6 @@ const (
 	viewCapacityES = "Cupo máximo"
 	viewCapacityEN = "Max Capacity"
 )
-
-func renderSlot(t *testing.T, locale i18n.Locale, component templ.Component) string {
-	t.Helper()
-
-	var body strings.Builder
-	require.NoError(t, component.Render(i18n.WithLocale(t.Context(), locale), &body))
-
-	return body.String()
-}
 
 func sampleSlots() []slot.ListDTO {
 	start := time.Date(2026, time.May, 25, 10, 0, 0, 0, time.UTC)
@@ -68,7 +57,7 @@ func TestDashboardCopyFollowsTheLocale(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			body := renderSlot(t, tt.locale, slot.Dashboard(sampleSlots(), nil))
+			body := i18ntest.Render(t, tt.locale, slot.Dashboard(sampleSlots(), nil))
 
 			assert.Contains(t, body, tt.create)
 			assert.Contains(t, body, tt.status)
@@ -81,8 +70,8 @@ func TestDashboardCopyFollowsTheLocale(t *testing.T) {
 func TestDashboardEmptyStateFollowsTheLocale(t *testing.T) {
 	t.Parallel()
 
-	assert.Contains(t, renderSlot(t, i18n.LocaleES, slot.Dashboard(nil, nil)), viewEmptyES)
-	assert.Contains(t, renderSlot(t, i18n.LocaleEN, slot.Dashboard(nil, nil)), viewEmptyEN)
+	assert.Contains(t, i18ntest.Render(t, i18n.LocaleES, slot.Dashboard(nil, nil)), viewEmptyES)
+	assert.Contains(t, i18ntest.Render(t, i18n.LocaleEN, slot.Dashboard(nil, nil)), viewEmptyEN)
 }
 
 func TestFormCopyFollowsTheLocale(t *testing.T) {
@@ -90,6 +79,6 @@ func TestFormCopyFollowsTheLocale(t *testing.T) {
 
 	empty := slot.ListDTO{}
 
-	assert.Contains(t, renderSlot(t, i18n.LocaleES, slot.Form(empty, "/slots", nil)), viewCapacityES)
-	assert.Contains(t, renderSlot(t, i18n.LocaleEN, slot.Form(empty, "/slots", nil)), viewCapacityEN)
+	assert.Contains(t, i18ntest.Render(t, i18n.LocaleES, slot.Form(empty, "/slots", nil)), viewCapacityES)
+	assert.Contains(t, i18ntest.Render(t, i18n.LocaleEN, slot.Form(empty, "/slots", nil)), viewCapacityEN)
 }

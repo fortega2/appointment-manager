@@ -3,7 +3,6 @@ package patient
 import (
 	"appointment-manager/internal/domain"
 	"appointment-manager/internal/healthinsurance"
-	"appointment-manager/internal/i18n"
 	"appointment-manager/internal/ui/components"
 	"appointment-manager/internal/ui/form"
 	"appointment-manager/internal/web"
@@ -21,7 +20,6 @@ import (
 const (
 	requestBodyMaxBytes int64 = 1 << 20
 
-	failedToCreatePatientMsg      string = "Failed to create patient"
 	failedToCreatePatientLowerMsg string = "failed to create patient"
 	missingIDInPathMsg            string = "missing patient id in path"
 )
@@ -386,7 +384,7 @@ func (h *Handler) renderUpdatedPatientsTable(ctx context.Context, w http.Respons
 	}
 
 	w.Header().Set("HX-Trigger", "close-modal")
-	if err := components.Snackbar(i18n.T(ctx, successKey), components.SnackbarSuccess).Render(ctx, w); err != nil {
+	if err := components.RenderSnackbar(ctx, w, components.SnackbarSuccess, successKey); err != nil {
 		h.logger.ErrorContext(ctx, "error rendering success snackbar after patient operation", slog.Any("error", err))
 	}
 	if err := Table(patientsViews).Render(ctx, w); err != nil {
@@ -398,7 +396,7 @@ func (h *Handler) renderUpdatedPatientsTable(ctx context.Context, w http.Respons
 // than a message so the copy follows the request locale; args fill the key's
 // placeholders, as the length-limit messages need.
 func (h *Handler) createSnackbarError(ctx context.Context, w http.ResponseWriter, statusCode int, messageKey, operation string, args ...any) {
-	if err := components.ShowSnackbarOnly(ctx, components.SnackbarError, w, statusCode, i18n.T(ctx, messageKey, args...)); err != nil {
+	if err := components.ShowSnackbarOnly(ctx, components.SnackbarError, w, statusCode, messageKey, args...); err != nil {
 		h.logger.ErrorContext(ctx, "error rendering snackbar", slog.Any("error", err), slog.String("package", "patient"), slog.String("operation", operation))
 	}
 }

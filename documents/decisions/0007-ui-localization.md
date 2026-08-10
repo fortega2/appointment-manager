@@ -114,10 +114,15 @@ was left alone.
 
 One artefact of that boundary looks like an oversight and is not: **`listProfessionalsQuery` still
 wraps the specialty in `INITCAP()` while `listAllProfessionalsQuery`, immediately below it, does
-not.** The first is read only by `GET /api/v1/professionals`, and keeping the cast keeps that
-response byte-identical to what it has always returned. The second is read only by the dashboard,
-which needs the stored slug so the UI can translate it. Unifying the two queries silently changes
-an API payload.
+not.** The first backs `GET /api/v1/professionals`, and keeping the cast keeps that response
+byte-identical to what it has always returned. The second is read only by the dashboard, which
+needs the stored slug so the UI can translate it. Unifying the two queries silently changes an API
+payload.
+
+`Repository.List` — the INITCAP one — is also read by the slots dashboard and the slot create form
+(`internal/slot/handler.go`), which use only the names. Rendering its specialty anywhere would hand
+`SpecialtyLabel` a capitalized value that `specialtyLabelKey` does not match, so it would fall
+through to the raw string and never translate. Read specialties through `ListAll`/`GetByID`.
 
 ## Decision 7 — Display labels are resolved in Go, not read from lookup tables
 

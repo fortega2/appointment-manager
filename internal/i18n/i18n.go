@@ -144,6 +144,10 @@ func FromContext(ctx context.Context) Locale {
 // T translates key for the context's locale. Pass an M to fill %{name}
 // placeholders.
 func T(ctx context.Context, key string, args ...any) string {
+	if loaded := catalog.GetLocale(ctx); loaded != nil {
+		return loaded.T(catalog.ExpandKey(ctx, key), args...)
+	}
+
 	return catalog.T(withFallbackLocale(ctx), key, args...)
 }
 
@@ -151,11 +155,17 @@ func T(ctx context.Context, key string, args ...any) string {
 // matches n. The catalog entry holds "one" and "other" sub-keys, and n is
 // interpolated through an M like any other value.
 func N(ctx context.Context, key string, n int, args ...any) string {
+	if loaded := catalog.GetLocale(ctx); loaded != nil {
+		return loaded.N(catalog.ExpandKey(ctx, key), n, args...)
+	}
+
 	return catalog.N(withFallbackLocale(ctx), key, n, args...)
 }
 
 // withFallbackLocale guarantees a locale is present, because ctxi18n renders a
-// literal "missing locale" marker into the page otherwise.
+// literal "missing locale" marker into the page otherwise. The T/N fast paths
+// above skip it: they already hold the locale, and re-deriving it through
+// catalog.T would look it up a second time on every call.
 func withFallbackLocale(ctx context.Context) context.Context {
 	if catalog.GetLocale(ctx) != nil {
 		return ctx
