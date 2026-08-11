@@ -40,6 +40,11 @@ const (
 	authPathUILogin              = "/login"
 	authHeaderHXRedirect         = "HX-Redirect"
 	authFormContentType          = "application/x-www-form-urlencoded"
+
+	// 5x the shared Argon2 concurrent-hash cap: enough that the old
+	// reject-on-full semaphore failed most of them, few enough that the last
+	// one queued stays well inside maxQueueWait on slow hardware.
+	authConcurrentLogins = 10
 )
 
 func TestLoginEndpointSuccessSetsCookieAndCreatesSession(t *testing.T) {
@@ -157,7 +162,7 @@ func TestLoginEndpointSetsSecureCookieOutsideDevelopment(t *testing.T) {
 	assert.Contains(t, rec.Header().Get(authHeaderSetCookie), authCookieSecureDirective)
 }
 
-func TestLoginEndpointRejectsWhenTooManyConcurrentPasswordChecks(t *testing.T) {
+func TestLoginEndpointQueuesConcurrentPasswordChecks(t *testing.T) {
 	testcontainers.SkipIfProviderIsNotHealthy(t)
 	ctx := context.Background()
 
@@ -167,13 +172,11 @@ func TestLoginEndpointRejectsWhenTooManyConcurrentPasswordChecks(t *testing.T) {
 
 	seedAssistantForAuth(ctx, t, repo, authEmail, authPassword)
 
-	const concurrentLogins = 20 // well above the shared Argon2 concurrent-hash cap
-
 	var wg sync.WaitGroup
 	start := make(chan struct{})
-	codes := make([]int, concurrentLogins)
+	codes := make([]int, authConcurrentLogins)
 
-	for i := range concurrentLogins {
+	for i := range authConcurrentLogins {
 		wg.Go(func() {
 			<-start
 
@@ -186,18 +189,12 @@ func TestLoginEndpointRejectsWhenTooManyConcurrentPasswordChecks(t *testing.T) {
 	close(start)
 	wg.Wait()
 
-	var busyCount int
-	for _, code := range codes {
-		assert.Contains(t, []int{http.StatusOK, http.StatusServiceUnavailable}, code)
-		if code == http.StatusServiceUnavailable {
-			busyCount++
-		}
+	for i, code := range codes {
+		assert.Equalf(t, http.StatusOK, code, "login %d was rejected instead of queued", i)
 	}
-
-	assert.Positive(t, busyCount, "expected at least one request to be rejected as busy under concurrent load")
 }
 
-func TestProcessLoginUIHandlerRejectsWhenTooManyConcurrentPasswordChecks(t *testing.T) {
+func TestProcessLoginUIHandlerQueuesConcurrentPasswordChecks(t *testing.T) {
 	testcontainers.SkipIfProviderIsNotHealthy(t)
 	ctx := context.Background()
 
@@ -207,13 +204,11 @@ func TestProcessLoginUIHandlerRejectsWhenTooManyConcurrentPasswordChecks(t *test
 
 	seedAssistantForAuth(ctx, t, repo, authEmail, authPassword)
 
-	const concurrentLogins = 20 // well above the shared Argon2 concurrent-hash cap
-
 	var wg sync.WaitGroup
 	start := make(chan struct{})
-	codes := make([]int, concurrentLogins)
+	codes := make([]int, authConcurrentLogins)
 
-	for i := range concurrentLogins {
+	for i := range authConcurrentLogins {
 		wg.Go(func() {
 			<-start
 
@@ -226,15 +221,9 @@ func TestProcessLoginUIHandlerRejectsWhenTooManyConcurrentPasswordChecks(t *test
 	close(start)
 	wg.Wait()
 
-	var busyCount int
-	for _, code := range codes {
-		assert.Contains(t, []int{http.StatusOK, http.StatusServiceUnavailable}, code)
-		if code == http.StatusServiceUnavailable {
-			busyCount++
-		}
+	for i, code := range codes {
+		assert.Equalf(t, http.StatusOK, code, "login %d was rejected instead of queued", i)
 	}
-
-	assert.Positive(t, busyCount, "expected at least one request to be rejected as busy under concurrent load")
 }
 
 func TestProcessLoginUIHandlerSuccessSetsCookieAndRedirects(t *testing.T) {
@@ -325,7 +314,7 @@ func seedAssistantForAuth(
 	t.Helper()
 
 	hasher := password.NewArgon2()
-	hashedPassword, err := hasher.Hash(plainPassword)
+	hashedPassword, err := hasher.Hash(ctx, plainPassword)
 	require.NoError(t, err)
 
 	record, err := assistant.NewAssistant("Laura", "Gomez", email, hashedPassword)

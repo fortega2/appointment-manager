@@ -14,7 +14,7 @@ type Repository interface {
 }
 
 type Hasher interface {
-	Hash(password string) (string, error)
+	Hash(ctx context.Context, password string) (string, error)
 }
 
 type Service struct {
@@ -56,7 +56,7 @@ func (s *Service) Create(ctx context.Context, input CreateInput) (uuid.UUID, err
 		return uuid.Nil, err
 	}
 
-	hashedPassword, err := s.hasher.Hash(input.Password)
+	hashedPassword, err := s.hasher.Hash(ctx, input.Password)
 	if err != nil {
 		return uuid.Nil, err
 	}

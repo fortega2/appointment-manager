@@ -66,8 +66,8 @@ type serviceHasherMock struct {
 	mock.Mock
 }
 
-func (m *serviceHasherMock) Hash(password string) (string, error) {
-	args := m.Called(password)
+func (m *serviceHasherMock) Hash(ctx context.Context, password string) (string, error) {
+	args := m.Called(ctx, password)
 	return args.String(0), args.Error(1)
 }
 
@@ -226,7 +226,7 @@ func TestServiceCreate(t *testing.T) {
 		svc, err := assistant.NewService(repo, hasher)
 		require.NoError(t, err)
 
-		hasher.On("Hash", serviceAssistantPassword).Return(emptyValue, errors.New(serviceBoomErrMsg)).Once()
+		hasher.On("Hash", mock.Anything, serviceAssistantPassword).Return(emptyValue, errors.New(serviceBoomErrMsg)).Once()
 
 		id, createErr := svc.Create(context.Background(), assistant.CreateInput{
 			FirstName: serviceAssistantNames,
@@ -249,7 +249,7 @@ func TestServiceCreate(t *testing.T) {
 		svc, err := assistant.NewService(repo, hasher)
 		require.NoError(t, err)
 
-		hasher.On("Hash", serviceAssistantPassword).Return("", nil).Once()
+		hasher.On("Hash", mock.Anything, serviceAssistantPassword).Return("", nil).Once()
 
 		id, createErr := svc.Create(context.Background(), assistant.CreateInput{
 			FirstName: serviceAssistantNames,
@@ -295,7 +295,7 @@ func TestServiceCreate(t *testing.T) {
 		svc, err := assistant.NewService(repo, hasher)
 		require.NoError(t, err)
 
-		hasher.On("Hash", serviceAssistantPassword).Return(serviceAssistantHash, nil).Once()
+		hasher.On("Hash", mock.Anything, serviceAssistantPassword).Return(serviceAssistantHash, nil).Once()
 		repo.On("Create", mock.Anything, mock.MatchedBy(func(record assistant.Assistant) bool {
 			return record.FirstName == serviceAssistantNames &&
 				record.LastName == serviceAssistantLastNames &&
@@ -325,7 +325,7 @@ func TestServiceCreate(t *testing.T) {
 		require.NoError(t, err)
 
 		createdID := uuid.MustParse(serviceAssistantFixedID)
-		hasher.On("Hash", serviceAssistantPassword).Return(serviceAssistantHash, nil).Once()
+		hasher.On("Hash", mock.Anything, serviceAssistantPassword).Return(serviceAssistantHash, nil).Once()
 		repo.On("Create", mock.Anything, mock.MatchedBy(func(record assistant.Assistant) bool {
 			return record.FirstName == serviceAssistantNames &&
 				record.LastName == serviceAssistantLastNames &&

@@ -182,14 +182,14 @@ func (h *Handler) verifyCredentials(ctx context.Context, email, plainPassword st
 			// mask, so skip the dummy hash instead of burning a hash slot.
 			return nil, fmt.Errorf("%w: %w", errCredentialLookupFailed, err)
 		}
-		if _, cmpErr := h.pass.Compare(dummyHash, plainPassword); errors.Is(cmpErr, password.ErrTooManyConcurrentHashes) {
+		if _, cmpErr := h.pass.Compare(ctx, dummyHash, plainPassword); errors.Is(cmpErr, password.ErrTooManyConcurrentHashes) {
 			return nil, cmpErr
 		}
 
 		return nil, errInvalidCredentials
 	}
 
-	ok, err := h.pass.Compare(a.PasswordHash, plainPassword)
+	ok, err := h.pass.Compare(ctx, a.PasswordHash, plainPassword)
 	if err != nil {
 		if errors.Is(err, password.ErrTooManyConcurrentHashes) {
 			return nil, err

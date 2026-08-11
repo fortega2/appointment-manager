@@ -1,12 +1,14 @@
 package password
 
 import (
+	"context"
 	"crypto/rand"
 	"crypto/subtle"
 	"encoding/base64"
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"golang.org/x/crypto/argon2"
 )
@@ -32,12 +34,15 @@ const (
 	minimumParamsVal = 1
 
 	// maxConcurrentHashes bounds how many Hash/Compare calls may run at once.
-	// Each call costs defaultMemoryKiB of memory and defaultParallelism CPU
-	// threads, so this must stay proportional to the container's cpu/memory
-	// limits (see docker/docker-compose.yml), not raised for throughput:
-	// 2 * defaultMemoryKiB = 128MiB peak, 2 * defaultParallelism = 2 threads,
-	// matching the container's ~2-core budget.
+	// The binding constraint is CPU, not memory: with defaultParallelism = 1,
+	// two hashes already saturate the container's GOMAXPROCS=2
+	// (docker/docker-compose.yml). Raising it buys timeslicing, not throughput.
 	maxConcurrentHashes = 2
+
+	// maxQueueWait bounds how long a caller waits for a slot. It must stay well
+	// under the server's WriteTimeout (cmd/server/main.go), or a queued login
+	// would still be waiting once its response can no longer be written.
+	maxQueueWait = 3 * time.Second
 )
 
 type Argon2 struct {
@@ -49,6 +54,8 @@ type Argon2 struct {
 	sem         chan struct{}
 }
 
+// NewArgon2 builds a hasher whose concurrency budget is shared by every caller
+// in the process.
 func NewArgon2() *Argon2 {
 	return &Argon2{
 		memory:      defaultMemoryKiB,
@@ -60,13 +67,13 @@ func NewArgon2() *Argon2 {
 	}
 }
 
-func (a *Argon2) Hash(password string) (string, error) {
+func (a *Argon2) Hash(ctx context.Context, password string) (string, error) {
 	salt := make([]byte, a.saltLen)
 	if _, err := rand.Read(salt); err != nil {
 		return "", fmt.Errorf("generate salt: %w", err)
 	}
 
-	if err := a.acquire(); err != nil {
+	if err := a.acquire(ctx); err != nil {
 		return "", err
 	}
 	defer a.release()
@@ -102,7 +109,7 @@ type parsedPHC struct {
 	hash        []byte
 }
 
-func (a *Argon2) Compare(encodedHash, plainPassword string) (bool, error) {
+func (a *Argon2) Compare(ctx context.Context, encodedHash, plainPassword string) (bool, error) {
 	parsed, err := parsePHCEncodedHash(encodedHash)
 	if err != nil {
 		return false, err
@@ -113,7 +120,7 @@ func (a *Argon2) Compare(encodedHash, plainPassword string) (bool, error) {
 		return false, fmt.Errorf("hash length exceeds maximum: %d > %d", hashLen, maxHashLenBytes)
 	}
 
-	if err := a.acquire(); err != nil {
+	if err := a.acquire(ctx); err != nil {
 		return false, err
 	}
 	defer a.release()
@@ -130,14 +137,18 @@ func (a *Argon2) Compare(encodedHash, plainPassword string) (bool, error) {
 	return subtle.ConstantTimeCompare(parsed.hash, calculatedHash) == 1, nil
 }
 
-// acquire reserves one of the concurrent-hash slots, or reports
-// ErrTooManyConcurrentHashes immediately rather than making the caller wait.
-func (a *Argon2) acquire() error {
+// acquire reserves one of the concurrent-hash slots, waiting up to maxQueueWait
+// for one to free up. Waiting costs nothing but a blocked goroutine — the
+// memory bound the slots exist to enforce is paid only by the holders.
+func (a *Argon2) acquire(ctx context.Context) error {
+	ctx, cancel := context.WithTimeout(ctx, maxQueueWait)
+	defer cancel()
+
 	select {
 	case a.sem <- struct{}{}:
 		return nil
-	default:
-		return ErrTooManyConcurrentHashes
+	case <-ctx.Done():
+		return fmt.Errorf("%w: %w", ErrTooManyConcurrentHashes, ctx.Err())
 	}
 }
 

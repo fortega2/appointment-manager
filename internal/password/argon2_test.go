@@ -42,16 +42,16 @@ func TestHashAndCompare(t *testing.T) {
 
 	hasher := password.NewArgon2()
 
-	encodedHash, err := hasher.Hash(passwordSuperSecret)
+	encodedHash, err := hasher.Hash(t.Context(), passwordSuperSecret)
 	require.NoError(t, err)
 	assert.NotEmpty(t, encodedHash)
 	assert.Contains(t, encodedHash, argon2Prefix, generatedHashShouldContainPrefix)
 
-	match, compareErr := hasher.Compare(encodedHash, passwordSuperSecret)
+	match, compareErr := hasher.Compare(t.Context(), encodedHash, passwordSuperSecret)
 	require.NoError(t, compareErr)
 	assert.True(t, match)
 
-	noMatch, wrongCompareErr := hasher.Compare(encodedHash, passwordWrong)
+	noMatch, wrongCompareErr := hasher.Compare(t.Context(), encodedHash, passwordWrong)
 	require.NoError(t, wrongCompareErr)
 	assert.False(t, noMatch)
 }
@@ -61,10 +61,10 @@ func TestHashUsesRandomSalt(t *testing.T) {
 
 	hasher := password.NewArgon2()
 
-	hashA, errA := hasher.Hash(passwordGeneric)
+	hashA, errA := hasher.Hash(t.Context(), passwordGeneric)
 	require.NoError(t, errA)
 
-	hashB, errB := hasher.Hash(passwordGeneric)
+	hashB, errB := hasher.Hash(t.Context(), passwordGeneric)
 	require.NoError(t, errB)
 
 	assert.NotEqual(t, hashA, hashB, generatedHashShouldBeUnique)
@@ -92,7 +92,7 @@ func TestCompareErrors(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			match, err := hasher.Compare(tt.encodedHash, passwordSuperSecret)
+			match, err := hasher.Compare(t.Context(), tt.encodedHash, passwordSuperSecret)
 
 			require.Error(t, err)
 			assert.False(t, match)
@@ -106,7 +106,7 @@ func TestCompareHashLengthLimit(t *testing.T) {
 
 	hasher := password.NewArgon2()
 
-	match, err := hasher.Compare(encodedTooLargeHash, passwordGeneric)
+	match, err := hasher.Compare(t.Context(), encodedTooLargeHash, passwordGeneric)
 
 	require.Error(t, err)
 	assert.False(t, match)
