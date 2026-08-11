@@ -41,9 +41,9 @@ const (
 	authHeaderHXRedirect         = "HX-Redirect"
 	authFormContentType          = "application/x-www-form-urlencoded"
 
-	// 5x the shared Argon2 concurrent-hash cap: enough that the old
-	// reject-on-full semaphore failed most of them, few enough that the last
-	// one queued stays well inside maxQueueWait on slow hardware.
+	// 5x the shared Argon2 concurrent-hash cap: enough to force queueing, few
+	// enough that the last one queued stays well inside maxQueueWait on slow
+	// hardware.
 	authConcurrentLogins = 10
 )
 
@@ -162,67 +162,56 @@ func TestLoginEndpointSetsSecureCookieOutsideDevelopment(t *testing.T) {
 	assert.Contains(t, rec.Header().Get(authHeaderSetCookie), authCookieSecureDirective)
 }
 
-func TestLoginEndpointQueuesConcurrentPasswordChecks(t *testing.T) {
+func TestLoginQueuesConcurrentPasswordChecks(t *testing.T) {
 	testcontainers.SkipIfProviderIsNotHealthy(t)
 	ctx := context.Background()
 
-	pool := newAuthIntegrationPool(ctx, t)
-	repo := newAuthIntegrationRepository(t, pool)
-	mux := newAuthIntegrationMux(t, repo, newTestSessionStore(t), true)
+	tests := []struct {
+		name   string
+		newReq func() *http.Request
+	}{
+		{
+			name: "json api",
+			newReq: func() *http.Request {
+				return newAuthRequest(ctx, http.MethodPost, authPathLogin, authBodyValidLogin)
+			},
+		},
+		{
+			name: "ui form",
+			newReq: func() *http.Request {
+				return newAuthFormRequest(ctx, authEmail, authPassword)
+			},
+		},
+	}
 
-	seedAssistantForAuth(ctx, t, repo, authEmail, authPassword)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			pool := newAuthIntegrationPool(ctx, t)
+			repo := newAuthIntegrationRepository(t, pool)
+			mux := newAuthIntegrationMux(t, repo, newTestSessionStore(t), true)
 
-	var wg sync.WaitGroup
-	start := make(chan struct{})
-	codes := make([]int, authConcurrentLogins)
+			seedAssistantForAuth(ctx, t, repo, authEmail, authPassword)
 
-	for i := range authConcurrentLogins {
-		wg.Go(func() {
-			<-start
+			var wg sync.WaitGroup
+			start := make(chan struct{})
+			codes := make([]int, authConcurrentLogins)
 
-			req := newAuthRequest(ctx, http.MethodPost, authPathLogin, authBodyValidLogin)
-			rec := httptest.NewRecorder()
-			mux.ServeHTTP(rec, req)
-			codes[i] = rec.Code
+			for i := range authConcurrentLogins {
+				wg.Go(func() {
+					<-start
+
+					rec := httptest.NewRecorder()
+					mux.ServeHTTP(rec, tt.newReq())
+					codes[i] = rec.Code
+				})
+			}
+			close(start)
+			wg.Wait()
+
+			for i, code := range codes {
+				assert.Equalf(t, http.StatusOK, code, "login %d was rejected instead of queued", i)
+			}
 		})
-	}
-	close(start)
-	wg.Wait()
-
-	for i, code := range codes {
-		assert.Equalf(t, http.StatusOK, code, "login %d was rejected instead of queued", i)
-	}
-}
-
-func TestProcessLoginUIHandlerQueuesConcurrentPasswordChecks(t *testing.T) {
-	testcontainers.SkipIfProviderIsNotHealthy(t)
-	ctx := context.Background()
-
-	pool := newAuthIntegrationPool(ctx, t)
-	repo := newAuthIntegrationRepository(t, pool)
-	mux := newAuthIntegrationMux(t, repo, newTestSessionStore(t), true)
-
-	seedAssistantForAuth(ctx, t, repo, authEmail, authPassword)
-
-	var wg sync.WaitGroup
-	start := make(chan struct{})
-	codes := make([]int, authConcurrentLogins)
-
-	for i := range authConcurrentLogins {
-		wg.Go(func() {
-			<-start
-
-			req := newAuthFormRequest(ctx, authEmail, authPassword)
-			rec := httptest.NewRecorder()
-			mux.ServeHTTP(rec, req)
-			codes[i] = rec.Code
-		})
-	}
-	close(start)
-	wg.Wait()
-
-	for i, code := range codes {
-		assert.Equalf(t, http.StatusOK, code, "login %d was rejected instead of queued", i)
 	}
 }
 
