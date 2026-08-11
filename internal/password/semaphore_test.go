@@ -56,6 +56,17 @@ func (m *recordingMetrics) counts() (waits, timedOut, clientCancelled int) {
 	return m.waits, m.timedOut, m.clientCancelled
 }
 
+// newCheapArgon2 keeps the real semaphore but shrinks the KDF to a cost the
+// slowest runner still finishes instantly. Queueing behaviour is independent of
+// the cost parameters, so nothing under test is weakened.
+func newCheapArgon2() *Argon2 {
+	a := NewArgon2(nil)
+	a.memory = 64
+	a.iterations = 1
+
+	return a
+}
+
 // saturate fills every slot and returns a release func for one of them.
 func saturate(t *testing.T, a *Argon2) func() {
 	t.Helper()
@@ -181,11 +192,12 @@ func TestGivesUpWhenSlotNeverFrees(t *testing.T) {
 func TestConcurrentHashesAllSucceed(t *testing.T) {
 	t.Parallel()
 
-	// 3x oversubscription: enough to prove queueing, few enough that the last
-	// caller's wait stays clear of maxQueueWait on slow CI hardware.
 	const callers = 3 * maxConcurrentHashes
 
-	a := NewArgon2(nil)
+	// Real Argon2 cost would race the queue against maxQueueWait, making the
+	// result a statement about the machine's KDF throughput rather than the
+	// semaphore: on a slow CI runner one 64 MiB hash outlasts the whole budget.
+	a := newCheapArgon2()
 
 	errs := make([]error, callers)
 
