@@ -95,6 +95,9 @@ symbols it governs.
 
 - Run full lint:
   - `golangci-lint run ./...`
+- Lint the `//go:build integration` files too (the command above skips them, so
+  issues can accumulate there unseen):
+  - `golangci-lint run --build-tags=integration ./...`
 - Run lint on one package:
   - `golangci-lint run ./internal/assistant/...`
 - Format Go code:
@@ -232,6 +235,19 @@ the general guidance). Project-specific deviations:
 - Before finishing substantial changes (all TODOs for the task done), run the
   `pre-pr-check` skill: lint, race tests, vulnerability scan, coverage when
   tests changed, the pre-PR checklist, and starting a code review.
+
+### Commits
+
+- **Subject line only — no body.** This repo's history is one-liners; a
+  multi-paragraph commit message is out of place here. Reasoning that needs more
+  than a subject line belongs in an ADR under `documents/decisions/`, where it
+  is findable later, not in a message nobody re-reads.
+- Conventional-commit prefixes, as in `git log`: `feat`, `fix`, `refactor`,
+  `docs`, `style`, `chore`, with a scope (`fix(password): ...`).
+- Prefer several small commits over one large one, split by context rather than
+  by file. Every commit must build and pass tests on its own — `lefthook`
+  pre-commit enforces it, so a commit that only compiles alongside the next one
+  cannot be created without `--no-verify`.
 
 ## 8) MCP and SKILLS Usage
 
