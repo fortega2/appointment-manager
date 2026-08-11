@@ -735,7 +735,6 @@ func performConcurrentCreateRequests(ctx context.Context, mux *http.ServeMux, bo
 
 	var wg sync.WaitGroup
 	for i := range bodies {
-		i := i
 		wg.Go(func() {
 			<-start
 

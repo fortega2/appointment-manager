@@ -40,7 +40,7 @@ func TestRepositoryCreatePersistsPatient(t *testing.T) {
 		repositoryPatientEmail,
 		repositoryPatientInsurance,
 		repositoryPatientInsuranceNumber,
-		stringPtr(repositoryPatientNotes),
+		new(repositoryPatientNotes),
 	)
 	require.NoError(t, err)
 
@@ -164,8 +164,4 @@ func fetchPatientRecord(ctx context.Context, t *testing.T, pool *pgxpool.Pool, i
 	require.NoError(t, err)
 
 	return persisted
-}
-
-func stringPtr(value string) *string {
-	return &value
 }
