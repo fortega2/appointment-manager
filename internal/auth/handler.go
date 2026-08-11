@@ -21,10 +21,6 @@ const (
 	failedGetAssistByEmailMsg string = "failed to get assistant by email"
 	failedCreateSessionMsg    string = "failed to create session"
 	failedDeleteSessionMsg    string = "failed to delete session"
-	// Kept in English: these reach the JSON API through problem_mappings.go, which
-	// is machine-facing. The UI renders the catalog keys below instead.
-	serverBusyMsg           string = "Server is busy, please try again"
-	incorrectCredentialsMsg string = "Incorrect email or password"
 
 	loginErrorFormKey string = "auth.error.form"
 	loginErrorBusyKey string = "auth.error.busy"

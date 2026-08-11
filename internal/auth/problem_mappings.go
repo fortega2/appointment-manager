@@ -18,7 +18,7 @@ const (
 func loginProblem(err error, path string) web.ProblemDetail {
 	switch {
 	case errors.Is(err, password.ErrTooManyConcurrentHashes):
-		return web.NewProblem(http.StatusServiceUnavailable, web.ProblemTypeServiceUnavailable, serverBusyMsg, path)
+		return web.NewServiceUnavailableProblem(path)
 	case errors.Is(err, errInvalidCredentials):
 		return web.NewProblem(http.StatusUnauthorized, web.ProblemTypeUnauthorized, detailIncorrectCredentials, path)
 	case errors.Is(err, errCredentialLookupFailed):

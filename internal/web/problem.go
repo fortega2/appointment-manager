@@ -8,6 +8,8 @@ import (
 const (
 	problemJSONContentType = "application/problem+json"
 
+	detailServerBusy = "Server is busy, please try again"
+
 	ProblemTypeInvalidJSON          = "/problems/invalid-json"
 	ProblemTypeUnsupportedMediaType = "/problems/unsupported-media-type"
 	ProblemTypeRequestBodyTooLarge  = "/problems/request-body-too-large"
@@ -39,6 +41,13 @@ func NewProblem(status int, problemType, detail, instance string) ProblemDetail 
 
 func NewInternalServerProblem(detail, instance string) ProblemDetail {
 	return NewProblem(http.StatusInternalServerError, ProblemTypeInternalServerError, detail, instance)
+}
+
+// NewServiceUnavailableProblem is the one 503 body for a caller that should
+// simply retry. It owns the detail so every endpoint that runs out of a shared
+// resource answers identically.
+func NewServiceUnavailableProblem(instance string) ProblemDetail {
+	return NewProblem(http.StatusServiceUnavailable, ProblemTypeServiceUnavailable, detailServerBusy, instance)
 }
 
 func WriteProblem(w http.ResponseWriter, problem ProblemDetail) {
