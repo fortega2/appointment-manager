@@ -144,8 +144,7 @@ func (a *Argon2) Compare(ctx context.Context, encodedHash, plainPassword string)
 }
 
 // acquire reserves one of the concurrent-hash slots, waiting up to maxQueueWait
-// for one to free up. Waiting costs nothing but a blocked goroutine — the
-// memory bound the slots exist to enforce is paid only by the holders.
+// for one to free up.
 func (a *Argon2) acquire(ctx context.Context) error {
 	start := time.Now()
 
@@ -155,10 +154,17 @@ func (a *Argon2) acquire(ctx context.Context) error {
 	select {
 	case a.sem <- struct{}{}:
 		a.metrics.ObservePasswordQueueWait(ctx, time.Since(start))
+
 		return nil
 	case <-ctx.Done():
-		a.metrics.RecordPasswordQueueTimeout(waitFailureReason(ctx.Err()))
-		return fmt.Errorf("%w: %w", ErrTooManyConcurrentHashes, ctx.Err())
+		// Observed on both arms: dropping the callers that waited longest is
+		// what would make p95 look healthy under saturation. See ADR 0008.
+		a.metrics.ObservePasswordQueueWait(ctx, time.Since(start))
+
+		err := ctx.Err()
+		a.recordWaitFailure(err)
+
+		return fmt.Errorf("%w: %w", ErrTooManyConcurrentHashes, err)
 	}
 }
 
@@ -166,12 +172,12 @@ func (a *Argon2) release() {
 	<-a.sem
 }
 
-func waitFailureReason(err error) string {
+func (a *Argon2) recordWaitFailure(err error) {
 	if errors.Is(err, context.DeadlineExceeded) {
-		return waitFailureTimeout
+		a.metrics.RecordPasswordQueueTimedOut()
+		return
 	}
-
-	return waitFailureClientCancelled
+	a.metrics.RecordPasswordQueueClientCancelled()
 }
 
 func parsePHCEncodedHash(encodedHash string) (*parsedPHC, error) {

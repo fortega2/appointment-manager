@@ -41,9 +41,12 @@ case a.sem <- struct{}{}:
 	a.metrics.ObservePasswordQueueWait(ctx, time.Since(start))
 	return nil
 case <-ctx.Done():
-	a.metrics.RecordPasswordQueueTimeout(waitFailureReason(ctx.Err()))
+	a.metrics.ObservePasswordQueueWait(ctx, time.Since(start))
 
-	return fmt.Errorf("%w: %w", ErrTooManyConcurrentHashes, ctx.Err())
+	err := ctx.Err()
+	a.recordWaitFailure(err)
+
+	return fmt.Errorf("%w: %w", ErrTooManyConcurrentHashes, err)
 }
 ```
 
@@ -130,6 +133,12 @@ without production data behind them.
 `appt_password_queue_wait_seconds` puts a bucket boundary at 3 for the same reason
 `notificationSendBuckets` puts one at 5: a caller that gave up lands on an edge and reads as its
 own step rather than smearing across a wide final bucket.
+
+`acquire` observes the wait on **both** arms of the select, and that is load-bearing. Recording
+only successful acquires makes the histogram survivorship-biased: it drops exactly the callers who
+waited longest, so p95 reads *healthiest* at the moment saturation starts turning logins away. The
+timeout counter says *that* callers gave up; the histogram is what says *how long they waited
+first*, and it can only say it if the give-ups are in it.
 
 ## What this does not fix
 

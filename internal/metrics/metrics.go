@@ -42,6 +42,13 @@ const (
 	dropReasonUnknownKind = "unknown_kind"
 )
 
+// Why a caller stopped waiting for a hashing slot. Only timeout means
+// saturation; client_cancelled is the caller's own context ending first.
+const (
+	queueWaitFailureTimeout         = "timeout"
+	queueWaitFailureClientCancelled = "client_cancelled"
+)
+
 // What became of a notification the drain picked up. no_recipients is a normal
 // outcome, not a failure: cancelling a slot nobody booked notifies nobody.
 const (
@@ -67,7 +74,7 @@ var notificationSendBuckets = []float64{0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.
 // passwordQueueWaitBuckets cover the wait for an Argon2 hashing slot. An
 // uncontended acquire is sub-millisecond, hence the fine low end; the boundary
 // at 3 is the password package's maxQueueWait, so a caller that gave up lands
-// on a bucket edge instead of being smeared across a wider one.
+// on that boundary instead of being smeared across a wider bucket.
 //
 //nolint:mnd // histogram bucket boundaries are metric configuration, not magic numbers.
 var passwordQueueWaitBuckets = []float64{0.0005, 0.001, 0.005, 0.01, 0.05, 0.1, 0.25, 0.5, 1, 2, 3}
@@ -394,18 +401,25 @@ func (m *Metrics) RegisterNotificationQueue(depth, capacity func() float64) {
 	)
 }
 
-// ObservePasswordQueueWait records how long a caller waited before getting an
-// Argon2 hashing slot. It carries a trace_id exemplar when ctx holds a sampled
-// span, which is what ties a slow login back to the burst that caused it.
+// ObservePasswordQueueWait records how long a caller waited for an Argon2
+// hashing slot, whether or not it got one. It carries a trace_id exemplar when
+// ctx holds a sampled span, which is what ties a slow login back to the burst
+// that caused it.
 func (m *Metrics) ObservePasswordQueueWait(ctx context.Context, waited time.Duration) {
 	observeWithExemplar(ctx, m.passwordQueueWait, waited.Seconds())
 }
 
-// RecordPasswordQueueTimeout counts one caller that gave up waiting for a
-// hashing slot. Only reason="timeout" means saturation; "client_cancelled" is
-// the caller's own context ending and is expected background noise.
-func (m *Metrics) RecordPasswordQueueTimeout(reason string) {
-	m.passwordQueueTimeouts.WithLabelValues(reason).Inc()
+// RecordPasswordQueueTimedOut counts one caller that waited the full budget
+// without a slot freeing up. This is the series that means saturation.
+func (m *Metrics) RecordPasswordQueueTimedOut() {
+	m.passwordQueueTimeouts.WithLabelValues(queueWaitFailureTimeout).Inc()
+}
+
+// RecordPasswordQueueClientCancelled counts one caller whose own context ended
+// while queued. Unlike a timeout it says nothing about load, since the client
+// hung up on a request nobody was going to answer anyway.
+func (m *Metrics) RecordPasswordQueueClientCancelled() {
+	m.passwordQueueTimeouts.WithLabelValues(queueWaitFailureClientCancelled).Inc()
 }
 
 // DBTracer returns a pgx query tracer that records this Metrics' database
