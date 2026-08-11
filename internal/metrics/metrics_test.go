@@ -46,6 +46,26 @@ func TestNewRegistersRuntimeCollectors(t *testing.T) {
 	assert.Contains(t, body, "go_build_info")
 }
 
+func TestNewInitialisesFailureReasonsAtZero(t *testing.T) {
+	t.Parallel()
+
+	m := New()
+
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, metricsEndpoint, nil)
+	rec := httptest.NewRecorder()
+	m.Handler().ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code)
+
+	// Without a zero-valued series to step up from, the first burst creates the
+	// child already carrying its count and increase() reports nothing happened.
+	body := rec.Body.String()
+	assert.Contains(t, body, `appt_password_queue_timeouts_total{reason="timeout"} 0`)
+	assert.Contains(t, body, `appt_password_queue_timeouts_total{reason="client_cancelled"} 0`)
+	assert.Contains(t, body, `appt_notifications_dropped_total{reason="queue_full"} 0`)
+	assert.Contains(t, body, `appt_notifications_dropped_total{reason="unknown_kind"} 0`)
+}
+
 func TestBusinessRecorders(t *testing.T) {
 	t.Parallel()
 

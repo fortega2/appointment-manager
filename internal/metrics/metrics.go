@@ -241,7 +241,7 @@ func New() *Metrics {
 			Namespace: namespace,
 			Subsystem: subsystemPassword,
 			Name:      "queue_wait_seconds",
-			Help:      "Time a caller waited for an Argon2 hashing slot before getting one.",
+			Help:      "Time a caller waited for an Argon2 hashing slot, whether or not it got one.",
 			Buckets:   passwordQueueWaitBuckets,
 		},
 	)
@@ -257,6 +257,15 @@ func New() *Metrics {
 		},
 		[]string{"reason"},
 	)
+
+	// WithLabelValues creates a child lazily, so a reason that never fired has no
+	// series at all — and one born carrying its first burst shows increase() = 0,
+	// because Prometheus never observed the step up from zero. Registering every
+	// known reason here is what makes the first occurrence visible.
+	passwordQueueTimeouts.WithLabelValues(queueWaitFailureTimeout)
+	passwordQueueTimeouts.WithLabelValues(queueWaitFailureClientCancelled)
+	notificationsDropped.WithLabelValues(dropReasonQueueFull)
+	notificationsDropped.WithLabelValues(dropReasonUnknownKind)
 
 	return &Metrics{
 		reg:                      reg,
