@@ -38,7 +38,7 @@ func TestNewHandlerValidation(t *testing.T) {
 
 	store := newTestSessionStore(t)
 	repo := &assistant.PostgresRepository{}
-	hasher := password.NewArgon2()
+	hasher := password.NewArgon2(nil)
 	logger := slog.New(slog.DiscardHandler)
 
 	tests := []struct {
@@ -75,7 +75,7 @@ func TestRegisterHandlersDoesNotPanic(t *testing.T) {
 		slog.New(slog.DiscardHandler),
 		newTestSessionStore(t),
 		&assistant.PostgresRepository{},
-		password.NewArgon2(),
+		password.NewArgon2(nil),
 		true,
 	)
 	require.NoError(t, err)
@@ -176,7 +176,7 @@ func newAuthDecodeTestMux(t *testing.T) *http.ServeMux {
 	t.Helper()
 
 	mux := http.NewServeMux()
-	newTestHandler(t, password.NewArgon2()).RegisterHandlers(mux)
+	newTestHandler(t, password.NewArgon2(nil)).RegisterHandlers(mux)
 
 	return mux
 }

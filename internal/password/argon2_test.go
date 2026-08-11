@@ -40,7 +40,7 @@ const (
 func TestHashAndCompare(t *testing.T) {
 	t.Parallel()
 
-	hasher := password.NewArgon2()
+	hasher := password.NewArgon2(nil)
 
 	encodedHash, err := hasher.Hash(t.Context(), passwordSuperSecret)
 	require.NoError(t, err)
@@ -59,7 +59,7 @@ func TestHashAndCompare(t *testing.T) {
 func TestHashUsesRandomSalt(t *testing.T) {
 	t.Parallel()
 
-	hasher := password.NewArgon2()
+	hasher := password.NewArgon2(nil)
 
 	hashA, errA := hasher.Hash(t.Context(), passwordGeneric)
 	require.NoError(t, errA)
@@ -73,7 +73,7 @@ func TestHashUsesRandomSalt(t *testing.T) {
 func TestCompareErrors(t *testing.T) {
 	t.Parallel()
 
-	hasher := password.NewArgon2()
+	hasher := password.NewArgon2(nil)
 
 	tests := []struct {
 		name        string
@@ -104,7 +104,7 @@ func TestCompareErrors(t *testing.T) {
 func TestCompareHashLengthLimit(t *testing.T) {
 	t.Parallel()
 
-	hasher := password.NewArgon2()
+	hasher := password.NewArgon2(nil)
 
 	match, err := hasher.Compare(t.Context(), encodedTooLargeHash, passwordGeneric)
 

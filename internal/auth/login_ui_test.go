@@ -38,7 +38,7 @@ func TestLoginUIErrorFollowsTheRequestLocale(t *testing.T) {
 			t.Parallel()
 
 			mux := http.NewServeMux()
-			newTestHandler(t, password.NewArgon2()).RegisterHandlers(mux)
+			newTestHandler(t, password.NewArgon2(nil)).RegisterHandlers(mux)
 
 			ctx := i18n.WithLocale(t.Context(), tt.locale)
 			req := httptest.NewRequestWithContext(ctx, http.MethodPost, loginUIPath, nil)

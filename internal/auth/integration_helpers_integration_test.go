@@ -122,7 +122,7 @@ func newAuthIntegrationMux(
 ) *http.ServeMux {
 	t.Helper()
 
-	h, err := auth.NewHandler(slog.New(slog.DiscardHandler), store, repo, password.NewArgon2(), isDev)
+	h, err := auth.NewHandler(slog.New(slog.DiscardHandler), store, repo, password.NewArgon2(nil), isDev)
 	require.NoError(t, err)
 
 	mux := http.NewServeMux()

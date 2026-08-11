@@ -20,6 +20,41 @@ const (
 	semaphoreGiveUpWait   = 30 * time.Millisecond
 )
 
+// recordingMetrics counts the queue observations Argon2 emits.
+type recordingMetrics struct {
+	mu      sync.Mutex
+	waits   []time.Duration
+	reasons []string
+}
+
+func (m *recordingMetrics) ObservePasswordQueueWait(_ context.Context, waited time.Duration) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	m.waits = append(m.waits, waited)
+}
+
+func (m *recordingMetrics) RecordPasswordQueueTimeout(reason string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	m.reasons = append(m.reasons, reason)
+}
+
+func (m *recordingMetrics) recordedReasons() []string {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	return append([]string(nil), m.reasons...)
+}
+
+func (m *recordingMetrics) waitCount() int {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	return len(m.waits)
+}
+
 // saturate fills every slot and returns a release func for one of them.
 func saturate(t *testing.T, a *Argon2) func() {
 	t.Helper()
@@ -34,7 +69,7 @@ func saturate(t *testing.T, a *Argon2) func() {
 func TestHashQueuesUntilSlotFrees(t *testing.T) {
 	t.Parallel()
 
-	a := NewArgon2()
+	a := NewArgon2(nil)
 	release := saturate(t, a)
 
 	go func() {
@@ -54,7 +89,7 @@ func TestHashQueuesUntilSlotFrees(t *testing.T) {
 func TestCompareQueuesUntilSlotFrees(t *testing.T) {
 	t.Parallel()
 
-	a := NewArgon2()
+	a := NewArgon2(nil)
 	release := saturate(t, a)
 
 	go func() {
@@ -77,7 +112,7 @@ func TestConcurrentHashesAllSucceed(t *testing.T) {
 	// caller's wait stays clear of maxQueueWait on slow CI hardware.
 	const callers = 3 * maxConcurrentHashes
 
-	a := NewArgon2()
+	a := NewArgon2(nil)
 
 	errs := make([]error, callers)
 
@@ -97,7 +132,8 @@ func TestConcurrentHashesAllSucceed(t *testing.T) {
 func TestAcquireGivesUpWhenSaturated(t *testing.T) {
 	t.Parallel()
 
-	a := NewArgon2()
+	recorder := &recordingMetrics{}
+	a := NewArgon2(recorder)
 	saturate(t, a)
 
 	// A parent deadline shorter than maxQueueWait wins, so the test does not
@@ -110,12 +146,14 @@ func TestAcquireGivesUpWhenSaturated(t *testing.T) {
 	assert.Empty(t, hash)
 	require.ErrorIs(t, err, ErrTooManyConcurrentHashes)
 	require.ErrorIs(t, err, context.DeadlineExceeded)
+	assert.Equal(t, []string{waitFailureTimeout}, recorder.recordedReasons())
 }
 
 func TestAcquireReturnsOnCancelledContext(t *testing.T) {
 	t.Parallel()
 
-	a := NewArgon2()
+	recorder := &recordingMetrics{}
+	a := NewArgon2(recorder)
 	saturate(t, a)
 
 	ctx, cancel := context.WithCancel(t.Context())
@@ -125,12 +163,27 @@ func TestAcquireReturnsOnCancelledContext(t *testing.T) {
 
 	require.ErrorIs(t, err, ErrTooManyConcurrentHashes)
 	require.ErrorIs(t, err, context.Canceled)
+	assert.Equal(t, []string{waitFailureClientCancelled}, recorder.recordedReasons(),
+		"a client hanging up must not be reported as saturation")
+}
+
+func TestAcquireRecordsWaitOnSuccess(t *testing.T) {
+	t.Parallel()
+
+	recorder := &recordingMetrics{}
+	a := NewArgon2(recorder)
+
+	_, err := a.Hash(t.Context(), semaphorePlainPassword)
+
+	require.NoError(t, err)
+	assert.Equal(t, 1, recorder.waitCount())
+	assert.Empty(t, recorder.recordedReasons())
 }
 
 func TestHashAndCompareReleaseSemaphoreSlot(t *testing.T) {
 	t.Parallel()
 
-	a := NewArgon2()
+	a := NewArgon2(nil)
 
 	hash, err := a.Hash(t.Context(), semaphorePlainPassword)
 	require.NoError(t, err)

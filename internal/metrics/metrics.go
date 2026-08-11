@@ -24,6 +24,7 @@ const (
 	subsystemDB            = "db"
 	subsystemAppointments  = "appointments"
 	subsystemNotifications = "notifications"
+	subsystemPassword      = "password"
 )
 
 const (
@@ -63,6 +64,14 @@ var dbDurationBuckets = []float64{0.0005, 0.001, 0.0025, 0.005, 0.01, 0.025, 0.0
 //nolint:mnd // histogram bucket boundaries are metric configuration, not magic numbers.
 var notificationSendBuckets = []float64{0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10}
 
+// passwordQueueWaitBuckets cover the wait for an Argon2 hashing slot. An
+// uncontended acquire is sub-millisecond, hence the fine low end; the boundary
+// at 3 is the password package's maxQueueWait, so a caller that gave up lands
+// on a bucket edge instead of being smeared across a wider one.
+//
+//nolint:mnd // histogram bucket boundaries are metric configuration, not magic numbers.
+var passwordQueueWaitBuckets = []float64{0.0005, 0.001, 0.005, 0.01, 0.05, 0.1, 0.25, 0.5, 1, 2, 3}
+
 // Metrics holds the private registry and every collector the service exports.
 type Metrics struct {
 	reg *prometheus.Registry
@@ -78,6 +87,9 @@ type Metrics struct {
 	notificationsDropped     *prometheus.CounterVec
 	notificationsProcessed   *prometheus.CounterVec
 	notificationSendDuration *prometheus.HistogramVec
+
+	passwordQueueWait     prometheus.Histogram
+	passwordQueueTimeouts *prometheus.CounterVec
 }
 
 // New builds a Metrics backed by a private registry (never the global default)
@@ -215,6 +227,30 @@ func New() *Metrics {
 		[]string{"kind"},
 	)
 
+	// Dashboard: histogram_quantile(0.95, sum(rate(appt_password_queue_wait_seconds_bucket[5m])) by (le))
+	// Alert:     histogram_quantile(0.95, sum(rate(appt_password_queue_wait_seconds_bucket[5m])) by (le)) > 1
+	passwordQueueWait := factory.NewHistogram(
+		prometheus.HistogramOpts{
+			Namespace: namespace,
+			Subsystem: subsystemPassword,
+			Name:      "queue_wait_seconds",
+			Help:      "Time a caller waited for an Argon2 hashing slot before getting one.",
+			Buckets:   passwordQueueWaitBuckets,
+		},
+	)
+
+	// Dashboard: sum by (reason) (rate(appt_password_queue_timeouts_total[5m]))
+	// Alert:     increase(appt_password_queue_timeouts_total{reason="timeout"}[5m]) > 0
+	passwordQueueTimeouts := factory.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: namespace,
+			Subsystem: subsystemPassword,
+			Name:      "queue_timeouts_total",
+			Help:      "Total number of callers that gave up waiting for an Argon2 hashing slot, by reason.",
+		},
+		[]string{"reason"},
+	)
+
 	return &Metrics{
 		reg:                      reg,
 		httpRequests:             httpRequests,
@@ -227,6 +263,8 @@ func New() *Metrics {
 		notificationsDropped:     notificationsDropped,
 		notificationsProcessed:   notificationsProcessed,
 		notificationSendDuration: notificationSendDuration,
+		passwordQueueWait:        passwordQueueWait,
+		passwordQueueTimeouts:    passwordQueueTimeouts,
 	}
 }
 
@@ -354,6 +392,20 @@ func (m *Metrics) RegisterNotificationQueue(depth, capacity func() float64) {
 		},
 		capacity,
 	)
+}
+
+// ObservePasswordQueueWait records how long a caller waited before getting an
+// Argon2 hashing slot. It carries a trace_id exemplar when ctx holds a sampled
+// span, which is what ties a slow login back to the burst that caused it.
+func (m *Metrics) ObservePasswordQueueWait(ctx context.Context, waited time.Duration) {
+	observeWithExemplar(ctx, m.passwordQueueWait, waited.Seconds())
+}
+
+// RecordPasswordQueueTimeout counts one caller that gave up waiting for a
+// hashing slot. Only reason="timeout" means saturation; "client_cancelled" is
+// the caller's own context ending and is expected background noise.
+func (m *Metrics) RecordPasswordQueueTimeout(reason string) {
+	m.passwordQueueTimeouts.WithLabelValues(reason).Inc()
 }
 
 // DBTracer returns a pgx query tracer that records this Metrics' database

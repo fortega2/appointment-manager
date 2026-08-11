@@ -53,7 +53,7 @@ type dependencies struct {
 // newDependencies builds every shared collaborator from the pool. Each
 // constructor here fails only when the pool is nil, so an error means the
 // process cannot serve anything and must not start.
-func newDependencies(pool *pgxpool.Pool, appointmentMetrics *metrics.Metrics) (*dependencies, error) {
+func newDependencies(pool *pgxpool.Pool, appMetrics *metrics.Metrics) (*dependencies, error) {
 	appointmentRepo, err := appointment.NewPostgresRepository(pool)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create appointment postgres repository: %w", err)
@@ -62,7 +62,7 @@ func newDependencies(pool *pgxpool.Pool, appointmentMetrics *metrics.Metrics) (*
 	if err != nil {
 		return nil, fmt.Errorf("failed to create appointment query: %w", err)
 	}
-	appointmentService, err := appointment.NewService(appointmentRepo, appointmentMetrics)
+	appointmentService, err := appointment.NewService(appointmentRepo, appMetrics)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create appointment service: %w", err)
 	}
@@ -116,7 +116,7 @@ func newDependencies(pool *pgxpool.Pool, appointmentMetrics *metrics.Metrics) (*
 	}
 
 	return &dependencies{
-		passwordHasher:      password.NewArgon2(),
+		passwordHasher:      password.NewArgon2(appMetrics),
 		readinessCheck:      readinessCheck,
 		appointmentQuery:    appointmentQuery,
 		appointmentService:  appointmentService,

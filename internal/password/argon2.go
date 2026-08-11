@@ -52,11 +52,16 @@ type Argon2 struct {
 	saltLen     uint32
 	keyLen      uint32
 	sem         chan struct{}
+	metrics     Metrics
 }
 
 // NewArgon2 builds a hasher whose concurrency budget is shared by every caller
-// in the process.
-func NewArgon2() *Argon2 {
+// in the process. A nil hashMetrics disables instrumentation.
+func NewArgon2(hashMetrics Metrics) *Argon2 {
+	if hashMetrics == nil {
+		hashMetrics = noopMetrics{}
+	}
+
 	return &Argon2{
 		memory:      defaultMemoryKiB,
 		iterations:  defaultIterations,
@@ -64,6 +69,7 @@ func NewArgon2() *Argon2 {
 		saltLen:     defaultSaltLenBytes,
 		keyLen:      defaultKeyLenBytes,
 		sem:         make(chan struct{}, maxConcurrentHashes),
+		metrics:     hashMetrics,
 	}
 }
 
@@ -141,19 +147,31 @@ func (a *Argon2) Compare(ctx context.Context, encodedHash, plainPassword string)
 // for one to free up. Waiting costs nothing but a blocked goroutine — the
 // memory bound the slots exist to enforce is paid only by the holders.
 func (a *Argon2) acquire(ctx context.Context) error {
+	start := time.Now()
+
 	ctx, cancel := context.WithTimeout(ctx, maxQueueWait)
 	defer cancel()
 
 	select {
 	case a.sem <- struct{}{}:
+		a.metrics.ObservePasswordQueueWait(ctx, time.Since(start))
 		return nil
 	case <-ctx.Done():
+		a.metrics.RecordPasswordQueueTimeout(waitFailureReason(ctx.Err()))
 		return fmt.Errorf("%w: %w", ErrTooManyConcurrentHashes, ctx.Err())
 	}
 }
 
 func (a *Argon2) release() {
 	<-a.sem
+}
+
+func waitFailureReason(err error) string {
+	if errors.Is(err, context.DeadlineExceeded) {
+		return waitFailureTimeout
+	}
+
+	return waitFailureClientCancelled
 }
 
 func parsePHCEncodedHash(encodedHash string) (*parsedPHC, error) {
