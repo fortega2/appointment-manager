@@ -2,6 +2,7 @@ package assistant
 
 import (
 	"appointment-manager/internal/domain"
+	"appointment-manager/internal/password"
 	"appointment-manager/internal/web"
 	"context"
 	"encoding/json"
@@ -144,7 +145,7 @@ func (h *Handler) createHandler() http.HandlerFunc {
 
 		id, err := h.service.Create(r.Context(), CreateInput(req))
 		if err != nil {
-			if !isValidationError(err) && !errors.Is(err, ErrEmailAlreadyExists) {
+			if !isExpectedCreateError(err) {
 				h.logger.ErrorContext(r.Context(), "failed to create assistant", slog.Any("error", err))
 			}
 			web.WriteProblem(w, problemFromCreateError(err, r.URL.Path))
@@ -163,4 +164,12 @@ func isValidationError(err error) bool {
 		errors.Is(err, ErrEmailRequired) ||
 		errors.Is(err, ErrEmailHasNoSign) ||
 		errors.Is(err, ErrPasswordRequired)
+}
+
+// isExpectedCreateError reports whether err is a rejection the caller caused or
+// must simply retry, as opposed to a server fault worth an error log.
+func isExpectedCreateError(err error) bool {
+	return isValidationError(err) ||
+		errors.Is(err, ErrEmailAlreadyExists) ||
+		errors.Is(err, password.ErrTooManyConcurrentHashes)
 }

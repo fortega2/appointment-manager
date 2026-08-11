@@ -2,6 +2,7 @@ package assistant_test
 
 import (
 	"appointment-manager/internal/assistant"
+	"appointment-manager/internal/password"
 	"bytes"
 	"context"
 	"errors"
@@ -43,6 +44,7 @@ const (
 	handlerCaseNotFound             = "not found"
 	handlerCaseValidationError      = "validation error"
 	handlerCaseEmptyHashError       = "empty hash error"
+	handlerCaseHashQueueTimeout     = "hash queue timeout"
 	handlerCaseInvalidJSON          = "invalid json"
 	handlerCaseMissingContentType   = "missing content type"
 	handlerCaseUnknownField         = "unknown field"
@@ -465,6 +467,29 @@ func TestCreateEndpoint(t *testing.T) {
 		mux.ServeHTTP(rec, req)
 
 		assert.Equal(t, http.StatusConflict, rec.Code)
+		assert.Equal(t, handlerApplicationProblemJSON, rec.Header().Get(handlerContentType))
+		svc.AssertExpectations(t)
+	})
+
+	t.Run(handlerCaseHashQueueTimeout, func(t *testing.T) {
+		t.Parallel()
+
+		svc := new(mockService)
+		svc.On("Create", mock.Anything, assistant.CreateInput{
+			FirstName: handlerAssistantNames,
+			LastName:  handlerAssistantLastNames,
+			Email:     handlerAssistantEmail,
+			Password:  handlerAssistantPlainPassword,
+		}).Return(uuid.Nil, password.ErrTooManyConcurrentHashes).Once()
+
+		mux := newMuxWithHandler(t, svc)
+
+		req := newCreateAssistantRequest(handlerCreateAssistantBody)
+		rec := httptest.NewRecorder()
+
+		mux.ServeHTTP(rec, req)
+
+		assert.Equal(t, http.StatusServiceUnavailable, rec.Code)
 		assert.Equal(t, handlerApplicationProblemJSON, rec.Header().Get(handlerContentType))
 		svc.AssertExpectations(t)
 	})

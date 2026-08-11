@@ -1,6 +1,7 @@
 package assistant
 
 import (
+	"appointment-manager/internal/password"
 	"appointment-manager/internal/web"
 	"errors"
 	"net/http"
@@ -18,6 +19,7 @@ const (
 	detailFailedToGetAssistant        = "failed to get assistant"
 	detailFailedToEncodeGetResponse   = "failed to encode assistant response"
 	detailFailedToCreateAssistant     = "failed to create assistant"
+	detailServerBusy                  = "Server is busy, please try again"
 )
 
 func problemAssistantIDNotFound(path string) web.ProblemDetail {
@@ -54,6 +56,8 @@ func problemFromCreateError(err error, path string) web.ProblemDetail {
 		return web.NewProblem(http.StatusUnprocessableEntity, web.ProblemTypeValidationFailed, err.Error(), path)
 	case errors.Is(err, ErrEmailAlreadyExists):
 		return web.NewProblem(http.StatusConflict, web.ProblemTypeConflict, detailAssistantEmailAlreadyExists, path)
+	case errors.Is(err, password.ErrTooManyConcurrentHashes):
+		return web.NewProblem(http.StatusServiceUnavailable, web.ProblemTypeServiceUnavailable, detailServerBusy, path)
 	default:
 		return web.NewInternalServerProblem(detailFailedToCreateAssistant, path)
 	}
