@@ -17,6 +17,14 @@ jobs:
       - name: Checkout
         uses: https://code.forgejo.org/actions/checkout@v4
 
+      - name: Cache bucket date
+        id: cache-date
+        run: echo "day=$(date -u +%Y-%m-%d)" >> "$GITHUB_OUTPUT"
+
+      # The key rotates daily, not per commit: a per-SHA key never hits the primary key, so every
+      # push re-uploaded ~166 MB and the runner's cache store (GC'd only by age) grew unbounded.
+      # Beware that `path` and the runner image's compression tools (gzip vs zstd) are part of the
+      # entry's version hash, not of the key — changing either invalidates every existing entry.
       - name: Cache Go modules
         uses: https://code.forgejo.org/actions/cache@v4
         with:
@@ -24,9 +32,10 @@ jobs:
             ~/go/pkg/mod
             ~/.cache/go-build
             ~/.cache/golangci-lint
-          key: go-${{ hashFiles('go.sum') }}-${{ github.sha }}
+          key: go-${{ hashFiles('go.sum') }}-${{ steps.cache-date.outputs.day }}
           restore-keys: |
             go-${{ hashFiles('go.sum') }}-
+            go-
 
       - name: Download dependencies
         run: go mod download
