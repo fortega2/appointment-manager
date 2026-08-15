@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"appointment-manager/internal/web"
 	"bufio"
 	"io"
 	"log/slog"
@@ -9,8 +10,6 @@ import (
 	"strings"
 	"time"
 )
-
-const realIPHeader = "X-Real-Ip"
 
 type responseRecorder struct {
 	http.ResponseWriter
@@ -146,23 +145,23 @@ func RequestLogger(logger *slog.Logger) func(http.Handler) http.Handler {
 	}
 }
 
-// remoteIP prefers the X-Real-IP header over the TCP peer address. The app is
-// only reachable through Caddy (see docker/docker-compose.yml: the container
-// has no published host ports), and the Caddyfile overwrites this header with
-// the proxy's own view of the peer via `header_up X-Real-IP {remote_host}`, so
-// it can't be spoofed by a client and is always the real client IP rather than
-// Caddy's container address.
+// remoteIP resolves the client address for the log line. It defers to
+// web.ClientIP so the logger and the login rate limiter never disagree about
+// who a request came from; the trust model behind the header lives there.
+//
+// Where web.ClientIP finds nothing parseable it reports nothing, but a log line
+// is better off with the raw value than with a blank: an unparseable address is
+// itself worth seeing.
 func remoteIP(r *http.Request) string {
-	if realIP := strings.TrimSpace(r.Header.Get(realIPHeader)); realIP != "" {
+	if addr, ok := web.ClientIP(r); ok {
+		return addr.String()
+	}
+
+	if realIP := strings.TrimSpace(r.Header.Get(web.RealIPHeader)); realIP != "" {
 		return realIP
 	}
 
-	host, _, err := net.SplitHostPort(r.RemoteAddr)
-	if err != nil {
-		return r.RemoteAddr
-	}
-
-	return host
+	return r.RemoteAddr
 }
 
 func requestRoute(r *http.Request) string {

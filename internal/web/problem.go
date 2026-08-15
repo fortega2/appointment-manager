@@ -10,6 +10,9 @@ const (
 
 	detailServerBusy = "Server is busy, please try again"
 
+	//nolint:gosec // G101 false positive: user-facing copy, not a credential.
+	detailTooManyLoginAttempts = "Too many login attempts, please try again later"
+
 	ProblemTypeInvalidJSON          = "/problems/invalid-json"
 	ProblemTypeUnsupportedMediaType = "/problems/unsupported-media-type"
 	ProblemTypeRequestBodyTooLarge  = "/problems/request-body-too-large"
@@ -19,6 +22,7 @@ const (
 	ProblemTypeInternalServerError  = "/problems/internal-server-error"
 	ProblemTypeUnauthorized         = "/problems/unauthorized"
 	ProblemTypeServiceUnavailable   = "/problems/service-unavailable"
+	ProblemTypeTooManyRequests      = "/problems/too-many-requests"
 )
 
 type ProblemDetail struct {
@@ -48,6 +52,14 @@ func NewInternalServerProblem(detail, instance string) ProblemDetail {
 // resource answers identically.
 func NewServiceUnavailableProblem(instance string) ProblemDetail {
 	return NewProblem(http.StatusServiceUnavailable, ProblemTypeServiceUnavailable, detailServerBusy, instance)
+}
+
+// NewTooManyRequestsProblem is the one 429 body for a caller that has spent its
+// login allowance. It says nothing about whether the account exists, so it
+// carries no signal a caller could probe. Pair it with SetRetryAfter, which is
+// what tells the caller when to come back.
+func NewTooManyRequestsProblem(instance string) ProblemDetail {
+	return NewProblem(http.StatusTooManyRequests, ProblemTypeTooManyRequests, detailTooManyLoginAttempts, instance)
 }
 
 func WriteProblem(w http.ResponseWriter, problem ProblemDetail) {

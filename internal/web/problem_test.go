@@ -14,6 +14,7 @@ import (
 const (
 	problemContentType = "Content-Type"
 	problemJSONType    = "application/problem+json"
+	loginInstance      = "/api/v1/auth/login"
 )
 
 func TestWriteProblem(t *testing.T) {
@@ -58,4 +59,16 @@ func TestWriteProblem(t *testing.T) {
 		assert.Equal(t, http.StatusInternalServerError, decoded.Status)
 		assert.Equal(t, http.StatusText(http.StatusInternalServerError), decoded.Title)
 	})
+}
+
+func TestNewTooManyRequestsProblem(t *testing.T) {
+	t.Parallel()
+
+	problem := web.NewTooManyRequestsProblem(loginInstance)
+
+	assert.Equal(t, http.StatusTooManyRequests, problem.Status)
+	assert.Equal(t, web.ProblemTypeTooManyRequests, problem.Type)
+	assert.Equal(t, http.StatusText(http.StatusTooManyRequests), problem.Title)
+	assert.Equal(t, loginInstance, problem.Instance)
+	assert.NotEmpty(t, problem.Detail)
 }
