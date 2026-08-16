@@ -7,10 +7,12 @@ import (
 	"appointment-manager/internal/auth"
 	"appointment-manager/internal/db"
 	"appointment-manager/internal/password"
+	"appointment-manager/internal/ratelimit"
 	"appointment-manager/internal/session"
 	"context"
 	"log/slog"
 	"net/http"
+	"sync"
 	"testing"
 	"time"
 
@@ -26,6 +28,10 @@ const (
 	authIntegrationDBUser   = "appointment_user"
 	authIntegrationDBPass   = "appointment_password"
 	authIntegrationSSLParam = "sslmode=disable"
+
+	authRoomyBurst        = 1000
+	authLimiterRefill     = time.Minute
+	authLimiterMaxEntries = 128
 )
 
 func newAuthIntegrationPool(ctx context.Context, t *testing.T) *pgxpool.Pool {
@@ -64,17 +70,28 @@ func newAuthIntegrationRepository(t *testing.T, pool *pgxpool.Pool) *assistant.P
 
 // stubSessionStorer is an in-memory session.Storer. The integration tests here
 // cover the auth handlers, not session persistence, which has its own suite.
+//
+// The mutex is load-bearing: TestLoginQueuesConcurrentPasswordChecks drives ten
+// logins at once and every one of them reaches Create, so an unguarded map here
+// is a data race in the test rather than in the code under test.
 type stubSessionStorer struct {
+	mu       sync.Mutex
 	sessions map[string]session.Session
 }
 
 func (s *stubSessionStorer) Create(_ context.Context, value session.Session) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
 	s.sessions[value.ID] = value
 
 	return nil
 }
 
 func (s *stubSessionStorer) Get(_ context.Context, id string) (*session.Session, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
 	value, ok := s.sessions[id]
 	if !ok {
 		return nil, session.ErrSessionNotFound
@@ -85,6 +102,9 @@ func (s *stubSessionStorer) Get(_ context.Context, id string) (*session.Session,
 }
 
 func (s *stubSessionStorer) Delete(_ context.Context, id string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
 	if _, ok := s.sessions[id]; !ok {
 		return session.ErrSessionNotFound
 	}
@@ -94,6 +114,9 @@ func (s *stubSessionStorer) Delete(_ context.Context, id string) error {
 }
 
 func (s *stubSessionStorer) DeleteExpired(_ context.Context, before time.Time) (int64, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
 	removed := int64(0)
 	for id, value := range s.sessions {
 		if before.After(value.ExpiresAt) {
@@ -114,15 +137,50 @@ func newTestSessionStore(t *testing.T) *session.Store {
 	return store
 }
 
+// newAuthIntegrationLimiter builds a limiter roomy enough that no test trips it
+// by accident; tests about the limit itself ask for one sized to trip.
+func newAuthIntegrationLimiter(t *testing.T, cfg ratelimit.Config) *ratelimit.Limiter {
+	t.Helper()
+
+	limiter, err := ratelimit.New(cfg, nil)
+	require.NoError(t, err)
+
+	return limiter
+}
+
+func authRoomyLimiterConfig() ratelimit.Config {
+	return ratelimit.Config{
+		Enabled:       true,
+		AccountBurst:  authRoomyBurst,
+		AccountRefill: authLimiterRefill,
+		IPBurst:       authRoomyBurst,
+		IPRefill:      authLimiterRefill,
+		MaxEntries:    authLimiterMaxEntries,
+	}
+}
+
+// authDisabledLimiterConfig is for the tests that drive concurrent logins to
+// exercise something else -- the Argon2 queue -- and would otherwise be refused
+// by the limit before ever reaching it.
+func authDisabledLimiterConfig() ratelimit.Config {
+	cfg := authRoomyLimiterConfig()
+	cfg.Enabled = false
+
+	return cfg
+}
+
 func newAuthIntegrationMux(
 	t *testing.T,
 	repo *assistant.PostgresRepository,
 	store *session.Store,
+	cfg ratelimit.Config,
 	isDev bool,
 ) *http.ServeMux {
 	t.Helper()
 
-	h, err := auth.NewHandler(slog.New(slog.DiscardHandler), store, repo, password.NewArgon2(nil), isDev)
+	limiter := newAuthIntegrationLimiter(t, cfg)
+
+	h, err := auth.NewHandler(slog.New(slog.DiscardHandler), store, repo, password.NewArgon2(nil), limiter, isDev)
 	require.NoError(t, err)
 
 	mux := http.NewServeMux()
