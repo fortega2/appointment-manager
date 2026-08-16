@@ -64,6 +64,43 @@ func TestNewInitialisesFailureReasonsAtZero(t *testing.T) {
 	assert.Contains(t, body, `appt_password_queue_timeouts_total{reason="client_cancelled"} 0`)
 	assert.Contains(t, body, `appt_notifications_dropped_total{reason="queue_full"} 0`)
 	assert.Contains(t, body, `appt_notifications_dropped_total{reason="unknown_kind"} 0`)
+	assert.Contains(t, body, `appt_login_rate_limited_total{scope="account"} 0`)
+	assert.Contains(t, body, `appt_login_rate_limited_total{scope="ip"} 0`)
+}
+
+func TestLoginRateLimitRecorders(t *testing.T) {
+	t.Parallel()
+
+	m := New()
+
+	m.RecordLoginRateLimitedByAccount()
+	m.RecordLoginRateLimitedByAccount()
+	m.RecordLoginRateLimitedByIP()
+	m.RecordLoginRateLimitEvicted()
+
+	assert.InDelta(t, 2.0, testutil.ToFloat64(m.loginRateLimited.WithLabelValues(rateLimitScopeAccount)), 0.0001)
+	assert.InDelta(t, 1.0, testutil.ToFloat64(m.loginRateLimited.WithLabelValues(rateLimitScopeIP)), 0.0001)
+	assert.InDelta(t, 1.0, testutil.ToFloat64(m.loginRateLimiterEvictions), 0.0001)
+}
+
+func TestRegisterLoginRateLimiterExposesBothScopes(t *testing.T) {
+	t.Parallel()
+
+	m := New()
+
+	m.RegisterLoginRateLimiter(func() float64 { return 3 }, func() float64 { return 7 })
+
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, metricsEndpoint, nil)
+	rec := httptest.NewRecorder()
+	m.Handler().ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code)
+
+	// Both gauges share a name and differ only by a const label, so this also
+	// pins that registering them side by side does not collide.
+	body := rec.Body.String()
+	assert.Contains(t, body, `appt_login_rate_limiter_entries{scope="account"} 3`)
+	assert.Contains(t, body, `appt_login_rate_limiter_entries{scope="ip"} 7`)
 }
 
 func TestBusinessRecorders(t *testing.T) {

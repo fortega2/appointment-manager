@@ -25,6 +25,7 @@ const (
 	subsystemAppointments  = "appointments"
 	subsystemNotifications = "notifications"
 	subsystemPassword      = "password"
+	subsystemLogin         = "login"
 )
 
 const (
@@ -47,6 +48,14 @@ const (
 const (
 	queueWaitFailureTimeout         = "timeout"
 	queueWaitFailureClientCancelled = "client_cancelled"
+)
+
+// Which key ran out of login allowance. account rising while ip stays flat is
+// the signature of distributed credential stuffing — many hosts converging on
+// one account — which is the case an IP-keyed edge proxy cannot see at all.
+const (
+	rateLimitScopeAccount = "account"
+	rateLimitScopeIP      = "ip"
 )
 
 // What became of a notification the drain picked up. no_recipients is a normal
@@ -97,6 +106,9 @@ type Metrics struct {
 
 	passwordQueueWait     prometheus.Histogram
 	passwordQueueTimeouts *prometheus.CounterVec
+
+	loginRateLimited          *prometheus.CounterVec
+	loginRateLimiterEvictions prometheus.Counter
 }
 
 // New builds a Metrics backed by a private registry (never the global default)
@@ -258,6 +270,33 @@ func New() *Metrics {
 		[]string{"reason"},
 	)
 
+	// Dashboard: sum by (scope) (rate(appt_login_rate_limited_total[5m]))
+	// Alert:     increase(appt_login_rate_limited_total{scope="account"}[15m]) > 0
+	loginRateLimited := factory.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: namespace,
+			Subsystem: subsystemLogin,
+			Name:      "rate_limited_total",
+			Help:      "Total number of login attempts refused for exceeding their allowance, by key.",
+		},
+		[]string{"scope"},
+	)
+
+	// Dashboard: rate(appt_login_rate_limiter_evictions_total[5m])
+	// Alert:     increase(appt_login_rate_limiter_evictions_total[15m]) > 0
+	//
+	// Evicting drops a key that may still owe time, so this staying at zero is
+	// what keeps the limiter's memory honest. Anything above it means the entry
+	// cap is being reached: either an attack, or a cap set too low.
+	loginRateLimiterEvictions := factory.NewCounter(
+		prometheus.CounterOpts{
+			Namespace: namespace,
+			Subsystem: subsystemLogin,
+			Name:      "rate_limiter_evictions_total",
+			Help:      "Total number of rate-limiter entries dropped to stay within the entry cap.",
+		},
+	)
+
 	// WithLabelValues creates a child lazily, so a reason that never fired has no
 	// series at all — and one born carrying its first burst shows increase() = 0,
 	// because Prometheus never observed the step up from zero. Registering every
@@ -266,6 +305,8 @@ func New() *Metrics {
 	passwordQueueTimeouts.WithLabelValues(queueWaitFailureClientCancelled)
 	notificationsDropped.WithLabelValues(dropReasonQueueFull)
 	notificationsDropped.WithLabelValues(dropReasonUnknownKind)
+	loginRateLimited.WithLabelValues(rateLimitScopeAccount)
+	loginRateLimited.WithLabelValues(rateLimitScopeIP)
 
 	return &Metrics{
 		reg:                      reg,
@@ -281,6 +322,9 @@ func New() *Metrics {
 		notificationSendDuration: notificationSendDuration,
 		passwordQueueWait:        passwordQueueWait,
 		passwordQueueTimeouts:    passwordQueueTimeouts,
+
+		loginRateLimited:          loginRateLimited,
+		loginRateLimiterEvictions: loginRateLimiterEvictions,
 	}
 }
 
@@ -407,6 +451,59 @@ func (m *Metrics) RegisterNotificationQueue(depth, capacity func() float64) {
 			Help:      "Configured maximum number of notifications the queue can hold.",
 		},
 		capacity,
+	)
+}
+
+// RecordLoginRateLimitedByAccount counts one login attempt refused because the
+// account had spent its allowance. This series rising while the ip one stays
+// flat is distributed credential stuffing, the case an IP-keyed edge proxy is
+// structurally unable to see.
+func (m *Metrics) RecordLoginRateLimitedByAccount() {
+	m.loginRateLimited.WithLabelValues(rateLimitScopeAccount).Inc()
+}
+
+// RecordLoginRateLimitedByIP counts one login attempt refused because the
+// address had spent its allowance.
+func (m *Metrics) RecordLoginRateLimitedByIP() {
+	m.loginRateLimited.WithLabelValues(rateLimitScopeIP).Inc()
+}
+
+// RecordLoginRateLimitEvicted counts one rate-limiter entry dropped to stay
+// within the entry cap. An eviction can forget a key that still owed time, so
+// this is expected to sit at zero and to move only under abuse.
+func (m *Metrics) RecordLoginRateLimitEvicted() {
+	m.loginRateLimiterEvictions.Inc()
+}
+
+// RegisterLoginRateLimiter registers gauges reporting how many keys the login
+// rate limiter is tracking. Both are read on scrape rather than written on
+// change, so an idle limiter costs nothing and the gauges cannot drift from the
+// maps they describe.
+func (m *Metrics) RegisterLoginRateLimiter(accounts, addresses func() float64) {
+	factory := promauto.With(m.reg)
+
+	// Dashboard: appt_login_rate_limiter_entries
+	// Alert:     appt_login_rate_limiter_entries > 8000
+	factory.NewGaugeFunc(
+		prometheus.GaugeOpts{
+			Namespace:   namespace,
+			Subsystem:   subsystemLogin,
+			Name:        "rate_limiter_entries",
+			Help:        "Number of keys the login rate limiter is currently tracking.",
+			ConstLabels: prometheus.Labels{"scope": rateLimitScopeAccount},
+		},
+		accounts,
+	)
+
+	factory.NewGaugeFunc(
+		prometheus.GaugeOpts{
+			Namespace:   namespace,
+			Subsystem:   subsystemLogin,
+			Name:        "rate_limiter_entries",
+			Help:        "Number of keys the login rate limiter is currently tracking.",
+			ConstLabels: prometheus.Labels{"scope": rateLimitScopeIP},
+		},
+		addresses,
 	)
 }
 
