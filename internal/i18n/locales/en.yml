@@ -30,6 +30,7 @@ en:
       password: "Error verifying password"
       session: "Internal error creating the session"
       busy: "Server is busy, please try again"
+      rate_limited: "Too many attempts. Try again in %{seconds} seconds"
   home:
     title: "Dashboard"
     welcome: "Welcome to Appointment Manager"

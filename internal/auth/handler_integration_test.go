@@ -54,7 +54,7 @@ func TestLoginEndpointSuccessSetsCookieAndCreatesSession(t *testing.T) {
 	pool := newAuthIntegrationPool(ctx, t)
 	repo := newAuthIntegrationRepository(t, pool)
 	store := newTestSessionStore(t)
-	mux := newAuthIntegrationMux(t, repo, store, true)
+	mux := newAuthIntegrationMux(t, repo, store, authRoomyLimiterConfig(), true)
 
 	assistantID := seedAssistantForAuth(ctx, t, repo, authEmail, authPassword)
 
@@ -83,7 +83,7 @@ func TestLoginEndpointUnauthorizedForWrongPassword(t *testing.T) {
 
 	pool := newAuthIntegrationPool(ctx, t)
 	repo := newAuthIntegrationRepository(t, pool)
-	mux := newAuthIntegrationMux(t, repo, newTestSessionStore(t), true)
+	mux := newAuthIntegrationMux(t, repo, newTestSessionStore(t), authRoomyLimiterConfig(), true)
 
 	seedAssistantForAuth(ctx, t, repo, authEmail, authPassword)
 
@@ -102,7 +102,7 @@ func TestLoginEndpointUnauthorizedForUnknownEmail(t *testing.T) {
 
 	pool := newAuthIntegrationPool(ctx, t)
 	repo := newAuthIntegrationRepository(t, pool)
-	mux := newAuthIntegrationMux(t, repo, newTestSessionStore(t), true)
+	mux := newAuthIntegrationMux(t, repo, newTestSessionStore(t), authRoomyLimiterConfig(), true)
 
 	req := newAuthRequest(ctx, http.MethodPost, authPathLogin, authBodyUnknownEmail)
 	rec := httptest.NewRecorder()
@@ -119,7 +119,7 @@ func TestLogoutEndpointIsIdempotent(t *testing.T) {
 	pool := newAuthIntegrationPool(ctx, t)
 	repo := newAuthIntegrationRepository(t, pool)
 	store := newTestSessionStore(t)
-	mux := newAuthIntegrationMux(t, repo, store, true)
+	mux := newAuthIntegrationMux(t, repo, store, authRoomyLimiterConfig(), true)
 
 	sessionID, err := store.Create(t.Context(), "assistant-1")
 	require.NoError(t, err)
@@ -150,7 +150,7 @@ func TestLoginEndpointSetsSecureCookieOutsideDevelopment(t *testing.T) {
 
 	pool := newAuthIntegrationPool(ctx, t)
 	repo := newAuthIntegrationRepository(t, pool)
-	mux := newAuthIntegrationMux(t, repo, newTestSessionStore(t), false)
+	mux := newAuthIntegrationMux(t, repo, newTestSessionStore(t), authRoomyLimiterConfig(), false)
 
 	seedAssistantForAuth(ctx, t, repo, authEmail, authPassword)
 
@@ -188,7 +188,10 @@ func TestLoginQueuesConcurrentPasswordChecks(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			pool := newAuthIntegrationPool(ctx, t)
 			repo := newAuthIntegrationRepository(t, pool)
-			mux := newAuthIntegrationMux(t, repo, newTestSessionStore(t), true)
+			// The limiter is off here on purpose: this test is about the Argon2
+			// queue, and the limiter sits in front of it, so leaving it on would
+			// mean asserting on a refusal that never reaches the semaphore.
+			mux := newAuthIntegrationMux(t, repo, newTestSessionStore(t), authDisabledLimiterConfig(), true)
 
 			seedAssistantForAuth(ctx, t, repo, authEmail, authPassword)
 
@@ -222,7 +225,7 @@ func TestProcessLoginUIHandlerSuccessSetsCookieAndRedirects(t *testing.T) {
 	pool := newAuthIntegrationPool(ctx, t)
 	repo := newAuthIntegrationRepository(t, pool)
 	store := newTestSessionStore(t)
-	mux := newAuthIntegrationMux(t, repo, store, true)
+	mux := newAuthIntegrationMux(t, repo, store, authRoomyLimiterConfig(), true)
 
 	assistantID := seedAssistantForAuth(ctx, t, repo, authEmail, authPassword)
 
@@ -249,7 +252,7 @@ func TestProcessLoginUIHandlerRendersErrorForWrongPassword(t *testing.T) {
 
 	pool := newAuthIntegrationPool(ctx, t)
 	repo := newAuthIntegrationRepository(t, pool)
-	mux := newAuthIntegrationMux(t, repo, newTestSessionStore(t), true)
+	mux := newAuthIntegrationMux(t, repo, newTestSessionStore(t), authRoomyLimiterConfig(), true)
 
 	seedAssistantForAuth(ctx, t, repo, authEmail, authPassword)
 

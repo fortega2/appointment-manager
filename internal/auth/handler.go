@@ -4,6 +4,7 @@ import (
 	"appointment-manager/internal/assistant"
 	"appointment-manager/internal/i18n"
 	"appointment-manager/internal/password"
+	"appointment-manager/internal/ratelimit"
 	"appointment-manager/internal/session"
 	"appointment-manager/internal/ui/auth"
 	"appointment-manager/internal/web"
@@ -27,8 +28,9 @@ const (
 	//nolint:gosec // G101 false positive: a message catalog key, not a credential.
 	loginErrorCredentialsKey string = "auth.error.credentials"
 	//nolint:gosec // G101 false positive: a message catalog key, not a credential.
-	loginErrorPasswordKey string = "auth.error.password"
-	loginErrorSessionKey  string = "auth.error.session"
+	loginErrorPasswordKey    string = "auth.error.password"
+	loginErrorSessionKey     string = "auth.error.session"
+	loginErrorRateLimitedKey string = "auth.error.rate_limited"
 
 	// dummyHash is compared against when an email is unknown, so that
 	// path costs the same as a real verification and cannot be used to probe
@@ -41,10 +43,18 @@ type Handler struct {
 	store         *session.Store
 	repo          *assistant.PostgresRepository
 	pass          *password.Argon2
+	limiter       *ratelimit.Limiter
 	isDevelopment bool
 }
 
-func NewHandler(logger *slog.Logger, store *session.Store, repo *assistant.PostgresRepository, pass *password.Argon2, isDev bool) (*Handler, error) {
+func NewHandler(
+	logger *slog.Logger,
+	store *session.Store,
+	repo *assistant.PostgresRepository,
+	pass *password.Argon2,
+	limiter *ratelimit.Limiter,
+	isDev bool,
+) (*Handler, error) {
 	if logger == nil {
 		return nil, ErrNilLogger
 	}
@@ -57,12 +67,16 @@ func NewHandler(logger *slog.Logger, store *session.Store, repo *assistant.Postg
 	if pass == nil {
 		return nil, ErrNilPasswordHasher
 	}
+	if limiter == nil {
+		return nil, ErrNilRateLimiter
+	}
 
 	return &Handler{
 		logger:        logger,
 		store:         store,
 		repo:          repo,
 		pass:          pass,
+		limiter:       limiter,
 		isDevelopment: isDev,
 	}, nil
 }
@@ -92,11 +106,18 @@ func (h *Handler) loginAPIHandler() http.HandlerFunc {
 			return
 		}
 
+		if _, allowed := h.checkRateLimit(w, r, req.Email); !allowed {
+			web.WriteProblem(w, web.NewTooManyRequestsProblem(r.URL.Path))
+			return
+		}
+
 		a, err := h.verifyCredentials(r.Context(), req.Email, req.Password)
 		if err != nil {
 			web.WriteProblem(w, loginProblem(err, r.URL.Path))
 			return
 		}
+
+		h.recordLoginSuccess(w, r, req.Email)
 
 		sessionID, err := h.store.Create(r.Context(), a.ID.String())
 		if err != nil {
@@ -121,6 +142,51 @@ func (h *Handler) loginAPIHandler() http.HandlerFunc {
 			SameSite: http.SameSiteStrictMode,
 		})
 		w.WriteHeader(http.StatusOK)
+	}
+}
+
+// checkRateLimit charges one attempt against the login allowance, writes the
+// advisory headers and reports whether the caller may go on to the password
+// check. It runs before verifyCredentials on purpose: a refused attempt then
+// costs no Argon2 slot, which is the whole point of having it here rather than
+// after the fact.
+//
+// A request whose address cannot be resolved shares one bucket with every other
+// such request. That is a fallback for a case this deployment does not produce
+// — the app is only reachable through a proxy that always sets the header — and
+// collapsing them is safer than handing each an unlimited budget.
+func (h *Handler) checkRateLimit(w http.ResponseWriter, r *http.Request, email string) (ratelimit.Decision, bool) {
+	addr, _ := web.ClientIP(r)
+
+	decision := h.limiter.Allow(addr, email)
+	if !decision.Enforced() {
+		return decision, true
+	}
+
+	web.SetRateLimitHeaders(w.Header(), decision.Limit, decision.Remaining, decision.Reset)
+	if !decision.Allowed {
+		web.SetRetryAfter(w.Header(), decision.RetryAfter)
+		// The address is logged but the email is not: it is attacker-controlled
+		// and bounded only by maxBytesReader, so it has no place in a log line.
+		h.logger.WarnContext(
+			r.Context(),
+			"login attempt refused for exceeding its allowance",
+			slog.String("client_ip", addr.String()),
+			slog.Int64("retry_after_seconds", web.RetryAfterSeconds(decision.RetryAfter)))
+	}
+
+	return decision, decision.Allowed
+}
+
+// recordLoginSuccess credits a login that passed the password check, which puts
+// the account's allowance back to full, and rewrites the headers so they do not
+// keep advertising the budget the attempt was charged before it was credited.
+func (h *Handler) recordLoginSuccess(w http.ResponseWriter, r *http.Request, email string) {
+	addr, _ := web.ClientIP(r)
+
+	credited := h.limiter.RecordSuccess(addr, email)
+	if credited.Enforced() {
+		web.SetRateLimitHeaders(w.Header(), credited.Limit, credited.Remaining, credited.Reset)
 	}
 }
 
@@ -215,6 +281,17 @@ func (h *Handler) processLoginUIHandler() http.HandlerFunc {
 			return
 		}
 
+		decision, allowed := h.checkRateLimit(w, r, email)
+		if !allowed {
+			h.renderError(
+				w, r,
+				http.StatusTooManyRequests,
+				loginErrorRateLimitedKey,
+				i18n.M{"seconds": web.RetryAfterSeconds(decision.RetryAfter)})
+
+			return
+		}
+
 		a, err := h.verifyCredentials(r.Context(), email, pass)
 		if err != nil {
 			switch {
@@ -227,6 +304,8 @@ func (h *Handler) processLoginUIHandler() http.HandlerFunc {
 			}
 			return
 		}
+
+		h.recordLoginSuccess(w, r, email)
 
 		sessionID, err := h.store.Create(r.Context(), a.ID.String())
 		if err != nil {
@@ -269,10 +348,14 @@ func (h *Handler) parseLoginForm(r *http.Request, w http.ResponseWriter) (string
 }
 
 // renderError writes the login form's inline error. It takes a catalog key
-// rather than a message so the copy follows the request's locale.
-func (h *Handler) renderError(w http.ResponseWriter, r *http.Request, status int, messageKey string) {
+// rather than a message so the copy follows the request's locale, and args for
+// the keys whose copy interpolates a value.
+//
+// Any header the response needs must already be set: this writes the status
+// line, after which net/http discards further header writes.
+func (h *Handler) renderError(w http.ResponseWriter, r *http.Request, status int, messageKey string, args ...any) {
 	w.WriteHeader(status)
-	if err := auth.LoginError(i18n.T(r.Context(), messageKey)).Render(r.Context(), w); err != nil {
+	if err := auth.LoginError(i18n.T(r.Context(), messageKey, args...)).Render(r.Context(), w); err != nil {
 		h.logger.ErrorContext(r.Context(), renderLoginErroMsg, slog.Any("error", err))
 	}
 }

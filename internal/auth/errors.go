@@ -7,6 +7,7 @@ var (
 	ErrNilSessionStore   = errors.New("session store cannot be nil")
 	ErrNilAssistantRepo  = errors.New("assistant repository cannot be nil")
 	ErrNilPasswordHasher = errors.New("password hasher cannot be nil")
+	ErrNilRateLimiter    = errors.New("rate limiter cannot be nil")
 )
 
 // Outcomes of verifyCredentials. errInvalidCredentials covers both an unknown

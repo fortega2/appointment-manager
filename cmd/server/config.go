@@ -3,6 +3,7 @@ package main
 import (
 	"appointment-manager/internal/db"
 	"appointment-manager/internal/i18n"
+	"appointment-manager/internal/ratelimit"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -42,6 +43,26 @@ const (
 	// close to free.
 	defaultNotificationTickerInterval = time.Minute
 	defaultNotificationBufferSize     = 100
+
+	loginRateLimitEnabledEnv       = "LOGIN_RATE_LIMIT_ENABLED"
+	loginRateLimitAccountBurstEnv  = "LOGIN_RATE_LIMIT_ACCOUNT_BURST"
+	loginRateLimitAccountRefillEnv = "LOGIN_RATE_LIMIT_ACCOUNT_REFILL"
+	loginRateLimitIPBurstEnv       = "LOGIN_RATE_LIMIT_IP_BURST"
+	loginRateLimitIPRefillEnv      = "LOGIN_RATE_LIMIT_IP_REFILL"
+	loginRateLimitMaxEntriesEnv    = "LOGIN_RATE_LIMIT_MAX_ENTRIES"
+	// Five quick attempts absorb a mistyped password; after that the account
+	// earns one every few minutes, which is unremarkable for a person and
+	// useless for a guesser. The address allowance is looser because one
+	// household or clinic can share an address, and refilling to full on a
+	// successful login is what keeps the tighter account limit from stranding
+	// anyone -- there is no password-reset flow to escape it with.
+	defaultLoginRateLimitAccountBurst  = 5
+	defaultLoginRateLimitAccountRefill = 3 * time.Minute
+	defaultLoginRateLimitIPBurst       = 20
+	defaultLoginRateLimitIPRefill      = 30 * time.Second
+	// At roughly 150 bytes per tracked key this caps the limiter near 1.5 MB per
+	// map, which is what bounds its memory against keys an attacker invents.
+	defaultLoginRateLimitMaxEntries = 10_000
 
 	dbPoolMaxConnsEnv              = "DB_POOL_MAX_CONNS"
 	dbPoolMinConnsEnv              = "DB_POOL_MIN_CONNS"
@@ -94,6 +115,110 @@ func parseWorkerInterval(raw string) (time.Duration, error) {
 	}
 
 	return interval, nil
+}
+
+// parseLoginRateLimit reads the LOGIN_RATE_LIMIT_* variables. Each is optional
+// and falls back to its default; a value that is set but malformed or
+// non-positive is rejected so misconfiguration fails fast.
+//
+// These are environment variables rather than constants because they are a
+// product judgement about how much retrying is normal, expected to be retuned
+// as real usage shows up -- unlike password.maxQueueWait, which is derived from
+// a machine constraint and has no business changing per deployment.
+func parseLoginRateLimit(getenv func(string) string) (ratelimit.Config, error) {
+	// An unset variable must never read as "off": the only way to disable the
+	// limiter is to say so.
+	enabled, err := parseBool(getenv(loginRateLimitEnabledEnv), loginRateLimitEnabledEnv, true)
+	if err != nil {
+		return ratelimit.Config{}, err
+	}
+
+	accountBurst, err := parsePositiveInt(getenv(loginRateLimitAccountBurstEnv), loginRateLimitAccountBurstEnv, defaultLoginRateLimitAccountBurst)
+	if err != nil {
+		return ratelimit.Config{}, err
+	}
+
+	accountRefill, err := parsePositiveDuration(getenv(loginRateLimitAccountRefillEnv), loginRateLimitAccountRefillEnv, defaultLoginRateLimitAccountRefill)
+	if err != nil {
+		return ratelimit.Config{}, err
+	}
+
+	ipBurst, err := parsePositiveInt(getenv(loginRateLimitIPBurstEnv), loginRateLimitIPBurstEnv, defaultLoginRateLimitIPBurst)
+	if err != nil {
+		return ratelimit.Config{}, err
+	}
+
+	ipRefill, err := parsePositiveDuration(getenv(loginRateLimitIPRefillEnv), loginRateLimitIPRefillEnv, defaultLoginRateLimitIPRefill)
+	if err != nil {
+		return ratelimit.Config{}, err
+	}
+
+	maxEntries, err := parsePositiveInt(getenv(loginRateLimitMaxEntriesEnv), loginRateLimitMaxEntriesEnv, defaultLoginRateLimitMaxEntries)
+	if err != nil {
+		return ratelimit.Config{}, err
+	}
+
+	return ratelimit.Config{
+		Enabled:       enabled,
+		AccountBurst:  accountBurst,
+		AccountRefill: accountRefill,
+		IPBurst:       ipBurst,
+		IPRefill:      ipRefill,
+		MaxEntries:    maxEntries,
+	}, nil
+}
+
+// parseBool reads an optional boolean, falling back to def when unset.
+func parseBool(raw, name string, def bool) (bool, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return def, nil
+	}
+
+	parsed, err := strconv.ParseBool(raw)
+	if err != nil {
+		return false, fmt.Errorf("invalid %s: %w", name, err)
+	}
+
+	return parsed, nil
+}
+
+// parsePositiveInt reads an optional count that must be at least one, falling
+// back to def when unset.
+func parsePositiveInt(raw, name string, def int) (int, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return def, nil
+	}
+
+	parsed, err := strconv.Atoi(raw)
+	if err != nil {
+		return 0, fmt.Errorf("invalid %s: %w", name, err)
+	}
+	if parsed <= 0 {
+		return 0, fmt.Errorf("invalid %s: must be greater than zero", name)
+	}
+
+	return parsed, nil
+}
+
+// parsePositiveDuration reads an optional Go duration string that must be above
+// zero, falling back to def when unset.
+func parsePositiveDuration(raw, name string, def time.Duration) (time.Duration, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return def, nil
+	}
+
+	parsed, err := time.ParseDuration(raw)
+	if err != nil {
+		return 0, fmt.Errorf("invalid %s: %w", name, err)
+	}
+	if parsed <= 0 {
+		return 0, fmt.Errorf("invalid %s: must be greater than zero", name)
+	}
+
+	return parsed, nil
 }
 
 // stringOrDefault trims raw and returns def when the result is empty, the shared

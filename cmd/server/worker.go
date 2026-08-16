@@ -1,6 +1,7 @@
 package main
 
 import (
+	"appointment-manager/internal/ratelimit"
 	"appointment-manager/internal/session"
 	"appointment-manager/internal/worker"
 	"context"
@@ -11,9 +12,10 @@ import (
 )
 
 const (
-	expireOverdueJobName    = "expire-overdue-appointments"
-	reconcileCancelsJobName = "cancel-appointments-on-blocked-slots"
-	expireSessionsJobName   = "expire-sessions"
+	expireOverdueJobName     = "expire-overdue-appointments"
+	reconcileCancelsJobName  = "cancel-appointments-on-blocked-slots"
+	expireSessionsJobName    = "expire-sessions"
+	sweepLoginLimiterJobName = "sweep-login-rate-limiter"
 )
 
 // startBackgroundWorkers runs the periodic appointment sweeps in the background
@@ -21,13 +23,14 @@ const (
 // until their goroutines have exited, so callers can defer it to keep shutdown
 // ordered ahead of the pool being closed.
 //
-// Both jobs are service methods: the sweeps carry business rules and business
-// metrics, so they stay behind the service rather than being assembled here.
+// Every job is a method on the thing it sweeps: the work carries rules and
+// metrics that belong to its own package rather than being assembled here.
 func startBackgroundWorkers(
 	ctx context.Context,
 	logger *slog.Logger,
 	deps *dependencies,
 	sessionStore *session.Store,
+	loginLimiter *ratelimit.Limiter,
 ) (func(), error) {
 	workerInterval, err := parseWorkerInterval(os.Getenv(workerIntervalEnv))
 	if err != nil {
@@ -41,6 +44,7 @@ func startBackgroundWorkers(
 		{name: expireOverdueJobName, run: deps.appointmentService.ExpireOverdue},
 		{name: reconcileCancelsJobName, run: deps.appointmentService.CancelOnBlockedSlots},
 		{name: expireSessionsJobName, run: sessionStore.DeleteExpired},
+		{name: sweepLoginLimiterJobName, run: loginLimiter.DeleteExpired},
 	}
 
 	stops := make([]func(), 0, len(jobs))

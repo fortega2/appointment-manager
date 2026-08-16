@@ -4,6 +4,7 @@ import (
 	"appointment-manager/internal/i18n"
 	"appointment-manager/internal/metrics"
 	"appointment-manager/internal/middleware"
+	"appointment-manager/internal/ratelimit"
 	"appointment-manager/internal/session"
 	"appointment-manager/internal/storage"
 	"context"
@@ -18,6 +19,7 @@ import (
 type handlerConfig struct {
 	logger           *slog.Logger
 	sessionStore     *session.Store
+	loginLimiter     *ratelimit.Limiter
 	deps             *dependencies
 	storageClient    *storage.Client
 	metrics          *metrics.Metrics
@@ -30,7 +32,7 @@ type handlerConfig struct {
 // are returned wrapped rather than logged here: run logs them once, so the
 // context of the failure is carried by the error chain itself.
 func initializeServerHandlers(cfg handlerConfig) (http.Handler, error) {
-	authHandler, err := initializeAuthHandler(cfg.logger, cfg.sessionStore, cfg.deps, cfg.isDev)
+	authHandler, err := initializeAuthHandler(cfg.logger, cfg.sessionStore, cfg.deps, cfg.loginLimiter, cfg.isDev)
 	if err != nil {
 		return nil, err
 	}

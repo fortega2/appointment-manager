@@ -127,6 +127,12 @@ over the `.env` file.
 | `NOTIFICATION_TICKER_INTERVAL` | no | How often queued notifications are drained and delivered (default `1m`). This is also the window a crash can lose, since the queue is in memory. |
 | `NOTIFICATION_BUFFER_SIZE` | no | How many notifications may wait at once (default `100`). Beyond that, new ones are dropped with a warning rather than blocking the request that raised them. |
 | `METRICS_ADDR` | no | Listen address for the Prometheus metrics server (default `:9090`). Served on a separate listener from the app. |
+| `LOGIN_RATE_LIMIT_ENABLED` | no | Whether login attempts are rate limited (default `true`). Unset means enabled — a missing variable must never silently drop the protection. |
+| `LOGIN_RATE_LIMIT_ACCOUNT_BURST` | no | Attempts a single account may make back to back before it is throttled (default `5`). |
+| `LOGIN_RATE_LIMIT_ACCOUNT_REFILL` | no | How long one account attempt takes to come back, not a window length (default `3m`). A successful login refills the account to full. |
+| `LOGIN_RATE_LIMIT_IP_BURST` | no | Attempts a single client IP may make back to back before it is throttled (default `20`). |
+| `LOGIN_RATE_LIMIT_IP_REFILL` | no | How long one client-IP attempt takes to come back (default `30s`). |
+| `LOGIN_RATE_LIMIT_MAX_ENTRIES` | no | Maximum keys the limiter tracks per dimension before evicting the least recently used (default `10000`, roughly 1.5 MB per dimension). This is what bounds its memory against keys an attacker invents. |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | no | OTLP/HTTP collector base URL for tracing (e.g. `http://tempo:4318`). When unset, tracing is disabled. |
 | `OTEL_TRACES_SAMPLE_RATIO` | no | Head-based trace sampling probability in `[0,1]` (default `1.0`). Child spans follow their parent's decision. |
 | `OTEL_SERVICE_VERSION` | no | Release identifier attached to spans as `service.version` (default `dev`). |

@@ -156,9 +156,13 @@ func (l *Limiter) Allow(address netip.Addr, account string) Decision {
 // back to full and the address gets its token back. The account is refilled
 // rather than merely refunded so that a user who mistyped their way to the
 // limit is not left rationed once they get it right.
-func (l *Limiter) RecordSuccess(address netip.Addr, account string) {
+//
+// It returns the allowance as it stands after the credit, because the caller
+// has already written headers describing the state before it — replacing them
+// is what stops a successful login from reporting a budget it no longer has.
+func (l *Limiter) RecordSuccess(address netip.Addr, account string) Decision {
 	if !l.enabled {
-		return
+		return Decision{Allowed: true}
 	}
 
 	now := l.now()
@@ -167,8 +171,16 @@ func (l *Limiter) RecordSuccess(address netip.Addr, account string) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
-	l.bucketForAccount(key, now).fill(l.accountCfg)
-	l.bucketForAddress(address, now).refund(l.ipCfg)
+	accountBucket := l.bucketForAccount(key, now)
+	addressBucket := l.bucketForAddress(address, now)
+
+	accountBucket.fill(l.accountCfg)
+	addressBucket.refund(l.ipCfg)
+
+	return mostRestrictive(
+		accountBucket.headroom(now, l.accountCfg),
+		addressBucket.headroom(now, l.ipCfg),
+	)
 }
 
 // DeleteExpired drops the entries whose bucket has refilled completely and

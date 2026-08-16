@@ -12,6 +12,7 @@ import (
 	"appointment-manager/internal/patient"
 	"appointment-manager/internal/prescription"
 	"appointment-manager/internal/professional"
+	"appointment-manager/internal/ratelimit"
 	"appointment-manager/internal/session"
 	"appointment-manager/internal/slot"
 	"fmt"
@@ -138,6 +139,7 @@ type appComponents struct {
 	deps                *dependencies
 	notificationService *notification.Service
 	sessionStore        *session.Store
+	loginLimiter        *ratelimit.Limiter
 	locale              i18n.Locale
 	isDev               bool
 }
@@ -165,12 +167,36 @@ func initializeAppComponents(logger *slog.Logger, pool *pgxpool.Pool, appMetrics
 		return nil, fmt.Errorf("failed to initialize session store: %w", err)
 	}
 
+	loginLimiterCfg, err := parseLoginRateLimit(os.Getenv)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse login rate limit: %w", err)
+	}
+
+	loginLimiter, err := ratelimit.New(loginLimiterCfg, appMetrics)
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize login rate limiter: %w", err)
+	}
+
+	appMetrics.RegisterLoginRateLimiter(
+		func() float64 { return float64(loginLimiter.TrackedAccounts()) },
+		func() float64 { return float64(loginLimiter.TrackedAddresses()) },
+	)
+
+	logger.Info("login rate limit configured",
+		slog.Bool("enabled", loginLimiterCfg.Enabled),
+		slog.Int("account_burst", loginLimiterCfg.AccountBurst),
+		slog.Duration("account_refill", loginLimiterCfg.AccountRefill),
+		slog.Int("ip_burst", loginLimiterCfg.IPBurst),
+		slog.Duration("ip_refill", loginLimiterCfg.IPRefill),
+		slog.Int("max_entries", loginLimiterCfg.MaxEntries))
+
 	env := strings.TrimSpace(os.Getenv(environmentEnv))
 
 	return &appComponents{
 		deps:                deps,
 		notificationService: notificationService,
 		sessionStore:        sessionStore,
+		loginLimiter:        loginLimiter,
 		locale:              locale,
 		isDev:               env == "" || strings.EqualFold(env, environmentDevelopment),
 	}, nil

@@ -7,6 +7,7 @@ import (
 	"appointment-manager/internal/health"
 	"appointment-manager/internal/patient"
 	"appointment-manager/internal/professional"
+	"appointment-manager/internal/ratelimit"
 	"appointment-manager/internal/session"
 	"appointment-manager/internal/slot"
 	"context"
@@ -19,8 +20,8 @@ import (
 
 const readinessTimeout = 300 * time.Millisecond
 
-func initializeAuthHandler(logger *slog.Logger, store *session.Store, deps *dependencies, isDev bool) (*auth.Handler, error) {
-	authHandler, err := auth.NewHandler(logger, store, deps.assistantRepo, deps.passwordHasher, isDev)
+func initializeAuthHandler(logger *slog.Logger, store *session.Store, deps *dependencies, limiter *ratelimit.Limiter, isDev bool) (*auth.Handler, error) {
+	authHandler, err := auth.NewHandler(logger, store, deps.assistantRepo, deps.passwordHasher, limiter, isDev)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create auth handler: %w", err)
 	}

@@ -116,6 +116,7 @@ func run() error {
 	handler, err := initializeServerHandlers(handlerConfig{
 		logger:           logger,
 		sessionStore:     components.sessionStore,
+		loginLimiter:     components.loginLimiter,
 		deps:             components.deps,
 		storageClient:    storageClient,
 		metrics:          appMetrics,
@@ -142,7 +143,7 @@ func run() error {
 	stopNotificationWorker := startNotificationWorker(context.WithoutCancel(ctx), components.notificationService)
 	defer stopNotificationWorker()
 
-	stopWorkers, err := startBackgroundWorkers(ctx, logger, components.deps, components.sessionStore)
+	stopWorkers, err := startBackgroundWorkers(ctx, logger, components.deps, components.sessionStore, components.loginLimiter)
 	if err != nil {
 		logger.ErrorContext(ctx, "failed to start background workers", slog.Any("error", err))
 		return err
