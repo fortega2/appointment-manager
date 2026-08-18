@@ -302,11 +302,13 @@ func (h *Handler) processLoginUIHandler() http.HandlerFunc {
 
 		decision, addr := h.checkRateLimit(w, r, email)
 		if !decision.Allowed {
-			h.renderError(
+			seconds := web.RetryAfterSeconds(decision.RetryAfter)
+			h.renderErrorN(
 				w, r,
 				http.StatusTooManyRequests,
 				loginErrorRateLimitedKey,
-				i18n.M{"seconds": web.RetryAfterSeconds(decision.RetryAfter)})
+				int(seconds),
+				i18n.M{"seconds": seconds})
 
 			return
 		}
@@ -375,8 +377,25 @@ func (h *Handler) parseLoginForm(r *http.Request, w http.ResponseWriter) (string
 // Any header the response needs must already be set: this writes the status
 // line, after which net/http discards further header writes.
 func (h *Handler) renderError(w http.ResponseWriter, r *http.Request, status int, messageKey string, args ...any) {
+	h.renderMessage(w, r, status, i18n.T(r.Context(), messageKey, args...))
+}
+
+// renderErrorN is renderError for a message whose wording depends on a count,
+// so "1 second" does not render as "1 seconds".
+func (h *Handler) renderErrorN(
+	w http.ResponseWriter,
+	r *http.Request,
+	status int,
+	messageKey string,
+	n int,
+	args ...any,
+) {
+	h.renderMessage(w, r, status, i18n.N(r.Context(), messageKey, n, args...))
+}
+
+func (h *Handler) renderMessage(w http.ResponseWriter, r *http.Request, status int, message string) {
 	w.WriteHeader(status)
-	if err := auth.LoginError(i18n.T(r.Context(), messageKey, args...)).Render(r.Context(), w); err != nil {
+	if err := auth.LoginError(message).Render(r.Context(), w); err != nil {
 		h.logger.ErrorContext(r.Context(), renderLoginErroMsg, slog.Any("error", err))
 	}
 }

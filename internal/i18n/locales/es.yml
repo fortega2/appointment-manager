@@ -30,7 +30,9 @@ es:
       password: "Error al verificar la contraseña"
       session: "Error interno al crear la sesión"
       busy: "El servidor está ocupado, probá de nuevo"
-      rate_limited: "Demasiados intentos. Probá de nuevo en %{seconds} segundos"
+      rate_limited:
+        one: "Demasiados intentos. Probá de nuevo en %{seconds} segundo"
+        other: "Demasiados intentos. Probá de nuevo en %{seconds} segundos"
   home:
     title: "Panel"
     welcome: "Bienvenido a Appointment Manager"

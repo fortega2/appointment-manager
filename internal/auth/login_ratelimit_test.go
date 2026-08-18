@@ -12,6 +12,7 @@ import (
 	"net/url"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -25,6 +26,9 @@ const (
 
 	rateLimitedES = "Demasiados intentos. Probá de nuevo en 60 segundos"
 	rateLimitedEN = "Too many attempts. Try again in 60 seconds"
+
+	rateLimitedOnceES = "Demasiados intentos. Probá de nuevo en 1 segundo"
+	rateLimitedOnceEN = "Too many attempts. Try again in 1 second"
 
 	limitHeader     = "X-RateLimit-Limit"
 	remainingHeader = "X-RateLimit-Remaining"
@@ -198,6 +202,63 @@ func TestRefundOnlyHappensWhenTheFailureCarriesNoCredentialSignal(t *testing.T) 
 			} else {
 				assert.Empty(t, rec.Header().Get(limitHeader), "an attempt that was rationed rewrites nothing")
 			}
+		})
+	}
+}
+
+// newOneSecondLimiterMux drains a limiter whose account token comes back after a
+// second, which is what puts RetryAfterSeconds at its clamped minimum of one —
+// the case that used to render "1 segundos".
+func newOneSecondLimiterMux(t *testing.T) *http.ServeMux {
+	t.Helper()
+
+	limiter, err := ratelimit.New(ratelimit.Config{
+		Enabled:       true,
+		AccountBurst:  1,
+		AccountRefill: time.Second,
+		IPBurst:       roomyBurst,
+		IPRefill:      limiterRefill,
+		MaxEntries:    limiterMaxEntries,
+	}, nil)
+	require.NoError(t, err)
+	require.True(t, limiter.Allow(netip.MustParseAddr(limitedAddr), limitedEmail).Allowed)
+
+	mux := http.NewServeMux()
+	newTestHandlerWithLimiter(t, password.NewArgon2(nil), limiter).RegisterHandlers(mux)
+
+	return mux
+}
+
+func TestLoginUIRefusalReadsAsASingularSecond(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name   string
+		locale i18n.Locale
+		want   string
+	}{
+		{name: "spanish", locale: i18n.LocaleES, want: rateLimitedOnceES},
+		{name: "english", locale: i18n.LocaleEN, want: rateLimitedOnceEN},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			mux := newOneSecondLimiterMux(t)
+
+			form := url.Values{"email": {limitedEmail}, "password": {limitedPassword}}
+			ctx := i18n.WithLocale(t.Context(), tt.locale)
+			req := httptest.NewRequestWithContext(ctx, http.MethodPost, loginUIPath, strings.NewReader(form.Encode()))
+			req.Header.Set(headerContentTyp, formContentType)
+			rec := httptest.NewRecorder()
+
+			mux.ServeHTTP(rec, req)
+
+			require.Equal(t, http.StatusTooManyRequests, rec.Code)
+			assert.Contains(t, rec.Body.String(), tt.want)
+			assert.Equal(t, "1", rec.Header().Get(retryHeader),
+				"the header and the copy must quote the same number")
 		})
 	}
 }

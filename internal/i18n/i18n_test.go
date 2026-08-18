@@ -142,7 +142,7 @@ func TestT(t *testing.T) {
 // asserted NotEmpty: NotEmpty passes on the marker, so it proved nothing and
 // hid the fact that N has no exercised call path. The day a `one`/`other` entry
 // is added, this fails and the assertion becomes a real one.
-func TestNHasNoPluralizedEntryYet(t *testing.T) {
+func TestNOnAFlatEntryMisses(t *testing.T) {
 	t.Parallel()
 
 	const flatKey = "layout.nav.log_out"
@@ -156,6 +156,36 @@ func TestNHasNoPluralizedEntryYet(t *testing.T) {
 			for _, count := range []int{0, 1, 2} {
 				assert.Equal(t, "!(MISSING: "+flatKey+")", i18n.N(ctx, flatKey, count))
 			}
+		})
+	}
+}
+
+// TestNPicksThePluralForm pins the one entry that is pluralized. The singular is
+// reachable in production: web.RetryAfterSeconds clamps its minimum to 1, so any
+// sub-second wait renders through the "one" form.
+func TestNPicksThePluralForm(t *testing.T) {
+	t.Parallel()
+
+	const key = "auth.error.rate_limited"
+
+	tests := []struct {
+		locale  i18n.Locale
+		seconds int
+		want    string
+	}{
+		{i18n.LocaleES, 1, "Demasiados intentos. Probá de nuevo en 1 segundo"},
+		{i18n.LocaleES, 60, "Demasiados intentos. Probá de nuevo en 60 segundos"},
+		{i18n.LocaleEN, 1, "Too many attempts. Try again in 1 second"},
+		{i18n.LocaleEN, 60, "Too many attempts. Try again in 60 seconds"},
+	}
+
+	for _, tt := range tests {
+		t.Run(fmt.Sprintf("%s/%d", tt.locale, tt.seconds), func(t *testing.T) {
+			t.Parallel()
+
+			ctx := i18n.WithLocale(t.Context(), tt.locale)
+
+			assert.Equal(t, tt.want, i18n.N(ctx, key, tt.seconds, i18n.M{"seconds": tt.seconds}))
 		})
 	}
 }
