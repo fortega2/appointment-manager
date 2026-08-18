@@ -43,7 +43,7 @@ symbols it governs.
 
 ## 1) Repository Snapshot
 
-- Language: Go (`go 1.26.5` in `go.mod`).
+- Language: Go (`go 1.26.6` in `go.mod`).
 - Module: `appointment-manager`.
 - Main entrypoint: `cmd/server/main.go`.
 - Core packages:
@@ -109,10 +109,16 @@ Notes:
 - Lint is strict (security, complexity, modernize, sloglint, copyloopvar, etc.).
 - `//nolint:<linter>` must be specific and justified.
 - Run vulnerability scan: `govulncheck ./...`
+- `govulncheck` takes the stdlib version from `go env GOVERSION`. Distro Go builds bake the
+  enabled experiments into that string (`go1.26.6-X:nodwarf5` on Arch/CachyOS), which is not
+  valid semver, so every standard-library finding is dropped *silently* — the scan reports
+  "No vulnerabilities found" instead of failing. That is why `lefthook.yml` runs it as
+  `GOVERSION=$(go env GOVERSION | cut -d- -f1) govulncheck ...`; do not drop that prefix.
 - `lefthook` pre-commit already runs `golangci-lint run`, `govulncheck ./...`, `go test -short ./...`,
   and `make check-css` (on `.templ` changes) in parallel on every commit — a failing commit may be
   any of these, not just CSS drift.
-- `golangci-lint` must be built with a Go toolchain >= the `go` directive in `go.mod` (currently `1.26.4`), otherwise it refuses to run (`can't load config: the Go language version ... is lower than the targeted Go version`). If your installed binary is out of date, update it with `go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest` (or per https://golangci-lint.run/welcome/install/).
+- `golangci-lint` must be built with a Go toolchain whose language version is >= the one in the
+  `go` directive of `go.mod` (currently `1.26`; the patch level does not matter), otherwise it refuses to run (`can't load config: the Go language version ... is lower than the targeted Go version`). If your installed binary is out of date, update it with `go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest` (or per https://golangci-lint.run/welcome/install/).
 - `formatters.enable` in `.golangci.yml` includes `gofmt`, so `golangci-lint run ./...` also fails on unformatted files — a separate manual `gofmt -w` pass shouldn't normally be needed, but is listed above as a fallback.
 
 ## 4) Test Commands
