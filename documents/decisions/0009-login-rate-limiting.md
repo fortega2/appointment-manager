@@ -84,6 +84,8 @@ for the attacker, and not for the legitimate user sharing that account.
 not charged. Otherwise one blocked address could walk a list of usernames and drain every account's
 budget on the way, turning one refused attacker into a lockout of every account it chose to name.
 
+A third case — the attempt was charged but never reached the password check at all — is Decision 10.
+
 `bucket.decide` and `bucket.headroom` are separate for a related reason: the verdict is about the
 request being paid for, while the headers describe what is left after paying. Deriving the verdict
 from the post-consume state refuses the very request that spent the last token. That was a real bug
@@ -195,6 +197,30 @@ Advertising `Remaining` on a login endpoint does help an attacker pace itself. T
 information is recoverable by counting refusals anyway, and the alternative punishes only the honest
 client that would have backed off.
 
+## Decision 10 — An attempt that never reached the password check gets its account token back
+
+`checkRateLimit` charges before `verifyCredentials`, which is the whole point (Decision 3): a refused
+attempt must cost no Argon2 slot. But that ordering charges attempts that then fail for reasons
+carrying no signal about the credentials at all — `errCredentialLookupFailed` when the database is
+unreachable, `password.ErrTooManyConcurrentHashes` when the hashing queue is full (ADR 0008), and
+`errPasswordCheckFailed` when the comparison itself breaks. None of those compared a password.
+`RecordAbandoned` hands the token back.
+
+Without it, a user who hits five 503s during a hashing-queue burst is locked out for three minutes
+per retry, for an outage that is ours — and Decision 4's reasoning applies with more force here,
+because there is still no password-reset flow to escape through.
+
+**Only the account is refunded, and only by one token.** By one and not to full, because unlike
+Decision 4 the attempt proved nothing: it earns its charge back and no more. The account and not the
+address, because whoever is driving the load that emptied the hashing queue is exactly who the
+address budget exists to slow down — refunding it would let a flood hold its own budget open during
+the outage it is causing. The asymmetry mirrors `RecordSuccess`, which fills the account but only
+refunds the address.
+
+A caller who can *cause* these failures gains nothing from the refund: a request that never reached
+the comparison leaks no information about whether the password was right, which is the only thing
+the account budget is rationing.
+
 ## What this does not fix
 
 - **Malformed bodies are free.** The limiter runs after `parseLoginForm` / `DecodeJSON`, so a
@@ -206,7 +232,7 @@ client that would have backed off.
   implemented.
 - **The edge layer is still missing** — see Decision 7.
 - **Password management is still absent** (production blocker 2): no reset, no change, and
-  `validateCreateInput` accepts `"a"`. Decisions 3 and 4 are shaped by that absence and should be
+  `validateCreateInput` accepts `"a"`. Decisions 3, 4 and 10 are shaped by that absence and should be
   revisited when it is fixed.
 
 ## Revisit when
@@ -218,8 +244,8 @@ client that would have backed off.
   map is under deliberate pressure; see Decision 5 for why eviction is not harmless.
 - `appt_login_rate_limited_total{scope="account"}` rises while `scope="ip"` stays flat. That is
   distributed credential stuffing in progress, and the thresholds in Decision 8 are the lever.
-- A password-reset flow lands. Decision 4's refill-to-full and the whole refusal-to-lock-out stance
-  are calibrated to there being no escape hatch; with one, a stricter account limit becomes
-  defensible.
+- A password-reset flow lands. Decision 4's refill-to-full, Decision 10's refund and the whole
+  refusal-to-lock-out stance are calibrated to there being no escape hatch; with one, a stricter
+  account limit becomes defensible.
 - The zone is moved behind a Cloudflare proxy — see Decision 6, and do it *before* the DNS change.
 - The Cloudflare plan is upgraded to Pro or above, which would make Decision 7 worth reopening.

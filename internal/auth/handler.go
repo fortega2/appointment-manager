@@ -115,6 +115,7 @@ func (h *Handler) loginAPIHandler() http.HandlerFunc {
 
 		a, err := h.verifyCredentials(r.Context(), req.Email, req.Password)
 		if err != nil {
+			h.refundUnlessCredentialFailure(w, addr, req.Email, err)
 			web.WriteProblem(w, loginProblem(err, r.URL.Path))
 			return
 		}
@@ -189,6 +190,22 @@ func (h *Handler) recordLoginSuccess(w http.ResponseWriter, addr netip.Addr, ema
 	credited := h.limiter.RecordSuccess(addr, email)
 	if credited.Enforced() {
 		web.SetRateLimitHeaders(w.Header(), credited.Limit, credited.Remaining, credited.Reset)
+	}
+}
+
+// refundUnlessCredentialFailure hands the attempt's token back when err says
+// nothing about the credentials. A wrong password is the one failure the
+// allowance is meant to ration; a lookup that never ran and a hashing slot that
+// was never free are outages, and making a user sit out three minutes for one
+// would be charging them for our own bad day.
+func (h *Handler) refundUnlessCredentialFailure(w http.ResponseWriter, addr netip.Addr, email string, err error) {
+	if errors.Is(err, errInvalidCredentials) {
+		return
+	}
+
+	refunded := h.limiter.RecordAbandoned(addr, email)
+	if refunded.Enforced() {
+		web.SetRateLimitHeaders(w.Header(), refunded.Limit, refunded.Remaining, refunded.Reset)
 	}
 }
 
@@ -296,6 +313,8 @@ func (h *Handler) processLoginUIHandler() http.HandlerFunc {
 
 		a, err := h.verifyCredentials(r.Context(), email, pass)
 		if err != nil {
+			h.refundUnlessCredentialFailure(w, addr, email, err)
+
 			switch {
 			case errors.Is(err, password.ErrTooManyConcurrentHashes):
 				h.renderError(w, r, http.StatusServiceUnavailable, loginErrorBusyKey)

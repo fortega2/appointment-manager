@@ -5,6 +5,7 @@ import (
 	"appointment-manager/internal/password"
 	"appointment-manager/internal/ratelimit"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/netip"
@@ -156,4 +157,47 @@ func TestLoginAccountKeyIgnoresCaseAndPadding(t *testing.T) {
 
 	assert.Equal(t, http.StatusTooManyRequests, rec.Code,
 		"recasing the address must not buy a second allowance")
+}
+
+// TestRefundOnlyHappensWhenTheFailureCarriesNoCredentialSignal reaches for the
+// unexported helper on purpose: the failures it discriminates come from a nil
+// database pool and a saturated Argon2 semaphore, neither of which a handler
+// test can produce without a real dependency.
+func TestRefundOnlyHappensWhenTheFailureCarriesNoCredentialSignal(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		err      error
+		refunded bool
+	}{
+		{"a wrong password is what the allowance rations", errInvalidCredentials, false},
+		{"a wrapped wrong password still counts", fmt.Errorf("wrapped: %w", errInvalidCredentials), false},
+		{"a lookup that never ran is our outage", errCredentialLookupFailed, true},
+		{"a hashing slot that was never free is our outage", password.ErrTooManyConcurrentHashes, true},
+		{"a hash comparison that broke is our outage", errPasswordCheckFailed, true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			limiter := newLimiterWithBurst(t, 1)
+			addr := netip.MustParseAddr(limitedAddr)
+			require.True(t, limiter.Allow(addr, limitedEmail).Allowed)
+			require.False(t, limiter.Allow(addr, limitedEmail).Allowed, "the budget must start spent")
+
+			h := newTestHandlerWithLimiter(t, password.NewArgon2(nil), limiter)
+			rec := httptest.NewRecorder()
+
+			h.refundUnlessCredentialFailure(rec, addr, limitedEmail, tt.err)
+
+			assert.Equal(t, tt.refunded, limiter.Allow(addr, limitedEmail).Allowed)
+			if tt.refunded {
+				assert.Equal(t, "1", rec.Header().Get(limitHeader), "the headers must describe the state after the refund")
+			} else {
+				assert.Empty(t, rec.Header().Get(limitHeader), "an attempt that was rationed rewrites nothing")
+			}
+		})
+	}
 }

@@ -184,6 +184,42 @@ func (l *Limiter) RecordSuccess(address netip.Addr, account string) Decision {
 	)
 }
 
+// RecordAbandoned gives back the token an attempt spent when the attempt never
+// reached the password check at all — the account lookup failed, or no hashing
+// slot was free. Nothing was learned about the credentials, so charging for it
+// would let an outage ration a caller who did nothing wrong, and this
+// application has no password-reset flow to escape that.
+//
+// Only the account is refunded, and by one token rather than refilled: the
+// attempt proved nothing, so it earns its charge back and no more. The address
+// keeps paying, because whoever is driving the load that emptied the hashing
+// queue is exactly who the address budget exists to slow down.
+//
+// It returns the allowance as it stands after the refund, for the same reason
+// RecordSuccess does: the caller has already written headers describing the
+// state before it.
+func (l *Limiter) RecordAbandoned(address netip.Addr, account string) Decision {
+	if !l.enabled {
+		return Decision{Allowed: true}
+	}
+
+	now := l.now()
+	key := keyForAccount(account)
+
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	accountBucket := l.bucketForAccount(key, now)
+	addressBucket := l.bucketForAddress(address, now)
+
+	accountBucket.refund(l.accountCfg)
+
+	return mostRestrictive(
+		accountBucket.headroom(now, l.accountCfg),
+		addressBucket.headroom(now, l.ipCfg),
+	)
+}
+
 // DeleteExpired drops the entries whose bucket has refilled completely and
 // reports how many went. Its signature is worker.JobFunc, so it can run as a
 // periodic sweep. This is hygiene, not the memory bound — Config.MaxEntries is

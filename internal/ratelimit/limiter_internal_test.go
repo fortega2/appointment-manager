@@ -281,6 +281,43 @@ func TestRecordSuccessLeavesOtherAccountsAlone(t *testing.T) {
 	assert.Equal(t, accountBurst-2, decision.Remaining)
 }
 
+func TestRecordAbandonedLetsARationedAccountBackIn(t *testing.T) {
+	t.Parallel()
+
+	limiter, _, _ := newTestLimiter(t)
+
+	for range accountBurst {
+		require.True(t, limiter.Allow(address, account).Allowed)
+	}
+	require.False(t, limiter.Allow(address, account).Allowed)
+
+	refunded := limiter.RecordAbandoned(address, account)
+
+	assert.Equal(t, 1, refunded.Remaining, "the refund is one token, not a refill")
+	assert.True(t,
+		limiter.Allow(address, account).Allowed,
+		"an attempt that never reached the password check must not cost the caller its turn")
+}
+
+func TestRecordAbandonedLeavesTheAddressPaying(t *testing.T) {
+	t.Parallel()
+
+	limiter, _, _ := newTestLimiter(t)
+
+	// A distinct account each time, so the address is the only budget that can
+	// bind: what is under test is that refunding does not hand it back a token.
+	for i := range ipBurst {
+		named := fmt.Sprintf("user%d@example.com", i)
+
+		require.True(t, limiter.Allow(address, named).Allowed)
+		limiter.RecordAbandoned(address, named)
+	}
+
+	decision := limiter.Allow(address, "one-more@example.com")
+
+	assert.False(t, decision.Allowed, "the address budget must still run out under a refunded flood")
+}
+
 func TestDisabledLimiterAllowsEverythingAndAdvertisesNothing(t *testing.T) {
 	t.Parallel()
 
@@ -297,6 +334,7 @@ func TestDisabledLimiterAllowsEverythingAndAdvertisesNothing(t *testing.T) {
 	}
 
 	limiter.RecordSuccess(address, account)
+	assert.False(t, limiter.RecordAbandoned(address, account).Enforced())
 
 	deleted, err := limiter.DeleteExpired(t.Context())
 	require.NoError(t, err)
