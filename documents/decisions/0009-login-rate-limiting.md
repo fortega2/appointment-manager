@@ -151,6 +151,55 @@ changes; no test can catch this.
 In development there is no proxy at all: `docker-compose.dev.yml` runs Postgres only, the app runs on
 the host, no header arrives and `RemoteAddr` is used. Nothing needs configuring.
 
+**Two distinct things can collapse the address key, and both end the same way:** every client on the
+internet shares one bucket of `LOGIN_RATE_LIMIT_IP_BURST` tokens and login is down globally within
+seconds. Nothing errors and no test can catch either — the code behaves exactly as written.
+
+1. **The header goes missing.** If the Caddyfile ever stops setting `X-Real-Ip`, `ClientIP` falls
+   back to `RemoteAddr`, which in the compose network is Caddy's own container address — one RFC1918
+   address for every request.
+2. **The header carries the wrong address.** The Cloudflare case above: the header is present and
+   parses fine, but holds a Cloudflare *edge* address, which is public. This is the mode
+   `trusted_proxies` prevents, and it is the one to expect first, because the internet-facing
+   deployment is planned to sit behind the Cloudflare proxy.
+
+They look nothing alike in the logs, so detection differs per mode.
+
+Neither needs new Go code — `RequestLogger` already puts `client_ip` on every line. For mode 1, a
+login request logged with a private address is unambiguous, because the public internet is not
+RFC1918:
+
+```logql
+{container="appointment-manager"} | json
+  | route =~ "/login|/api/v1/auth/login"
+  | client_ip =~ "^(10\\.|172\\.(1[6-9]|2[0-9]|3[01])\\.|192\\.168\\.)"
+```
+
+The `^` is load-bearing. Label filter expressions after a parser are matched unanchored, unlike
+stream selectors, so an unanchored `10\.` also matches the public addresses `110.5.1.2` and
+`200.10.5.4`. Note this range does **not** overlap Cloudflare's `172.64.0.0/13`, so the two checks
+cannot shadow each other.
+
+For mode 2, match `client_ip` against Cloudflare's published ranges instead
+(<https://www.cloudflare.com/ips/> is the source of truth; they change, so do not freeze a copy
+here). Any login logged from a Cloudflare address means `trusted_proxies` is not in effect and the
+whole internet is sharing one bucket.
+
+Once the deployment is internet-facing, `appt_login_rate_limiter_entries{scope="ip"}` becomes a good
+alert as well — under real traffic it should track many addresses, so a collapse toward 1 is
+meaningful. It is **not** usable on the current test VPS: that instance is reached over Tailscale and
+served 32 requests to `/login` and 457 to `/api/v1/auth/login` in the 30 days to 2026-08-18, so any
+`rate(...[5m]) > 0` guard reads zero almost always. Do not calibrate a production threshold against
+numbers from that box.
+
+Two caveats about `client_ip` values, both from real data on the test VPS: its login traffic arrives
+from `100.64.0.0/10` (CGNAT, which is how Tailscale addresses clients — the logged address for the
+2026-08-11 load test was `100.97.118.5`), and a LAN client would also be private. So **do not widen
+mode 1 to "every non-public range"** or it fires on legitimate traffic. The mode-1 query above was
+run against Loki on 2026-08-18 and returned nothing over 30 days, while the same query without the
+`client_ip` filter returned the real login lines — so its empty result is a true negative rather than
+a broken query.
+
 ## Decision 7 — The edge layer stays with Caddy; Cloudflare's free tier cannot do it
 
 The plan of record was a coarse per-IP limit at Cloudflare instead of rebuilding Caddy with
@@ -247,5 +296,12 @@ the account budget is rationing.
 - A password-reset flow lands. Decision 4's refill-to-full, Decision 10's refund and the whole
   refusal-to-lock-out stance are calibrated to there being no escape hatch; with one, a stricter
   account limit becomes defensible.
-- The zone is moved behind a Cloudflare proxy — see Decision 6, and do it *before* the DNS change.
+- **Before the zone goes behind the Cloudflare proxy.** This is the planned production topology, not
+  a hypothetical: the Caddyfile must trust Cloudflare's ranges and forward `{client_ip}` *before* the
+  DNS record is flipped, or every client on the internet shares one address bucket from the first
+  request. See Decision 6, both collapse modes.
+- A login request is logged with an RFC1918 `client_ip`, or with a Cloudflare edge address. The
+  address key has collapsed and every client is sharing one bucket — see Decision 6 for which mode is
+  which. If either fires for real, consider promoting it to a counter (`source="header"` vs `"peer"`
+  on the client-address lookup) so it is alertable in Prometheus rather than only in Loki.
 - The Cloudflare plan is upgraded to Pro or above, which would make Decision 7 worth reopening.
