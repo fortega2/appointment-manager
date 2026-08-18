@@ -86,3 +86,14 @@ func (s *store[K]) deleteFull(now time.Time, cfg bucketConfig) int64 {
 func (s *store[K]) len() int {
 	return len(s.entries)
 }
+
+// peek returns the key's bucket only if it is already tracked, creating nothing
+// and disturbing no recency.
+func (s *store[K]) peek(key K) (*bucket, bool) {
+	element, ok := s.entries[key]
+	if !ok {
+		return nil, false
+	}
+
+	return &element.Value.(*entry[K]).bucket, true
+}

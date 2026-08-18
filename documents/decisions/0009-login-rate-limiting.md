@@ -121,8 +121,12 @@ no decision. That sweep is hygiene. Remove it and the memory bound still holds.
 
 **Eviction can forget a key that still owed time.** An attacker who pushes 10 000 invented accounts
 through could reset a real victim's drained bucket. What throttles that today is the *other*
-dimension: each of those requests also spends a token from the attacker's own address bucket, and 20
-does not go far. It is an indirect defence, which is why
+dimension: an invented account is only inserted when the attempt naming it was granted, so reaching
+the cap costs one address token per entry and 20 does not go far. That is why `Allow` weighs the
+address bucket **first** and returns through `refusedByAddress`, which reads an already tracked
+account but inserts nothing: an inserting lookup on the refused path would have let a blocked
+address evict the whole map at whatever rate it could send, with its own budget already at zero and
+so throttling nothing. It is an indirect defence, which is why
 `appt_login_rate_limiter_evictions_total` is expected to sit at zero and is alerted on above it.
 
 ## Decision 6 — The client address is trusted because of the deployment, and Cloudflare breaks that

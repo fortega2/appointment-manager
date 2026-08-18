@@ -339,14 +339,65 @@ func TestAllowEvictsAtTheEntryCapAndSaysSo(t *testing.T) {
 
 	limiter, _, recorder := newTestLimiter(t)
 
+	// Spread across addresses so every attempt is granted: only a granted
+	// attempt reaches the account store, so only granted attempts can fill it.
 	for i := range maxEntries + 2 {
-		limiter.Allow(address, fmt.Sprintf("user%d@example.com", i))
+		from := netip.AddrFrom4([4]byte{203, 0, 113, byte(i / 2)})
+		require.True(t, limiter.Allow(from, fmt.Sprintf("user%d@example.com", i)).Allowed)
 	}
 
 	assert.Equal(t, maxEntries, limiter.TrackedAccounts(), "the cap is what bounds memory")
 
 	_, _, evicted := recorder.counts()
 	assert.Equal(t, 2, evicted)
+}
+
+func TestAllowRefusedByTheAddressLeavesTheAccountStoreAlone(t *testing.T) {
+	t.Parallel()
+
+	limiter, _, recorder := newTestLimiter(t)
+
+	// Drain the address across accounts that each stay inside their own budget.
+	for i := range ipBurst {
+		require.True(t, limiter.Allow(address, fmt.Sprintf("user%d@example.com", i)).Allowed)
+	}
+	require.Equal(t, ipBurst, limiter.TrackedAccounts())
+
+	// A blocked address hammering invented names must not be able to insert,
+	// because every insert past the cap evicts a real account's drained bucket
+	// and hands it a fresh one.
+	for i := range 10 * maxEntries {
+		require.False(t, limiter.Allow(address, fmt.Sprintf("invented%d@example.com", i)).Allowed)
+	}
+
+	assert.Equal(t, ipBurst, limiter.TrackedAccounts(), "a refused attempt must track nothing")
+
+	_, _, evicted := recorder.counts()
+	assert.Zero(t, evicted, "a blocked address must not evict the accounts it never reached")
+}
+
+func TestAllowRefusedByTheAddressStillReportsATrackedAccountsRefusal(t *testing.T) {
+	t.Parallel()
+
+	limiter, _, recorder := newTestLimiter(t)
+
+	for range accountBurst {
+		require.True(t, limiter.Allow(address, account).Allowed)
+	}
+	for i := range ipBurst - accountBurst {
+		require.True(t, limiter.Allow(address, fmt.Sprintf("user%d@example.com", i)).Allowed)
+	}
+
+	// Both are spent now, and the account's wait is the longer of the two.
+	decision := limiter.Allow(address, account)
+
+	require.False(t, decision.Allowed)
+	assert.Equal(t, accountBurst, decision.Limit, "the account is the more restrictive of the two")
+	assert.Equal(t, accountRefill, decision.RetryAfter)
+
+	byAccount, byIP, _ := recorder.counts()
+	assert.Equal(t, 1, byAccount)
+	assert.Equal(t, 1, byIP)
 }
 
 func TestAllowIsSafeUnderConcurrentUse(t *testing.T) {

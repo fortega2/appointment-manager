@@ -86,9 +86,6 @@ func newWithClock(cfg Config, now func() time.Time, limitMetrics Metrics) (*Limi
 		return nil, ErrInvalidMaxEntries
 	}
 
-	if now == nil {
-		now = time.Now
-	}
 	if limitMetrics == nil {
 		limitMetrics = noopMetrics{}
 	}
@@ -113,6 +110,9 @@ func newWithClock(cfg Config, now func() time.Time, limitMetrics Metrics) (*Limi
 // buckets are charged or neither is: draining the account's budget on behalf of
 // an address that was going to be refused anyway would turn one blocked
 // attacker into a lockout of every account it names.
+//
+// The address is weighed first, and a request it refuses inserts nothing into
+// the account store. That ordering is load-bearing (ADR 0009 Decision 5).
 func (l *Limiter) Allow(address netip.Addr, account string) Decision {
 	if !l.enabled {
 		return Decision{Allowed: true}
@@ -124,19 +124,20 @@ func (l *Limiter) Allow(address netip.Addr, account string) Decision {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
-	accountBucket := l.bucketForAccount(key, now)
 	addressBucket := l.bucketForAddress(address, now)
 
-	accountDecision := accountBucket.decide(now, l.accountCfg)
 	addressDecision := addressBucket.decide(now, l.ipCfg)
+	if !addressDecision.Allowed {
+		l.metrics.RecordLoginRateLimitedByIP()
 
-	if !accountDecision.Allowed || !addressDecision.Allowed {
-		if !accountDecision.Allowed {
-			l.metrics.RecordLoginRateLimitedByAccount()
-		}
-		if !addressDecision.Allowed {
-			l.metrics.RecordLoginRateLimitedByIP()
-		}
+		return l.refusedByAddress(key, now, addressDecision)
+	}
+
+	accountBucket := l.bucketForAccount(key, now)
+
+	accountDecision := accountBucket.decide(now, l.accountCfg)
+	if !accountDecision.Allowed {
+		l.metrics.RecordLoginRateLimitedByAccount()
 
 		return mostRestrictive(accountDecision, addressDecision)
 	}
@@ -215,6 +216,23 @@ func (l *Limiter) TrackedAddresses() int {
 	defer l.mu.Unlock()
 
 	return l.addresses.len()
+}
+
+// refusedByAddress completes a decision the address bucket has already turned
+// down. It reads the account bucket only when one is already tracked, so the
+// refusal leaves the account store exactly as it found it.
+func (l *Limiter) refusedByAddress(key accountKey, now time.Time, addressDecision Decision) Decision {
+	tracked, ok := l.accounts.peek(key)
+	if !ok {
+		return addressDecision
+	}
+
+	accountDecision := tracked.decide(now, l.accountCfg)
+	if !accountDecision.Allowed {
+		l.metrics.RecordLoginRateLimitedByAccount()
+	}
+
+	return mostRestrictive(accountDecision, addressDecision)
 }
 
 func (l *Limiter) bucketForAccount(key accountKey, now time.Time) *bucket {
