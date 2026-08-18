@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"net/netip"
 	"time"
 )
 
@@ -106,7 +107,8 @@ func (h *Handler) loginAPIHandler() http.HandlerFunc {
 			return
 		}
 
-		if _, allowed := h.checkRateLimit(w, r, req.Email); !allowed {
+		decision, addr := h.checkRateLimit(w, r, req.Email)
+		if !decision.Allowed {
 			web.WriteProblem(w, web.NewTooManyRequestsProblem(r.URL.Path))
 			return
 		}
@@ -117,7 +119,7 @@ func (h *Handler) loginAPIHandler() http.HandlerFunc {
 			return
 		}
 
-		h.recordLoginSuccess(w, r, req.Email)
+		h.recordLoginSuccess(w, addr, req.Email)
 
 		sessionID, err := h.store.Create(r.Context(), a.ID.String())
 		if err != nil {
@@ -146,8 +148,8 @@ func (h *Handler) loginAPIHandler() http.HandlerFunc {
 }
 
 // checkRateLimit charges one attempt against the login allowance, writes the
-// advisory headers and reports whether the caller may go on to the password
-// check. It runs before verifyCredentials on purpose: a refused attempt then
+// advisory headers and returns the decision along with the address it charged.
+// It runs before verifyCredentials on purpose: a refused attempt then
 // costs no Argon2 slot, which is the whole point of having it here rather than
 // after the fact.
 //
@@ -155,12 +157,12 @@ func (h *Handler) loginAPIHandler() http.HandlerFunc {
 // such request. That is a fallback for a case this deployment does not produce
 // — the app is only reachable through a proxy that always sets the header — and
 // collapsing them is safer than handing each an unlimited budget.
-func (h *Handler) checkRateLimit(w http.ResponseWriter, r *http.Request, email string) (ratelimit.Decision, bool) {
+func (h *Handler) checkRateLimit(w http.ResponseWriter, r *http.Request, email string) (ratelimit.Decision, netip.Addr) {
 	addr, _ := web.ClientIP(r)
 
 	decision := h.limiter.Allow(addr, email)
 	if !decision.Enforced() {
-		return decision, true
+		return decision, addr
 	}
 
 	web.SetRateLimitHeaders(w.Header(), decision.Limit, decision.Remaining, decision.Reset)
@@ -175,15 +177,15 @@ func (h *Handler) checkRateLimit(w http.ResponseWriter, r *http.Request, email s
 			slog.Int64("retry_after_seconds", web.RetryAfterSeconds(decision.RetryAfter)))
 	}
 
-	return decision, decision.Allowed
+	return decision, addr
 }
 
 // recordLoginSuccess credits a login that passed the password check, which puts
 // the account's allowance back to full, and rewrites the headers so they do not
 // keep advertising the budget the attempt was charged before it was credited.
-func (h *Handler) recordLoginSuccess(w http.ResponseWriter, r *http.Request, email string) {
-	addr, _ := web.ClientIP(r)
-
+// It takes the address checkRateLimit charged rather than resolving it again,
+// so the two can never key on different buckets.
+func (h *Handler) recordLoginSuccess(w http.ResponseWriter, addr netip.Addr, email string) {
 	credited := h.limiter.RecordSuccess(addr, email)
 	if credited.Enforced() {
 		web.SetRateLimitHeaders(w.Header(), credited.Limit, credited.Remaining, credited.Reset)
@@ -281,8 +283,8 @@ func (h *Handler) processLoginUIHandler() http.HandlerFunc {
 			return
 		}
 
-		decision, allowed := h.checkRateLimit(w, r, email)
-		if !allowed {
+		decision, addr := h.checkRateLimit(w, r, email)
+		if !decision.Allowed {
 			h.renderError(
 				w, r,
 				http.StatusTooManyRequests,
@@ -305,7 +307,7 @@ func (h *Handler) processLoginUIHandler() http.HandlerFunc {
 			return
 		}
 
-		h.recordLoginSuccess(w, r, email)
+		h.recordLoginSuccess(w, addr, email)
 
 		sessionID, err := h.store.Create(r.Context(), a.ID.String())
 		if err != nil {

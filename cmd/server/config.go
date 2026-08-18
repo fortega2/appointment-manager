@@ -101,20 +101,7 @@ func parseLogLevel(raw string) (slog.Level, error) {
 // "30m", "1h"). When unset it falls back to defaultWorkerTickerInterval; a
 // malformed or non-positive value is rejected so misconfiguration fails fast.
 func parseWorkerInterval(raw string) (time.Duration, error) {
-	raw = strings.TrimSpace(raw)
-	if raw == "" {
-		return defaultWorkerTickerInterval, nil
-	}
-
-	interval, err := time.ParseDuration(raw)
-	if err != nil {
-		return 0, fmt.Errorf("invalid %s: %w", workerIntervalEnv, err)
-	}
-	if interval <= 0 {
-		return 0, fmt.Errorf("invalid %s: must be greater than zero", workerIntervalEnv)
-	}
-
-	return interval, nil
+	return parsePositiveDuration(raw, workerIntervalEnv, defaultWorkerTickerInterval)
 }
 
 // parseLoginRateLimit reads the LOGIN_RATE_LIMIT_* variables. Each is optional

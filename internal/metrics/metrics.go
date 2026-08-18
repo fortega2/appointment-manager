@@ -107,7 +107,8 @@ type Metrics struct {
 	passwordQueueWait     prometheus.Histogram
 	passwordQueueTimeouts *prometheus.CounterVec
 
-	loginRateLimited          *prometheus.CounterVec
+	loginRateLimitedAccount   prometheus.Counter
+	loginRateLimitedIP        prometheus.Counter
 	loginRateLimiterEvictions prometheus.Counter
 }
 
@@ -305,8 +306,8 @@ func New() *Metrics {
 	passwordQueueTimeouts.WithLabelValues(queueWaitFailureClientCancelled)
 	notificationsDropped.WithLabelValues(dropReasonQueueFull)
 	notificationsDropped.WithLabelValues(dropReasonUnknownKind)
-	loginRateLimited.WithLabelValues(rateLimitScopeAccount)
-	loginRateLimited.WithLabelValues(rateLimitScopeIP)
+	loginRateLimitedAccount := loginRateLimited.WithLabelValues(rateLimitScopeAccount)
+	loginRateLimitedIP := loginRateLimited.WithLabelValues(rateLimitScopeIP)
 
 	return &Metrics{
 		reg:                      reg,
@@ -323,7 +324,8 @@ func New() *Metrics {
 		passwordQueueWait:        passwordQueueWait,
 		passwordQueueTimeouts:    passwordQueueTimeouts,
 
-		loginRateLimited:          loginRateLimited,
+		loginRateLimitedAccount:   loginRateLimitedAccount,
+		loginRateLimitedIP:        loginRateLimitedIP,
 		loginRateLimiterEvictions: loginRateLimiterEvictions,
 	}
 }
@@ -459,13 +461,13 @@ func (m *Metrics) RegisterNotificationQueue(depth, capacity func() float64) {
 // flat is distributed credential stuffing, the case an IP-keyed edge proxy is
 // structurally unable to see.
 func (m *Metrics) RecordLoginRateLimitedByAccount() {
-	m.loginRateLimited.WithLabelValues(rateLimitScopeAccount).Inc()
+	m.loginRateLimitedAccount.Inc()
 }
 
 // RecordLoginRateLimitedByIP counts one login attempt refused because the
 // address had spent its allowance.
 func (m *Metrics) RecordLoginRateLimitedByIP() {
-	m.loginRateLimited.WithLabelValues(rateLimitScopeIP).Inc()
+	m.loginRateLimitedIP.Inc()
 }
 
 // RecordLoginRateLimitEvicted counts one rate-limiter entry dropped to stay
@@ -484,27 +486,26 @@ func (m *Metrics) RegisterLoginRateLimiter(accounts, addresses func() float64) {
 
 	// Dashboard: appt_login_rate_limiter_entries
 	// Alert:     appt_login_rate_limiter_entries > 8000
-	factory.NewGaugeFunc(
-		prometheus.GaugeOpts{
-			Namespace:   namespace,
-			Subsystem:   subsystemLogin,
-			Name:        "rate_limiter_entries",
-			Help:        "Number of keys the login rate limiter is currently tracking.",
-			ConstLabels: prometheus.Labels{"scope": rateLimitScopeAccount},
-		},
-		accounts,
-	)
+	scopes := []struct {
+		scope string
+		value func() float64
+	}{
+		{rateLimitScopeAccount, accounts},
+		{rateLimitScopeIP, addresses},
+	}
 
-	factory.NewGaugeFunc(
-		prometheus.GaugeOpts{
-			Namespace:   namespace,
-			Subsystem:   subsystemLogin,
-			Name:        "rate_limiter_entries",
-			Help:        "Number of keys the login rate limiter is currently tracking.",
-			ConstLabels: prometheus.Labels{"scope": rateLimitScopeIP},
-		},
-		addresses,
-	)
+	for _, s := range scopes {
+		factory.NewGaugeFunc(
+			prometheus.GaugeOpts{
+				Namespace:   namespace,
+				Subsystem:   subsystemLogin,
+				Name:        "rate_limiter_entries",
+				Help:        "Number of keys the login rate limiter is currently tracking.",
+				ConstLabels: prometheus.Labels{"scope": s.scope},
+			},
+			s.value,
+		)
+	}
 }
 
 // ObservePasswordQueueWait records how long a caller waited for an Argon2

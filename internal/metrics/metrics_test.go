@@ -78,8 +78,8 @@ func TestLoginRateLimitRecorders(t *testing.T) {
 	m.RecordLoginRateLimitedByIP()
 	m.RecordLoginRateLimitEvicted()
 
-	assert.InDelta(t, 2.0, testutil.ToFloat64(m.loginRateLimited.WithLabelValues(rateLimitScopeAccount)), 0.0001)
-	assert.InDelta(t, 1.0, testutil.ToFloat64(m.loginRateLimited.WithLabelValues(rateLimitScopeIP)), 0.0001)
+	assert.InDelta(t, 2.0, testutil.ToFloat64(m.loginRateLimitedAccount), 0.0001)
+	assert.InDelta(t, 1.0, testutil.ToFloat64(m.loginRateLimitedIP), 0.0001)
 	assert.InDelta(t, 1.0, testutil.ToFloat64(m.loginRateLimiterEvictions), 0.0001)
 }
 

@@ -147,18 +147,12 @@ func RequestLogger(logger *slog.Logger) func(http.Handler) http.Handler {
 
 // remoteIP resolves the client address for the log line. It defers to
 // web.ClientIP so the logger and the login rate limiter never disagree about
-// who a request came from; the trust model behind the header lives there.
-//
-// Where web.ClientIP finds nothing parseable it reports nothing, but a log line
-// is better off with the raw value than with a blank: an unparseable address is
-// itself worth seeing.
+// who a request came from, and so which headers are trusted stays a fact of
+// that package alone. When nothing parses the raw RemoteAddr is better than a
+// blank, and unlike the header it is not attacker-controlled.
 func remoteIP(r *http.Request) string {
 	if addr, ok := web.ClientIP(r); ok {
 		return addr.String()
-	}
-
-	if realIP := strings.TrimSpace(r.Header.Get(web.RealIPHeader)); realIP != "" {
-		return realIP
 	}
 
 	return r.RemoteAddr

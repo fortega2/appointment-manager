@@ -3,10 +3,8 @@ package main
 import (
 	"appointment-manager/internal/storage"
 	"context"
-	"fmt"
 	"log/slog"
 	"os"
-	"strconv"
 	"strings"
 )
 
@@ -30,13 +28,9 @@ func initializeStorageClient(ctx context.Context, logger *slog.Logger) (*storage
 		return nil, nil //nolint:nilnil // nil client + nil error is the documented "disabled" signal; callers check client == nil, not err.
 	}
 
-	useSSL := true
-	if raw := strings.TrimSpace(os.Getenv(storageUseSSLEnv)); raw != "" {
-		parsed, err := strconv.ParseBool(raw)
-		if err != nil {
-			return nil, fmt.Errorf("invalid %s: %w", storageUseSSLEnv, err)
-		}
-		useSSL = parsed
+	useSSL, err := parseBool(os.Getenv(storageUseSSLEnv), storageUseSSLEnv, true)
+	if err != nil {
+		return nil, err
 	}
 
 	client, err := storage.NewClient(ctx, storage.Config{
