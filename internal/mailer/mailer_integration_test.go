@@ -81,10 +81,10 @@ func mailpitRelay(ctx context.Context, t *testing.T) (host string, smtpPort int,
 	return host, int(mappedSMTP.Num()), fmt.Sprintf("http://%s:%d", host, mappedHTTP.Num())
 }
 
-func newIntegrationClient(ctx context.Context, t *testing.T, host string, port int) *mailer.Client {
+func newIntegrationClient(t *testing.T, host string, port int) *mailer.Client {
 	t.Helper()
 
-	client, err := mailer.NewClient(ctx, mailer.Config{
+	client, err := mailer.NewClient(mailer.Config{
 		Host:        host,
 		Port:        port,
 		FromAddress: integrationFrom,
@@ -113,21 +113,19 @@ func getJSON(ctx context.Context, t *testing.T, url string, dst any) {
 	require.NoError(t, json.NewDecoder(resp.Body).Decode(dst))
 }
 
-// TestNewClientReachesTheRelayAtStartup is the point of dialing in the
-// constructor: the check costs one connection at boot.
-func TestNewClientReachesTheRelayAtStartup(t *testing.T) {
+func TestVerifyConnectionReachesTheRelay(t *testing.T) {
 	testcontainers.SkipIfProviderIsNotHealthy(t)
 
 	ctx := context.Background()
 	host, smtpPort, _ := mailpitRelay(ctx, t)
 
-	client := newIntegrationClient(ctx, t, host, smtpPort)
-	assert.NotNil(t, client)
+	client := newIntegrationClient(t, host, smtpPort)
+	require.NoError(t, client.VerifyConnection(ctx))
 }
 
-// TestNewClientFailsFastOnAnUnreachableRelay is the other half of that bargain:
-// a misconfigured relay stops the process at startup, not at the first reset.
-func TestNewClientFailsFastOnAnUnreachableRelay(t *testing.T) {
+// TestVerifyConnectionReportsAnUnreachableRelay pins what the startup path
+// depends on: a bad relay yields a client, and only the check fails.
+func TestVerifyConnectionReportsAnUnreachableRelay(t *testing.T) {
 	testcontainers.SkipIfProviderIsNotHealthy(t)
 
 	var listenConfig net.ListenConfig
@@ -136,14 +134,16 @@ func TestNewClientFailsFastOnAnUnreachableRelay(t *testing.T) {
 	closedPort := listener.Addr().(*net.TCPAddr).Port
 	require.NoError(t, listener.Close())
 
-	client, err := mailer.NewClient(t.Context(), mailer.Config{
+	client, err := mailer.NewClient(mailer.Config{
 		Host:        "127.0.0.1",
 		Port:        closedPort,
 		FromAddress: integrationFrom,
 		UseTLS:      false,
 	})
-	require.Error(t, err)
-	assert.Nil(t, client)
+	require.NoError(t, err)
+	require.NotNil(t, client)
+
+	assert.Error(t, client.VerifyConnection(t.Context()))
 }
 
 func TestSendDeliversTextAndHTML(t *testing.T) {
@@ -151,7 +151,7 @@ func TestSendDeliversTextAndHTML(t *testing.T) {
 
 	ctx := context.Background()
 	host, smtpPort, apiBaseURL := mailpitRelay(ctx, t)
-	client := newIntegrationClient(ctx, t, host, smtpPort)
+	client := newIntegrationClient(t, host, smtpPort)
 
 	require.NoError(t, client.Send(ctx, mailer.Message{
 		To:       integrationTo,
@@ -186,7 +186,7 @@ func TestSendWithoutHTMLLeavesNoAlternative(t *testing.T) {
 
 	ctx := context.Background()
 	host, smtpPort, apiBaseURL := mailpitRelay(ctx, t)
-	client := newIntegrationClient(ctx, t, host, smtpPort)
+	client := newIntegrationClient(t, host, smtpPort)
 
 	require.NoError(t, client.Send(ctx, mailer.Message{
 		To:       integrationTo,
@@ -212,7 +212,7 @@ func TestSendRejectsHeaderInjectionBeforeTheWire(t *testing.T) {
 
 	ctx := context.Background()
 	host, smtpPort, apiBaseURL := mailpitRelay(ctx, t)
-	client := newIntegrationClient(ctx, t, host, smtpPort)
+	client := newIntegrationClient(t, host, smtpPort)
 
 	err := client.Send(ctx, mailer.Message{
 		To:       integrationTo,
@@ -234,7 +234,7 @@ func TestSendTwiceReusesTheClient(t *testing.T) {
 
 	ctx := context.Background()
 	host, smtpPort, apiBaseURL := mailpitRelay(ctx, t)
-	client := newIntegrationClient(ctx, t, host, smtpPort)
+	client := newIntegrationClient(t, host, smtpPort)
 
 	msg := mailer.Message{
 		To:       integrationTo,

@@ -24,13 +24,9 @@ type Client struct {
 	fromName    string
 }
 
-// NewClient validates the config, then opens and closes one connection so that
-// a wrong host or bad credentials fail at startup rather than at the first
-// send. See ADR 0010.
-func NewClient(ctx context.Context, cfg Config) (*Client, error) {
-	if ctx == nil {
-		return nil, ErrNilContext
-	}
+// NewClient validates the config and builds a client. It performs no I/O, so a
+// relay that is down cannot stop the caller from starting. See ADR 0010.
+func NewClient(cfg Config) (*Client, error) {
 	if err := cfg.validate(); err != nil {
 		return nil, err
 	}
@@ -56,17 +52,11 @@ func NewClient(ctx context.Context, cfg Config) (*Client, error) {
 		return nil, fmt.Errorf("create smtp client: %w", err)
 	}
 
-	client := &Client{
+	return &Client{
 		mail:        mailClient,
 		fromAddress: cfg.FromAddress,
 		fromName:    cfg.FromName,
-	}
-
-	if err := client.verifyConnection(ctx); err != nil {
-		return nil, err
-	}
-
-	return client, nil
+	}, nil
 }
 
 // Send delivers one message, dialing the relay and closing the connection
@@ -108,6 +98,23 @@ func (c *Client) Send(ctx context.Context, msg Message) error {
 	return nil
 }
 
+// VerifyConnection opens and closes one connection, so a wrong host or rejected
+// credentials surface at startup rather than at the first reset.
+func (c *Client) VerifyConnection(ctx context.Context) error {
+	dialCtx, cancel := context.WithTimeout(ctx, dialTimeout)
+	defer cancel()
+
+	if err := c.mail.DialWithContext(dialCtx); err != nil {
+		return fmt.Errorf("dial smtp relay: %w", err)
+	}
+
+	if err := c.mail.Close(); err != nil {
+		return fmt.Errorf("close smtp probe: %w", err)
+	}
+
+	return nil
+}
+
 func (c *Client) setSender(message *gomail.Msg) error {
 	if strings.TrimSpace(c.fromName) == "" {
 		if err := message.From(c.fromAddress); err != nil {
@@ -119,21 +126,6 @@ func (c *Client) setSender(message *gomail.Msg) error {
 
 	if err := message.FromFormat(c.fromName, c.fromAddress); err != nil {
 		return fmt.Errorf("set from address: %w", err)
-	}
-
-	return nil
-}
-
-func (c *Client) verifyConnection(ctx context.Context) error {
-	dialCtx, cancel := context.WithTimeout(ctx, dialTimeout)
-	defer cancel()
-
-	if err := c.mail.DialWithContext(dialCtx); err != nil {
-		return fmt.Errorf("dial smtp relay: %w", err)
-	}
-
-	if err := c.mail.Close(); err != nil {
-		return fmt.Errorf("close smtp probe: %w", err)
 	}
 
 	return nil

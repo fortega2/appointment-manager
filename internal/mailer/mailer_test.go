@@ -10,10 +10,9 @@ import (
 
 const senderDisplayName = "Turnos"
 
-// TestNewClientRejectsBadInputBeforeDialing covers every NewClient path that
-// returns without touching the network; a valid config needs the relay the
-// integration test has.
-func TestNewClientRejectsBadInputBeforeDialing(t *testing.T) {
+// TestNewClientRejectsBadInput covers every NewClient failure: the constructor
+// does no I/O, so config validation is all there is to fail on.
+func TestNewClientRejectsBadInput(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
@@ -55,7 +54,7 @@ func TestNewClientRejectsBadInputBeforeDialing(t *testing.T) {
 			cfg := validConfig()
 			tt.mutate(&cfg)
 
-			client, err := NewClient(t.Context(), cfg)
+			client, err := NewClient(cfg)
 			require.Error(t, err)
 			assert.Nil(t, client)
 			assert.ErrorIs(t, err, tt.expected)
@@ -63,14 +62,14 @@ func TestNewClientRejectsBadInputBeforeDialing(t *testing.T) {
 	}
 }
 
-func TestNewClientNilContext(t *testing.T) {
+// TestNewClientAcceptsAValidConfigWithoutDialing is the point of moving the dial
+// out of the constructor: a client exists even when no relay is reachable.
+func TestNewClientAcceptsAValidConfigWithoutDialing(t *testing.T) {
 	t.Parallel()
 
-	//nolint:staticcheck // SA1012: passing a nil context is exactly what this guard is for.
-	client, err := NewClient(nil, validConfig())
-	require.Error(t, err)
-	assert.Nil(t, client)
-	assert.ErrorIs(t, err, ErrNilContext)
+	client, err := NewClient(validConfig())
+	require.NoError(t, err)
+	assert.NotNil(t, client)
 }
 
 // TestSendRejectsBadMessageBeforeDialing pins that validation runs before the

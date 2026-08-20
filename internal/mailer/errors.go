@@ -3,8 +3,6 @@ package mailer
 import "errors"
 
 var (
-	ErrNilContext = errors.New("nil context")
-
 	ErrEmptyHost           = errors.New("empty smtp host")
 	ErrPortOutOfRange      = errors.New("smtp port out of range")
 	ErrEmptyFromAddress    = errors.New("empty smtp from address")
