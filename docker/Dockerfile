@@ -24,13 +24,18 @@ RUN --mount=type=cache,target=/go/pkg/mod \
     CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
     go build -trimpath -buildvcs=false -ldflags="-s -w" -o /app/healthcheck ./cmd/healthcheck/main.go
 
+RUN --mount=type=cache,target=/go/pkg/mod \
+    --mount=type=cache,target=/root/.cache/go-build \
+    CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
+    go build -trimpath -buildvcs=false -ldflags="-s -w" -o /app/resetpassword ./cmd/resetpassword
+
 RUN mkdir -p /out/etc/ssl/certs /out/internal/ui \
  && cp /etc/passwd /etc/group /out/etc/ \
  && cp /etc/ssl/certs/ca-certificates.crt /out/etc/ssl/certs/ \
- && cp /app/appointment-manager /app/healthcheck /out/ \
+ && cp /app/appointment-manager /app/healthcheck /app/resetpassword /out/ \
  && cp -r /app/internal/ui/static /out/internal/ui/static \
  && chmod -R a+rX /out \
- && chmod 0755 /out/appointment-manager /out/healthcheck
+ && chmod 0755 /out/appointment-manager /out/healthcheck /out/resetpassword
 
 FROM scratch
 

@@ -96,6 +96,11 @@ go run ./cmd/server
 
 The server starts on `:8080`. Visit `http://localhost:8080` for the UI or `http://localhost:8080/healthz` for a health check.
 
+The dev stack also runs [Mailpit](https://mailpit.axllent.org/), a catcher that accepts every
+mail and delivers none, so the password reset link can be read without a relay. Set
+`SMTP_HOST=localhost`, `SMTP_PORT=1025` and `SMTP_USE_TLS=false`, then open
+`http://127.0.0.1:8025`.
+
 Frontend assets (Tailwind CSS, htmx, Alpine.js) are self-hosted and already committed under `internal/ui/static/`, so no extra setup is needed. If you change Tailwind utility classes in any `.templ` file, run `make css` and commit the regenerated `internal/ui/static/css/app.css`.
 
 ### Environment variables
@@ -133,6 +138,18 @@ over the `.env` file.
 | `LOGIN_RATE_LIMIT_IP_BURST` | no | Attempts a single client IP may make back to back before it is throttled (default `20`). |
 | `LOGIN_RATE_LIMIT_IP_REFILL` | no | How long one client-IP attempt takes to come back (default `30s`). |
 | `LOGIN_RATE_LIMIT_MAX_ENTRIES` | no | Maximum keys the limiter tracks per dimension before evicting the least recently used (default `10000`, roughly 1.5 MB per dimension). This is what bounds its memory against keys an attacker invents. |
+| `APP_BASE_URL` | yes | Origin the password reset link is built from, e.g. `https://turnos.example.com`. Must be http or https and include a host. Never derived from the request: a forged `Host` header would otherwise put an attacker's domain in a mail the user trusts. |
+| `SMTP_HOST` | yes | SMTP relay to send through. A relay that is unreachable at startup is logged, not fatal — the server still boots and the reset recovers on its own once the relay is back. A *missing* one is fatal, because password reset is the only recovery path and starting without it would leave the account unrecoverable and say nothing. |
+| `SMTP_PORT` | no | Submission port on the relay (default `587`). |
+| `SMTP_USERNAME` / `SMTP_PASSWORD` | no | Relay credentials. A password without a username stops the process. |
+| `SMTP_FROM_ADDRESS` | yes | Sender the reset mail claims to be from. Must parse as an address. |
+| `SMTP_FROM_NAME` | no | Display name shown beside the sender address. |
+| `SMTP_USE_TLS` | no | `true` (default) requires TLS. `false` is for a local catcher such as Mailpit only; against a remote relay it puts the credentials on the wire in the clear. Opportunistic STARTTLS is deliberately not offered. |
+| `PASSWORD_RESET_TOKEN_TTL` | no | How long a reset link stays redeemable (default `30m`). Absolute, written once, single use. |
+| `PASSWORD_RESET_RATE_LIMIT_ACCOUNT_BURST` | no | Reset requests one account may make back to back (default `3`). |
+| `PASSWORD_RESET_RATE_LIMIT_ACCOUNT_REFILL` | no | How long one account request takes to come back (default `15m`). |
+| `PASSWORD_RESET_RATE_LIMIT_IP_BURST` | no | Reset requests one client IP may make back to back (default `10`). |
+| `PASSWORD_RESET_RATE_LIMIT_IP_REFILL` | no | How long one client-IP request takes to come back (default `5m`). |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | no | OTLP/HTTP collector base URL for tracing (e.g. `http://tempo:4318`). When unset, tracing is disabled. |
 | `OTEL_TRACES_SAMPLE_RATIO` | no | Head-based trace sampling probability in `[0,1]` (default `1.0`). Child spans follow their parent's decision. |
 | `OTEL_SERVICE_VERSION` | no | Release identifier attached to spans as `service.version` (default `dev`). |
@@ -174,6 +191,24 @@ Two things worth knowing before tuning:
 - **Everything has to fit in `max_connections`.** Size the server's limit above the sum
   of every pool pointed at it, leaving room for administrative and monitoring sessions.
 
+### Resetting a password without mail
+
+The image ships a second binary for when the mailed link is not an option — no relay
+configured, a relay that is down, or a mail that never arrives:
+
+```bash
+docker exec appointment-manager /resetpassword -email=you@example.com
+```
+
+It prints a fresh random password on stdout **once** and nothing else, so the stream can
+be captured directly; diagnostics go to stderr. There is deliberately no `-password`
+flag, which is what keeps the password out of your shell history and out of `ps`. Every
+session the account holds is closed, and the hash is written with the same Argon2id
+parameters the login verifies against.
+
+It talks to the database directly and does **not** apply migrations, so it still works
+when a half-applied migration is what broke the deployment in the first place.
+
 ## Monitoring & Observability
 
 The service exposes Prometheus metrics on a **separate listener** (default `:9090`, configurable
@@ -194,6 +229,10 @@ and process collectors):
 - **Business** — `appt_appointments_created_total` and
   `appt_appointments_finalized_total{outcome}` where `outcome` is one of
   `attended` / `cancelled` / `absent` / `expired`.
+- **Password reset** — `appt_password_reset_mail_total{outcome}` (`sent` / `failed`) and
+  `appt_password_resets_completed_total`. The first is the only signal that the flow is
+  broken: the requester is answered identically whether or not the mail went out, so a
+  relay the app cannot reach is otherwise invisible.
 
 Each metric declaration in `internal/metrics/metrics.go` documents its dashboard and alert PromQL
 inline.
@@ -242,6 +281,11 @@ must also be attached to `caddy_network`** for spans to be delivered.
 - **Security by design** — Argon2id for passwords, CSRF protection via `Go 1.26` cross-origin protections, session-based auth, gzip compression, structured logging with `slog`.
 - **Comprehensive testing** — unit tests with mocked dependencies, integration tests with disposable PostgreSQL instances via `testcontainers`, injection of clock functions for deterministic time-dependent rule testing. Internal package coverage target: ≥ 90%.
 - **Strict linting** — 35+ linters configured in `.golangci.yml` covering security, complexity, style, and performance. All `//nolint` directives are justified.
+
+## TODO
+- **Add request-deadline middleware**
+- **Add email to the notification package**
+- **Consider whether it is worth adding an outbox table to the notification worker/package**
 
 ## License
 
