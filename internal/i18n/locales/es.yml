@@ -24,6 +24,31 @@ es:
       email: "Email"
       password: "Contraseña"
       submit: "Iniciar sesión"
+      forgot: "¿Olvidaste tu contraseña?"
+    forgot:
+      title: "Recuperar contraseña"
+      description: "Ingresá tu email y te mandamos un link para elegir una contraseña nueva."
+      email: "Email"
+      submit: "Enviar link"
+      back: "Volver a iniciar sesión"
+      sent: "Si el email corresponde a una cuenta, te mandamos un link para restablecer la contraseña."
+    reset:
+      title: "Elegí una contraseña nueva"
+      password: "Contraseña nueva"
+      confirmation: "Repetí la contraseña"
+      hint: "Al menos %{count} caracteres."
+      submit: "Guardar contraseña"
+      expired_title: "El link ya no sirve"
+      expired: "El link venció o ya fue usado. Pedí uno nuevo para seguir."
+      request_another: "Pedir un link nuevo"
+    mail:
+      reset:
+        subject: "Restablecer tu contraseña"
+        greeting: "Recibimos un pedido para restablecer la contraseña de tu cuenta."
+        action: "Elegir una contraseña nueva"
+        fallback: "Si el botón no funciona, copiá y pegá este link en tu navegador:"
+        expiry: "El link vence en %{minutes} minutos y se puede usar una sola vez."
+        ignore: "Si no pediste esto, ignorá este mail: tu contraseña no cambió."
     error:
       form: "Error al procesar el formulario"
       credentials: "Email o contraseña incorrectos"
@@ -33,6 +58,12 @@ es:
       rate_limited:
         one: "Demasiados intentos. Probá de nuevo en %{seconds} segundo"
         other: "Demasiados intentos. Probá de nuevo en %{seconds} segundos"
+      reset_email: "Ingresá tu email"
+      reset_token: "El link venció o ya fue usado. Pedí uno nuevo."
+      reset_mismatch: "Las contraseñas no coinciden"
+      reset_too_short: "La contraseña debe tener al menos %{count} caracteres"
+      reset_too_long: "La contraseña no puede superar los %{count} caracteres"
+      reset_failed: "No se pudo cambiar la contraseña. Probá de nuevo."
   home:
     title: "Panel"
     welcome: "Bienvenido a Appointment Manager"

@@ -24,6 +24,31 @@ en:
       email: "Email"
       password: "Password"
       submit: "Log In"
+      forgot: "Forgot your password?"
+    forgot:
+      title: "Reset your password"
+      description: "Enter your email and we will send you a link to choose a new password."
+      email: "Email"
+      submit: "Send link"
+      back: "Back to log in"
+      sent: "If that email belongs to an account, we sent it a link to reset the password."
+    reset:
+      title: "Choose a new password"
+      password: "New password"
+      confirmation: "Repeat the password"
+      hint: "At least %{count} characters."
+      submit: "Save password"
+      expired_title: "This link no longer works"
+      expired: "The link expired or was already used. Request a new one to continue."
+      request_another: "Request a new link"
+    mail:
+      reset:
+        subject: "Reset your password"
+        greeting: "We received a request to reset the password for your account."
+        action: "Choose a new password"
+        fallback: "If the button does not work, copy and paste this link into your browser:"
+        expiry: "The link expires in %{minutes} minutes and can only be used once."
+        ignore: "If you did not ask for this, ignore this email: your password has not changed."
     error:
       form: "Error processing the form"
       credentials: "Incorrect email or password"
@@ -33,6 +58,12 @@ en:
       rate_limited:
         one: "Too many attempts. Try again in %{seconds} second"
         other: "Too many attempts. Try again in %{seconds} seconds"
+      reset_email: "Enter your email"
+      reset_token: "The link expired or was already used. Request a new one."
+      reset_mismatch: "The passwords do not match"
+      reset_too_short: "The password must be at least %{count} characters"
+      reset_too_long: "The password cannot be longer than %{count} characters"
+      reset_failed: "The password could not be changed. Please try again."
   home:
     title: "Dashboard"
     welcome: "Welcome to Appointment Manager"

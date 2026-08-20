@@ -10,6 +10,14 @@ var (
 	ErrNilRateLimiter    = errors.New("rate limiter cannot be nil")
 )
 
+var (
+	ErrNilResetTokenStore  = errors.New("reset token store cannot be nil")
+	ErrNilMailer           = errors.New("mailer cannot be nil")
+	ErrNilWaitGroup        = errors.New("wait group cannot be nil")
+	ErrEmptyBaseURL        = errors.New("base url cannot be empty")
+	ErrNonPositiveTokenTTL = errors.New("reset token ttl must be positive")
+)
+
 // Outcomes of verifyCredentials. errInvalidCredentials covers both an unknown
 // email and a wrong password, so callers cannot leak account existence; the
 // other two separate infrastructure failures from a rejected login.
