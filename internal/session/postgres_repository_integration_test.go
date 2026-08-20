@@ -24,8 +24,11 @@ const (
 	sessionIntegrationDBPass   = "appointment_password"
 	sessionIntegrationSSLParam = "sslmode=disable"
 
-	sessionIntegrationEmail = "assistant@email.com"
-	sessionIntegrationHash  = "0000000000000000000000000000000000000000000000000000000000000000"
+	sessionIntegrationEmail      = "assistant@email.com"
+	sessionIntegrationOtherEmail = "other@email.com"
+	sessionIntegrationHash       = "0000000000000000000000000000000000000000000000000000000000000000"
+	sessionIntegrationSecondHash = "1111111111111111111111111111111111111111111111111111111111111111"
+	sessionIntegrationThirdHash  = "2222222222222222222222222222222222222222222222222222222222222222"
 )
 
 func newSessionIntegrationPool(ctx context.Context, t *testing.T) *pgxpool.Pool {
@@ -181,7 +184,7 @@ func TestPostgresRepositoryDeleteExpired(t *testing.T) {
 		CreatedAt: now.Add(-2 * session.SessionDuration),
 		ExpiresAt: now.Add(-time.Hour),
 	}))
-	activeID := "1111111111111111111111111111111111111111111111111111111111111111"
+	activeID := sessionIntegrationSecondHash
 	require.NoError(t, repo.Create(ctx, session.Session{
 		ID:        activeID,
 		UserID:    assistantID.String(),
@@ -196,6 +199,74 @@ func TestPostgresRepositoryDeleteExpired(t *testing.T) {
 	active, err := repo.Get(ctx, activeID)
 	require.NoError(t, err)
 	assert.Equal(t, activeID, active.ID)
+}
+
+// TestPostgresRepositoryDeleteByAssistant is what makes a password reset log the
+// assistant out everywhere, so it has to leave other assistants alone.
+func TestPostgresRepositoryDeleteByAssistant(t *testing.T) {
+	testcontainers.SkipIfProviderIsNotHealthy(t)
+
+	ctx := context.Background()
+	pool := newSessionIntegrationPool(ctx, t)
+	repo := newSessionIntegrationRepository(t, pool)
+
+	assistantID := seedAssistant(ctx, t, pool, sessionIntegrationEmail)
+	otherID := seedAssistant(ctx, t, pool, sessionIntegrationOtherEmail)
+	now := time.Now().UTC()
+
+	for _, id := range []string{sessionIntegrationHash, sessionIntegrationSecondHash} {
+		require.NoError(t, repo.Create(ctx, session.Session{
+			ID:        id,
+			UserID:    assistantID.String(),
+			CreatedAt: now,
+			ExpiresAt: now.Add(session.SessionDuration),
+		}))
+	}
+	require.NoError(t, repo.Create(ctx, session.Session{
+		ID:        sessionIntegrationThirdHash,
+		UserID:    otherID.String(),
+		CreatedAt: now,
+		ExpiresAt: now.Add(session.SessionDuration),
+	}))
+
+	removed, err := repo.DeleteByAssistant(ctx, assistantID.String())
+	require.NoError(t, err)
+	assert.Equal(t, int64(2), removed)
+	assert.Equal(t, int64(1), countSessions(ctx, t, pool))
+
+	survivor, err := repo.Get(ctx, sessionIntegrationThirdHash)
+	require.NoError(t, err)
+	assert.Equal(t, otherID.String(), survivor.UserID)
+}
+
+// TestPostgresRepositoryDeleteByAssistantWithoutSessions pins that an assistant
+// logged in nowhere is a clean result, not ErrSessionNotFound.
+func TestPostgresRepositoryDeleteByAssistantWithoutSessions(t *testing.T) {
+	testcontainers.SkipIfProviderIsNotHealthy(t)
+
+	ctx := context.Background()
+	pool := newSessionIntegrationPool(ctx, t)
+	repo := newSessionIntegrationRepository(t, pool)
+
+	assistantID := seedAssistant(ctx, t, pool, sessionIntegrationEmail)
+
+	removed, err := repo.DeleteByAssistant(ctx, assistantID.String())
+	require.NoError(t, err)
+	assert.Zero(t, removed)
+}
+
+// TestPostgresRepositoryDeleteByAssistantUnknownAssistant covers the id that
+// parses but matches nothing: a DELETE has no foreign key to violate.
+func TestPostgresRepositoryDeleteByAssistantUnknownAssistant(t *testing.T) {
+	testcontainers.SkipIfProviderIsNotHealthy(t)
+
+	ctx := context.Background()
+	pool := newSessionIntegrationPool(ctx, t)
+	repo := newSessionIntegrationRepository(t, pool)
+
+	removed, err := repo.DeleteByAssistant(ctx, uuid.Must(uuid.NewV7()).String())
+	require.NoError(t, err)
+	assert.Zero(t, removed)
 }
 
 // TestSessionSurvivesStoreRestart is the reason this package talks to Postgres

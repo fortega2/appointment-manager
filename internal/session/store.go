@@ -30,6 +30,7 @@ type Storer interface {
 	Create(ctx context.Context, s Session) error
 	Get(ctx context.Context, id string) (*Session, error)
 	Delete(ctx context.Context, id string) error
+	DeleteByAssistant(ctx context.Context, userID string) (int64, error)
 	DeleteExpired(ctx context.Context, before time.Time) (int64, error)
 }
 
@@ -91,6 +92,17 @@ func (s *Store) Delete(ctx context.Context, token string) error {
 	}
 
 	return nil
+}
+
+// DeleteByAssistant removes every session the assistant holds and reports how
+// many. Finding none is not an error: it means they were logged in nowhere.
+func (s *Store) DeleteByAssistant(ctx context.Context, userID string) (int64, error) {
+	removed, err := s.storer.DeleteByAssistant(ctx, userID)
+	if err != nil {
+		return 0, fmt.Errorf("delete by assistant: %w", err)
+	}
+
+	return removed, nil
 }
 
 // DeleteExpired removes every expired session and reports how many. Its

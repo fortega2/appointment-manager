@@ -10,16 +10,20 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-const sessionUserID = "assistant-123"
+const (
+	sessionUserID = "assistant-123"
+	otherUserID   = "assistant-456"
+)
 
 var errStorerFailed = errors.New("storer failed")
 
 type stubStorer struct {
-	sessions   map[string]Session
-	createErr  error
-	deleteErr  error
-	expiredErr error
-	lastBefore time.Time
+	sessions       map[string]Session
+	createErr      error
+	deleteErr      error
+	byAssistantErr error
+	expiredErr     error
+	lastBefore     time.Time
 }
 
 func newStubStorer() *stubStorer {
@@ -55,6 +59,22 @@ func (s *stubStorer) Delete(_ context.Context, id string) error {
 	delete(s.sessions, id)
 
 	return nil
+}
+
+func (s *stubStorer) DeleteByAssistant(_ context.Context, userID string) (int64, error) {
+	if s.byAssistantErr != nil {
+		return 0, s.byAssistantErr
+	}
+
+	removed := int64(0)
+	for id, session := range s.sessions {
+		if session.UserID == userID {
+			delete(s.sessions, id)
+			removed++
+		}
+	}
+
+	return removed, nil
 }
 
 func (s *stubStorer) DeleteExpired(_ context.Context, before time.Time) (int64, error) {
@@ -209,6 +229,57 @@ func TestStoreDeletePropagatesStorerError(t *testing.T) {
 
 	err := store.Delete(t.Context(), "any")
 	require.Error(t, err)
+	assert.ErrorIs(t, err, errStorerFailed)
+}
+
+func TestStoreDeleteByAssistant(t *testing.T) {
+	t.Parallel()
+
+	store := newTestStore(t, newStubStorer())
+
+	first, err := store.Create(t.Context(), sessionUserID)
+	require.NoError(t, err)
+	second, err := store.Create(t.Context(), sessionUserID)
+	require.NoError(t, err)
+	untouched, err := store.Create(t.Context(), otherUserID)
+	require.NoError(t, err)
+
+	removed, err := store.DeleteByAssistant(t.Context(), sessionUserID)
+	require.NoError(t, err)
+	assert.Equal(t, int64(2), removed)
+
+	for _, token := range []string{first, second} {
+		_, getErr := store.Get(t.Context(), token)
+		assert.ErrorIs(t, getErr, ErrSessionNotFound)
+	}
+
+	survivor, err := store.Get(t.Context(), untouched)
+	require.NoError(t, err)
+	assert.Equal(t, otherUserID, survivor.UserID)
+}
+
+// TestStoreDeleteByAssistantWithoutSessions pins that an assistant logged in
+// nowhere is a clean result, not ErrSessionNotFound.
+func TestStoreDeleteByAssistantWithoutSessions(t *testing.T) {
+	t.Parallel()
+
+	store := newTestStore(t, newStubStorer())
+
+	removed, err := store.DeleteByAssistant(t.Context(), sessionUserID)
+	require.NoError(t, err)
+	assert.Zero(t, removed)
+}
+
+func TestStoreDeleteByAssistantStorerError(t *testing.T) {
+	t.Parallel()
+
+	storer := newStubStorer()
+	storer.byAssistantErr = errStorerFailed
+	store := newTestStore(t, storer)
+
+	removed, err := store.DeleteByAssistant(t.Context(), sessionUserID)
+	require.Error(t, err)
+	assert.Zero(t, removed)
 	assert.ErrorIs(t, err, errStorerFailed)
 }
 

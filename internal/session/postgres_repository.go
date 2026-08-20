@@ -16,10 +16,11 @@ import (
 const (
 	constraintFkSessionAssistant = "fk_session_assistant"
 
-	createErrMsg        = "create session: %w"
-	getErrMsg           = "get session: %w"
-	deleteErrMsg        = "delete session: %w"
-	deleteExpiredErrMsg = "delete expired sessions: %w"
+	createErrMsg            = "create session: %w"
+	getErrMsg               = "get session: %w"
+	deleteErrMsg            = "delete session: %w"
+	deleteByAssistantErrMsg = "delete assistant sessions: %w"
+	deleteExpiredErrMsg     = "delete expired sessions: %w"
 
 	createSessionQuery = `
 		INSERT INTO public.session (
@@ -47,6 +48,13 @@ const (
 			public.session
 		WHERE
 			id = $1
+	`
+
+	deleteAssistantSessionsQuery = `
+		DELETE FROM
+			public.session
+		WHERE
+			assistant_id = $1
 	`
 
 	deleteExpiredSessionsQuery = `
@@ -124,6 +132,22 @@ func (r *PostgresRepository) Delete(ctx context.Context, id string) error {
 	}
 
 	return nil
+}
+
+// DeleteByAssistant removes every session the assistant holds and reports how
+// many. Unlike Delete, zero rows is a normal result rather than ErrSessionNotFound.
+func (r *PostgresRepository) DeleteByAssistant(ctx context.Context, userID string) (int64, error) {
+	assistantID, err := domain.ParseID(userID)
+	if err != nil {
+		return 0, fmt.Errorf(deleteByAssistantErrMsg, fmt.Errorf("%w: %w", ErrInvalidAssistantID, err))
+	}
+
+	tag, err := r.pool.Exec(ctx, deleteAssistantSessionsQuery, assistantID)
+	if err != nil {
+		return 0, fmt.Errorf(deleteByAssistantErrMsg, err)
+	}
+
+	return tag.RowsAffected(), nil
 }
 
 // DeleteExpired removes every session that expired before the given instant.

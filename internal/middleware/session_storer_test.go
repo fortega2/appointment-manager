@@ -44,6 +44,18 @@ func (s *stubSessionStorer) Delete(_ context.Context, id string) error {
 	return nil
 }
 
+func (s *stubSessionStorer) DeleteByAssistant(_ context.Context, userID string) (int64, error) {
+	removed := int64(0)
+	for id, value := range s.sessions {
+		if value.UserID == userID {
+			delete(s.sessions, id)
+			removed++
+		}
+	}
+
+	return removed, nil
+}
+
 func (s *stubSessionStorer) DeleteExpired(_ context.Context, before time.Time) (int64, error) {
 	removed := int64(0)
 	for id, value := range s.sessions {

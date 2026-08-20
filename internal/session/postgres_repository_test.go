@@ -43,6 +43,18 @@ func TestPostgresRepositoryCreateEmptyAssistantID(t *testing.T) {
 	assert.ErrorIs(t, err, domain.ErrInvalidID)
 }
 
+func TestPostgresRepositoryDeleteByAssistantInvalidID(t *testing.T) {
+	t.Parallel()
+
+	repo := &PostgresRepository{}
+
+	removed, err := repo.DeleteByAssistant(t.Context(), "not-a-uuid")
+	require.Error(t, err)
+	assert.Zero(t, removed)
+	assert.ErrorIs(t, err, ErrInvalidAssistantID)
+	assert.ErrorIs(t, err, domain.ErrInvalidID)
+}
+
 func TestMapPgxError(t *testing.T) {
 	t.Parallel()
 
