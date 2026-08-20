@@ -6,3 +6,8 @@ import "errors"
 // the caller's context ends or maxQueueWait elapses — not on the first busy
 // moment. It wraps the underlying context error.
 var ErrTooManyConcurrentHashes = errors.New("too many concurrent password hashes")
+
+var (
+	ErrPasswordTooShort = errors.New("password is too short")
+	ErrPasswordTooLong  = errors.New("password is too long")
+)
