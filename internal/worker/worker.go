@@ -45,13 +45,14 @@ func NewWorker(logger *slog.Logger, name string, job JobFunc, tickerInterval tim
 	}, nil
 }
 
+// Run ticks until ctx ends. It logs nothing about its own lifecycle: whoever
+// started it logs the pair, so the two lines cannot drift apart.
 func (w *Worker) Run(ctx context.Context) {
 	ticker := time.NewTicker(w.tickerInterval)
 	defer ticker.Stop()
 
 	select {
 	case <-ctx.Done():
-		w.logger.InfoContext(ctx, "worker stopped", slog.String("job", w.name))
 		return
 	default:
 		w.runJob(ctx)
@@ -62,7 +63,6 @@ func (w *Worker) Run(ctx context.Context) {
 		case <-ticker.C:
 			w.runJob(ctx)
 		case <-ctx.Done():
-			w.logger.InfoContext(ctx, "worker stopped", slog.String("job", w.name))
 			return
 		}
 	}
