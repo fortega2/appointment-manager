@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -58,6 +59,18 @@ const (
 			email,
 			password_hash
 		) VALUES ($1, $2, $3, $4, $5)
+	`
+	// updated_at is stamped by the database, the clock created_at already
+	// defaults to, so skew can never order the pair backwards.
+	//nolint:gosec // G101 false positive: a SQL statement, not a credential.
+	updatePasswordHashQuery = `
+		UPDATE
+			assistant
+		SET
+			password_hash = $2,
+			updated_at = CURRENT_TIMESTAMP
+		WHERE
+			id = $1
 	`
 )
 
@@ -159,6 +172,26 @@ func (r *PostgresRepository) Create(ctx context.Context, assistant Assistant) (u
 	}
 
 	return assistant.ID, nil
+}
+
+// UpdatePasswordHash replaces the stored hash. A blank hash is refused because
+// no password could ever verify against it, and an id matching no row is
+// ErrAssistantNotFound rather than a silent success.
+func (r *PostgresRepository) UpdatePasswordHash(ctx context.Context, id uuid.UUID, passwordHash string) error {
+	if strings.TrimSpace(passwordHash) == "" {
+		return ErrEmptyPasswordHash
+	}
+
+	tag, err := r.pool.Exec(ctx, updatePasswordHashQuery, id, passwordHash)
+	if err != nil {
+		return fmt.Errorf("UpdatePasswordHash: %w", err)
+	}
+
+	if tag.RowsAffected() == 0 {
+		return fmt.Errorf("UpdatePasswordHash: %w", ErrAssistantNotFound)
+	}
+
+	return nil
 }
 
 func isUniqueEmailViolation(err error) bool {

@@ -9,8 +9,10 @@ import (
 	"errors"
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go"
@@ -34,7 +36,7 @@ func TestPostgresRepositoryCreateListGet(t *testing.T) {
 	testcontainers.SkipIfProviderIsNotHealthy(t)
 	ctx := context.Background()
 
-	repo := newIntegrationRepository(ctx, t)
+	repo, _ := newIntegrationRepository(ctx, t)
 
 	createdIDs := make([]uuid.UUID, 0, 2)
 	for i := range 2 {
@@ -71,7 +73,7 @@ func TestPostgresRepositoryGetNotFound(t *testing.T) {
 	testcontainers.SkipIfProviderIsNotHealthy(t)
 	ctx := context.Background()
 
-	repo := newIntegrationRepository(ctx, t)
+	repo, _ := newIntegrationRepository(ctx, t)
 
 	missingID := uuid.MustParse(repoMissingIDLiteral)
 	record, err := repo.Get(ctx, missingID)
@@ -85,7 +87,7 @@ func TestPostgresRepositoryCreateDuplicateEmail(t *testing.T) {
 	testcontainers.SkipIfProviderIsNotHealthy(t)
 	ctx := context.Background()
 
-	repo := newIntegrationRepository(ctx, t)
+	repo, _ := newIntegrationRepository(ctx, t)
 
 	duplicateEmail := "duplicate@email.com"
 	firstID, err := repo.Create(ctx, assistant.Assistant{
@@ -111,7 +113,49 @@ func TestPostgresRepositoryCreateDuplicateEmail(t *testing.T) {
 	assert.True(t, errors.Is(err, assistant.ErrEmailAlreadyExists))
 }
 
-func newIntegrationRepository(ctx context.Context, t *testing.T) *assistant.PostgresRepository {
+// TestPostgresRepositoryUpdatePasswordHash is what a password reset ends in: the
+// new hash must be what Get returns, and nothing else about the row may move.
+func TestPostgresRepositoryUpdatePasswordHash(t *testing.T) {
+	testcontainers.SkipIfProviderIsNotHealthy(t)
+	ctx := context.Background()
+
+	repo, pool := newIntegrationRepository(ctx, t)
+	id := seedIntegrationAssistant(ctx, t, repo)
+
+	before, err := repo.Get(ctx, id)
+	require.NoError(t, err)
+	require.Nil(t, readUpdatedAt(ctx, t, pool, id), "updated_at starts null")
+
+	newHash := "argon2id-hash-after-reset"
+	require.NoError(t, repo.UpdatePasswordHash(ctx, id, newHash))
+
+	after, err := repo.Get(ctx, id)
+	require.NoError(t, err)
+	assert.Equal(t, newHash, after.PasswordHash)
+	assert.Equal(t, before.FirstName, after.FirstName)
+	assert.Equal(t, before.LastName, after.LastName)
+	assert.Equal(t, before.Email, after.Email)
+
+	updatedAt := readUpdatedAt(ctx, t, pool, id)
+	require.NotNil(t, updatedAt, "updated_at must be stamped")
+	assert.WithinDuration(t, time.Now(), *updatedAt, time.Minute)
+}
+
+// TestPostgresRepositoryUpdatePasswordHashNotFound pins that an id matching no
+// row is an error: reporting success would tell the assistant their password
+// changed when it did not.
+func TestPostgresRepositoryUpdatePasswordHashNotFound(t *testing.T) {
+	testcontainers.SkipIfProviderIsNotHealthy(t)
+	ctx := context.Background()
+
+	repo, _ := newIntegrationRepository(ctx, t)
+
+	err := repo.UpdatePasswordHash(ctx, uuid.MustParse(repoMissingIDLiteral), "any-hash")
+	require.Error(t, err)
+	assert.ErrorIs(t, err, assistant.ErrAssistantNotFound)
+}
+
+func newIntegrationRepository(ctx context.Context, t *testing.T) (*assistant.PostgresRepository, *pgxpool.Pool) {
 	t.Helper()
 
 	databaseURL := startAssistantPostgresContainer(ctx, t)
@@ -123,7 +167,34 @@ func newIntegrationRepository(ctx context.Context, t *testing.T) *assistant.Post
 	repo, err := assistant.NewPostgresRepository(pool)
 	require.NoError(t, err)
 
-	return repo
+	return repo, pool
+}
+
+func seedIntegrationAssistant(ctx context.Context, t *testing.T, repo *assistant.PostgresRepository) uuid.UUID {
+	t.Helper()
+
+	id := uuid.Must(uuid.NewV7())
+	created, err := repo.Create(ctx, assistant.Assistant{
+		ID:           id,
+		FirstName:    fmt.Sprintf(repoNamesFmt, 0),
+		LastName:     repoLastNames,
+		Email:        fmt.Sprintf(repoEmailFmt, 0),
+		PasswordHash: fmt.Sprintf(repoPasswordHashFmt, 0),
+	})
+	require.NoError(t, err)
+
+	return created
+}
+
+func readUpdatedAt(ctx context.Context, t *testing.T, pool *pgxpool.Pool, id uuid.UUID) *time.Time {
+	t.Helper()
+
+	var updatedAt *time.Time
+	require.NoError(t, pool.QueryRow(ctx,
+		`SELECT updated_at FROM assistant WHERE id = $1`, id,
+	).Scan(&updatedAt))
+
+	return updatedAt
 }
 
 func startAssistantPostgresContainer(ctx context.Context, t *testing.T) string {
