@@ -12,10 +12,9 @@ import (
 )
 
 const (
-	loginCaseRenderForm  = "render login form"
-	loginCaseRenderError = "render login error message"
-	submitES             = "Iniciar sesión"
-	submitEN             = "Log In"
+	loginCaseRenderForm = "render login form"
+	submitES            = "Iniciar sesión"
+	submitEN            = "Log In"
 	//nolint:gosec // G101 false positive: a form label, not a credential.
 	passwordLabelES = "Contraseña"
 	passwordLabelEN = "Password"
@@ -50,24 +49,4 @@ func TestLogin(t *testing.T) {
 			assert.Contains(t, output, `name="password"`)
 		})
 	}
-}
-
-func TestLoginError(t *testing.T) {
-	t.Parallel()
-
-	t.Run(loginCaseRenderError, func(t *testing.T) {
-		t.Parallel()
-
-		msg := "Invalid credentials"
-		component := auth.LoginError(msg)
-
-		var buf bytes.Buffer
-		err := component.Render(t.Context(), &buf)
-		require.NoError(t, err)
-
-		output := buf.String()
-
-		assert.Contains(t, output, msg)
-		assert.Contains(t, output, "<span>")
-	})
 }

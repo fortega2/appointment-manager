@@ -1,0 +1,7 @@
+package auth
+
+// FormError is the error message htmx swaps into an auth form. It brings no
+// markup of its own, so each form styles the slot it lands in.
+templ FormError(message string) {
+	<span>{ message }</span>
+}

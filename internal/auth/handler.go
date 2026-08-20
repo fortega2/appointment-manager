@@ -19,7 +19,6 @@ import (
 
 const (
 	maxBytesReader            int64  = 1 << 20
-	renderLoginErroMsg        string = "error rendering login error"
 	failedGetAssistByEmailMsg string = "failed to get assistant by email"
 	failedCreateSessionMsg    string = "failed to create session"
 	failedDeleteSessionMsg    string = "failed to delete session"
@@ -296,15 +295,15 @@ func (h *Handler) processLoginUIHandler() http.HandlerFunc {
 		email, pass, err := h.parseLoginForm(r, w)
 		if err != nil {
 			h.logger.ErrorContext(r.Context(), "error parsing login form", slog.Any("error", err))
-			h.renderError(w, r, http.StatusBadRequest, loginErrorFormKey)
+			renderError(w, r, h.logger, http.StatusBadRequest, loginErrorFormKey)
 			return
 		}
 
 		decision, addr := h.checkRateLimit(w, r, email)
 		if !decision.Allowed {
 			seconds := web.RetryAfterSeconds(decision.RetryAfter)
-			h.renderErrorN(
-				w, r,
+			renderErrorN(
+				w, r, h.logger,
 				http.StatusTooManyRequests,
 				loginErrorRateLimitedKey,
 				int(seconds),
@@ -319,11 +318,11 @@ func (h *Handler) processLoginUIHandler() http.HandlerFunc {
 
 			switch {
 			case errors.Is(err, password.ErrTooManyConcurrentHashes):
-				h.renderError(w, r, http.StatusServiceUnavailable, loginErrorBusyKey)
+				renderError(w, r, h.logger, http.StatusServiceUnavailable, loginErrorBusyKey)
 			case errors.Is(err, errInvalidCredentials):
-				h.renderError(w, r, http.StatusUnauthorized, loginErrorCredentialsKey)
+				renderError(w, r, h.logger, http.StatusUnauthorized, loginErrorCredentialsKey)
 			default:
-				h.renderError(w, r, http.StatusInternalServerError, loginErrorPasswordKey)
+				renderError(w, r, h.logger, http.StatusInternalServerError, loginErrorPasswordKey)
 			}
 			return
 		}
@@ -338,7 +337,7 @@ func (h *Handler) processLoginUIHandler() http.HandlerFunc {
 				slog.String("assistant_id", a.ID.String()),
 				slog.String("email", a.Email),
 				slog.Any("error", err))
-			h.renderError(w, r, http.StatusInternalServerError, loginErrorSessionKey)
+			renderError(w, r, h.logger, http.StatusInternalServerError, loginErrorSessionKey)
 			return
 		}
 		//nolint:gosec // G124 false positive: Secure is dynamically !h.isDevelopment (true in prod, false only for local HTTP dev); HttpOnly/SameSite are already set.
@@ -368,36 +367,6 @@ func (h *Handler) parseLoginForm(r *http.Request, w http.ResponseWriter) (string
 	}
 
 	return email, pass, nil
-}
-
-// renderError writes the login form's inline error. It takes a catalog key
-// rather than a message so the copy follows the request's locale, and args for
-// the keys whose copy interpolates a value.
-//
-// Any header the response needs must already be set: this writes the status
-// line, after which net/http discards further header writes.
-func (h *Handler) renderError(w http.ResponseWriter, r *http.Request, status int, messageKey string, args ...any) {
-	h.renderMessage(w, r, status, i18n.T(r.Context(), messageKey, args...))
-}
-
-// renderErrorN is renderError for a message whose wording depends on a count,
-// so "1 second" does not render as "1 seconds".
-func (h *Handler) renderErrorN(
-	w http.ResponseWriter,
-	r *http.Request,
-	status int,
-	messageKey string,
-	n int,
-	args ...any,
-) {
-	h.renderMessage(w, r, status, i18n.N(r.Context(), messageKey, n, args...))
-}
-
-func (h *Handler) renderMessage(w http.ResponseWriter, r *http.Request, status int, message string) {
-	w.WriteHeader(status)
-	if err := auth.LoginError(message).Render(r.Context(), w); err != nil {
-		h.logger.ErrorContext(r.Context(), renderLoginErroMsg, slog.Any("error", err))
-	}
 }
 
 func (h *Handler) logoutUIHandler() http.HandlerFunc {
