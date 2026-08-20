@@ -4,8 +4,6 @@ import (
 	"appointment-manager/internal/i18n"
 	"appointment-manager/internal/metrics"
 	"appointment-manager/internal/middleware"
-	"appointment-manager/internal/ratelimit"
-	"appointment-manager/internal/session"
 	"appointment-manager/internal/storage"
 	"context"
 	"fmt"
@@ -18,9 +16,7 @@ import (
 
 type handlerConfig struct {
 	logger           *slog.Logger
-	sessionStore     *session.Store
-	loginLimiter     *ratelimit.Limiter
-	deps             *dependencies
+	components       *appComponents
 	storageClient    *storage.Client
 	metrics          *metrics.Metrics
 	sendNotification func(context.Context, uuid.UUID)
@@ -32,31 +28,31 @@ type handlerConfig struct {
 // are returned wrapped rather than logged here: run logs them once, so the
 // context of the failure is carried by the error chain itself.
 func initializeServerHandlers(cfg handlerConfig) (http.Handler, error) {
-	authHandler, err := initializeAuthHandler(cfg.logger, cfg.sessionStore, cfg.deps, cfg.loginLimiter, cfg.isDev)
+	authHandler, err := initializeAuthHandler(cfg.logger, cfg.components.sessionStore, cfg.components.deps, cfg.components.loginLimiter, cfg.isDev)
 	if err != nil {
 		return nil, err
 	}
-	assistantHandler, err := initializeAssistantHandler(cfg.logger, cfg.deps)
+	assistantHandler, err := initializeAssistantHandler(cfg.logger, cfg.components.deps)
 	if err != nil {
 		return nil, err
 	}
-	appointmentHandler, err := initializeAppointmentHandler(cfg.logger, cfg.deps)
+	appointmentHandler, err := initializeAppointmentHandler(cfg.logger, cfg.components.deps)
 	if err != nil {
 		return nil, err
 	}
-	professionalHandler, err := initializeProfessionalHandler(cfg.logger, cfg.deps)
+	professionalHandler, err := initializeProfessionalHandler(cfg.logger, cfg.components.deps)
 	if err != nil {
 		return nil, err
 	}
-	patientHandler, err := initializePatientHandler(cfg.logger, cfg.deps)
+	patientHandler, err := initializePatientHandler(cfg.logger, cfg.components.deps)
 	if err != nil {
 		return nil, err
 	}
-	slotHandler, err := initializeSlotHandler(cfg.logger, cfg.deps, cfg.sendNotification)
+	slotHandler, err := initializeSlotHandler(cfg.logger, cfg.components.deps, cfg.sendNotification)
 	if err != nil {
 		return nil, err
 	}
-	healthHandler, err := initializeHealthHandler(cfg.logger, cfg.deps)
+	healthHandler, err := initializeHealthHandler(cfg.logger, cfg.components.deps)
 	if err != nil {
 		return nil, err
 	}
@@ -64,11 +60,15 @@ func initializeServerHandlers(cfg handlerConfig) (http.Handler, error) {
 	if err != nil {
 		return nil, err
 	}
-	uiAppointmentHandler, err := initializeUIAppointmentHandler(cfg.logger, cfg.deps)
+	uiAppointmentHandler, err := initializeUIAppointmentHandler(cfg.logger, cfg.components.deps)
 	if err != nil {
 		return nil, err
 	}
 	uiLanguageHandler, err := initializeUILanguageHandler(cfg.logger, cfg.isDev)
+	if err != nil {
+		return nil, err
+	}
+	resetHandler, err := initializeResetHandler(cfg.logger, cfg.components, cfg.metrics)
 	if err != nil {
 		return nil, err
 	}
@@ -86,12 +86,13 @@ func initializeServerHandlers(cfg handlerConfig) (http.Handler, error) {
 
 	publicUI := middleware.Guard(mux, localeMiddleware)
 	authHandler.RegisterHandlers(publicUI)
+	resetHandler.RegisterHandlers(publicUI)
 	uiLanguageHandler.RegisterHandlers(publicUI)
 
 	// Protected routes are registered on mux itself through a guard rather than
 	// on a nested mux, so the pattern the observability middlewares observe is
 	// the specific route and not the catch-all (see middleware.Guard).
-	apiProtected := middleware.Guard(mux, middleware.Session(cfg.sessionStore, cfg.isDev))
+	apiProtected := middleware.Guard(mux, middleware.Session(cfg.components.sessionStore, cfg.isDev))
 	assistantHandler.RegisterHandlers(apiProtected)
 	appointmentHandler.RegisterHandlers(apiProtected)
 	professionalHandler.RegisterHandlers(apiProtected)
@@ -102,7 +103,7 @@ func initializeServerHandlers(cfg handlerConfig) (http.Handler, error) {
 		mux,
 		localeMiddleware,
 		middleware.Prescriptions(prescriptionsEnabled),
-		middleware.UISession(cfg.sessionStore, cfg.isDev),
+		middleware.UISession(cfg.components.sessionStore, cfg.isDev),
 	)
 	uiHomeHandler.RegisterHandlers(uiProtected)
 	professionalHandler.RegisterUIHandlers(uiProtected)
@@ -111,7 +112,7 @@ func initializeServerHandlers(cfg handlerConfig) (http.Handler, error) {
 	uiAppointmentHandler.RegisterUIHandlers(uiProtected)
 
 	if prescriptionsEnabled {
-		uiPrescriptionHandler, err := initializeUIPrescriptionHandler(cfg.logger, cfg.deps, cfg.storageClient)
+		uiPrescriptionHandler, err := initializeUIPrescriptionHandler(cfg.logger, cfg.components.deps, cfg.storageClient)
 		if err != nil {
 			return nil, err
 		}

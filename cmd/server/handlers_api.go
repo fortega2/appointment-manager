@@ -5,6 +5,7 @@ import (
 	"appointment-manager/internal/assistant"
 	"appointment-manager/internal/auth"
 	"appointment-manager/internal/health"
+	"appointment-manager/internal/metrics"
 	"appointment-manager/internal/patient"
 	"appointment-manager/internal/professional"
 	"appointment-manager/internal/ratelimit"
@@ -27,6 +28,31 @@ func initializeAuthHandler(logger *slog.Logger, store *session.Store, deps *depe
 	}
 
 	return authHandler, nil
+}
+
+func initializeResetHandler(
+	logger *slog.Logger,
+	components *appComponents,
+	appMetrics *metrics.Metrics,
+) (*auth.ResetHandler, error) {
+	resetHandler, err := auth.NewResetHandler(auth.ResetHandlerConfig{
+		Logger:   logger,
+		Tokens:   components.resetTokenStore,
+		Sessions: components.sessionStore,
+		Repo:     components.deps.assistantRepo,
+		Hasher:   components.deps.passwordHasher,
+		Mail:     components.mailClient,
+		Limiter:  components.resetLimiter,
+		Waiters:  components.resetWaiters,
+		Metrics:  appMetrics,
+		BaseURL:  components.appBaseURL,
+		TokenTTL: components.resetTokenTTL,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to create password reset handler: %w", err)
+	}
+
+	return resetHandler, nil
 }
 
 func initializeAssistantHandler(logger *slog.Logger, deps *dependencies) (*assistant.Handler, error) {

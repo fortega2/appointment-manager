@@ -3,11 +3,13 @@ package main
 import (
 	"appointment-manager/internal/db"
 	"appointment-manager/internal/i18n"
+	"appointment-manager/internal/mailer"
 	"appointment-manager/internal/ratelimit"
 	"errors"
 	"fmt"
 	"log/slog"
 	"math"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -63,6 +65,32 @@ const (
 	// At roughly 150 bytes per tracked key this caps the limiter near 1.5 MB per
 	// map, which is what bounds its memory against keys an attacker invents.
 	defaultLoginRateLimitMaxEntries = 10_000
+
+	appBaseURLEnv = "APP_BASE_URL"
+
+	smtpHostEnv        = "SMTP_HOST"
+	smtpPortEnv        = "SMTP_PORT"
+	smtpUsernameEnv    = "SMTP_USERNAME"
+	smtpPasswordEnv    = "SMTP_PASSWORD" //nolint:gosec // G101 false positive: an env var name, not a credential.
+	smtpFromAddressEnv = "SMTP_FROM_ADDRESS"
+	smtpFromNameEnv    = "SMTP_FROM_NAME"
+	smtpUseTLSEnv      = "SMTP_USE_TLS"
+
+	passwordResetTokenTTLEnv = "PASSWORD_RESET_TOKEN_TTL" //nolint:gosec // G101 false positive: an env var name, not a credential.
+	// Thirty minutes is long enough to walk away from the screen and short
+	// enough that a link left in an inbox stops being a key.
+	defaultPasswordResetTokenTTL = 30 * time.Minute
+
+	passwordResetRateLimitAccountBurstEnv  = "PASSWORD_RESET_RATE_LIMIT_ACCOUNT_BURST"
+	passwordResetRateLimitAccountRefillEnv = "PASSWORD_RESET_RATE_LIMIT_ACCOUNT_REFILL"
+	passwordResetRateLimitIPBurstEnv       = "PASSWORD_RESET_RATE_LIMIT_IP_BURST"
+	passwordResetRateLimitIPRefillEnv      = "PASSWORD_RESET_RATE_LIMIT_IP_REFILL"
+	// Tighter than the login allowance on purpose: a person asks for a reset
+	// once, and every granted request puts a mail in somebody else's inbox.
+	defaultPasswordResetRateLimitAccountBurst  = 3
+	defaultPasswordResetRateLimitAccountRefill = 15 * time.Minute
+	defaultPasswordResetRateLimitIPBurst       = 10
+	defaultPasswordResetRateLimitIPRefill      = 5 * time.Minute
 
 	dbPoolMaxConnsEnv              = "DB_POOL_MAX_CONNS"
 	dbPoolMinConnsEnv              = "DB_POOL_MIN_CONNS"
@@ -445,4 +473,117 @@ func logPoolConfig(logger *slog.Logger, cfg *pgxpool.Config) {
 		slog.Duration("max_conn_idle_time", cfg.MaxConnIdleTime),
 		slog.Duration("health_check_period", cfg.HealthCheckPeriod),
 	)
+}
+
+// parseAppBaseURL reads the origin the reset link is built from. It is required
+// and never derived from the request: a forged Host header would otherwise put
+// an attacker's domain in a mail the user trusts. See ADR 0010.
+func parseAppBaseURL(getenv func(string) string) (string, error) {
+	raw := strings.TrimSpace(getenv(appBaseURLEnv))
+	if raw == "" {
+		return "", fmt.Errorf("%s is required", appBaseURLEnv)
+	}
+
+	parsed, err := url.Parse(raw)
+	if err != nil {
+		return "", fmt.Errorf("%s is not a valid url: %w", appBaseURLEnv, err)
+	}
+	if parsed.Scheme != "http" && parsed.Scheme != "https" {
+		return "", fmt.Errorf("%s must be http or https, got %q", appBaseURLEnv, parsed.Scheme)
+	}
+	if parsed.Host == "" {
+		return "", fmt.Errorf("%s must include a host", appBaseURLEnv)
+	}
+
+	return strings.TrimRight(raw, "/"), nil
+}
+
+func parseSMTPConfig(getenv func(string) string) (mailer.Config, error) {
+	port, err := parsePositiveInt(getenv(smtpPortEnv), smtpPortEnv, mailer.DefaultPort)
+	if err != nil {
+		return mailer.Config{}, err
+	}
+
+	useTLS, err := parseBool(getenv(smtpUseTLSEnv), smtpUseTLSEnv, true)
+	if err != nil {
+		return mailer.Config{}, err
+	}
+
+	return mailer.Config{
+		Host:        strings.TrimSpace(getenv(smtpHostEnv)),
+		Username:    strings.TrimSpace(getenv(smtpUsernameEnv)),
+		Password:    getenv(smtpPasswordEnv),
+		FromAddress: strings.TrimSpace(getenv(smtpFromAddressEnv)),
+		FromName:    strings.TrimSpace(getenv(smtpFromNameEnv)),
+		Port:        port,
+		UseTLS:      useTLS,
+	}, nil
+}
+
+func parsePasswordResetTokenTTL(getenv func(string) string) (time.Duration, error) {
+	return parsePositiveDuration(
+		getenv(passwordResetTokenTTLEnv),
+		passwordResetTokenTTLEnv,
+		defaultPasswordResetTokenTTL,
+	)
+}
+
+// parsePasswordResetRateLimit builds a second limiter rather than sharing the
+// login one. See ADR 0010.
+func parsePasswordResetRateLimit(getenv func(string) string) (ratelimit.Config, error) {
+	accountBurst, err := parsePositiveInt(
+		getenv(passwordResetRateLimitAccountBurstEnv),
+		passwordResetRateLimitAccountBurstEnv,
+		defaultPasswordResetRateLimitAccountBurst,
+	)
+	if err != nil {
+		return ratelimit.Config{}, err
+	}
+
+	accountRefill, err := parsePositiveDuration(
+		getenv(passwordResetRateLimitAccountRefillEnv),
+		passwordResetRateLimitAccountRefillEnv,
+		defaultPasswordResetRateLimitAccountRefill,
+	)
+	if err != nil {
+		return ratelimit.Config{}, err
+	}
+
+	ipBurst, err := parsePositiveInt(
+		getenv(passwordResetRateLimitIPBurstEnv),
+		passwordResetRateLimitIPBurstEnv,
+		defaultPasswordResetRateLimitIPBurst,
+	)
+	if err != nil {
+		return ratelimit.Config{}, err
+	}
+
+	ipRefill, err := parsePositiveDuration(
+		getenv(passwordResetRateLimitIPRefillEnv),
+		passwordResetRateLimitIPRefillEnv,
+		defaultPasswordResetRateLimitIPRefill,
+	)
+	if err != nil {
+		return ratelimit.Config{}, err
+	}
+
+	// The reset limiter reuses the login entry cap: both track the same kind of
+	// key and the same attacker invents them.
+	maxEntries, err := parsePositiveInt(
+		getenv(loginRateLimitMaxEntriesEnv),
+		loginRateLimitMaxEntriesEnv,
+		defaultLoginRateLimitMaxEntries,
+	)
+	if err != nil {
+		return ratelimit.Config{}, err
+	}
+
+	return ratelimit.Config{
+		Enabled:       true,
+		AccountBurst:  accountBurst,
+		AccountRefill: accountRefill,
+		IPBurst:       ipBurst,
+		IPRefill:      ipRefill,
+		MaxEntries:    maxEntries,
+	}, nil
 }

@@ -6,19 +6,24 @@ import (
 	"appointment-manager/internal/health"
 	"appointment-manager/internal/healthinsurance"
 	"appointment-manager/internal/i18n"
+	"appointment-manager/internal/mailer"
 	"appointment-manager/internal/metrics"
 	"appointment-manager/internal/notification"
 	"appointment-manager/internal/password"
+	"appointment-manager/internal/passwordreset"
 	"appointment-manager/internal/patient"
 	"appointment-manager/internal/prescription"
 	"appointment-manager/internal/professional"
 	"appointment-manager/internal/ratelimit"
 	"appointment-manager/internal/session"
 	"appointment-manager/internal/slot"
+	"context"
 	"fmt"
 	"log/slog"
 	"os"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -44,6 +49,8 @@ type dependencies struct {
 	prescriptionQuery *prescription.Query
 
 	professionalRepo *professional.Repository
+
+	passwordResetRepo *passwordreset.PostgresRepository
 
 	sessionRepo *session.PostgresRepository
 
@@ -97,6 +104,11 @@ func newDependencies(pool *pgxpool.Pool, appMetrics *metrics.Metrics) (*dependen
 		return nil, fmt.Errorf("failed to create professional repository: %w", err)
 	}
 
+	passwordResetRepo, err := passwordreset.NewPostgresRepository(pool)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create password reset postgres repository: %w", err)
+	}
+
 	sessionRepo, err := session.NewPostgresRepository(pool)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create session postgres repository: %w", err)
@@ -127,6 +139,7 @@ func newDependencies(pool *pgxpool.Pool, appMetrics *metrics.Metrics) (*dependen
 		prescriptionRepo:    prescriptionRepo,
 		prescriptionQuery:   prescriptionQuery,
 		professionalRepo:    professionalRepo,
+		passwordResetRepo:   passwordResetRepo,
 		sessionRepo:         sessionRepo,
 		slotRepo:            slotRepo,
 		slotQuery:           slotQuery,
@@ -139,14 +152,25 @@ type appComponents struct {
 	deps                *dependencies
 	notificationService *notification.Service
 	sessionStore        *session.Store
+	resetTokenStore     *passwordreset.Store
 	loginLimiter        *ratelimit.Limiter
+	resetLimiter        *ratelimit.Limiter
+	mailClient          *mailer.Client
+	resetWaiters        *sync.WaitGroup
+	appBaseURL          string
+	resetTokenTTL       time.Duration
 	locale              i18n.Locale
 	isDev               bool
 }
 
 // initializeAppComponents builds everything between the pool and the handlers.
 // Errors are wrapped rather than logged: run logs them once.
-func initializeAppComponents(logger *slog.Logger, pool *pgxpool.Pool, appMetrics *metrics.Metrics) (*appComponents, error) {
+func initializeAppComponents(
+	ctx context.Context,
+	logger *slog.Logger,
+	pool *pgxpool.Pool,
+	appMetrics *metrics.Metrics,
+) (*appComponents, error) {
 	deps, err := newDependencies(pool, appMetrics)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize dependencies: %w", err)
@@ -190,13 +214,60 @@ func initializeAppComponents(logger *slog.Logger, pool *pgxpool.Pool, appMetrics
 		slog.Duration("ip_refill", loginLimiterCfg.IPRefill),
 		slog.Int("max_entries", loginLimiterCfg.MaxEntries))
 
+	appBaseURL, err := parseAppBaseURL(os.Getenv)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse app base url: %w", err)
+	}
+
+	resetTokenTTL, err := parsePasswordResetTokenTTL(os.Getenv)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse password reset token ttl: %w", err)
+	}
+
+	resetTokenStore, err := passwordreset.NewStore(deps.passwordResetRepo, resetTokenTTL)
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize password reset token store: %w", err)
+	}
+
+	resetLimiterCfg, err := parsePasswordResetRateLimit(os.Getenv)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse password reset rate limit: %w", err)
+	}
+
+	// A separate limiter, not the login one: sharing would let reset requests
+	// spend the login allowance, and a successful login would refill the reset
+	// budget. See ADR 0010.
+	resetLimiter, err := ratelimit.New(resetLimiterCfg, appMetrics)
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize password reset rate limiter: %w", err)
+	}
+
+	mailClient, err := initializeMailer(ctx, logger)
+	if err != nil {
+		return nil, err
+	}
+
+	logger.Info("password reset configured",
+		slog.String("base_url", appBaseURL),
+		slog.Duration("token_ttl", resetTokenTTL),
+		slog.Int("account_burst", resetLimiterCfg.AccountBurst),
+		slog.Duration("account_refill", resetLimiterCfg.AccountRefill),
+		slog.Int("ip_burst", resetLimiterCfg.IPBurst),
+		slog.Duration("ip_refill", resetLimiterCfg.IPRefill))
+
 	env := strings.TrimSpace(os.Getenv(environmentEnv))
 
 	return &appComponents{
 		deps:                deps,
 		notificationService: notificationService,
 		sessionStore:        sessionStore,
+		resetTokenStore:     resetTokenStore,
 		loginLimiter:        loginLimiter,
+		resetLimiter:        resetLimiter,
+		mailClient:          mailClient,
+		resetWaiters:        &sync.WaitGroup{},
+		appBaseURL:          appBaseURL,
+		resetTokenTTL:       resetTokenTTL,
 		locale:              locale,
 		isDev:               env == "" || strings.EqualFold(env, environmentDevelopment),
 	}, nil

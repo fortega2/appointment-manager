@@ -107,7 +107,7 @@ func run() error {
 		return err
 	}
 
-	components, err := initializeAppComponents(logger, pool, appMetrics)
+	components, err := initializeAppComponents(context.Background(), logger, pool, appMetrics)
 	if err != nil {
 		logger.Error("failed to initialize application components", slog.Any("error", err))
 		return err
@@ -115,9 +115,7 @@ func run() error {
 
 	handler, err := initializeServerHandlers(handlerConfig{
 		logger:           logger,
-		sessionStore:     components.sessionStore,
-		loginLimiter:     components.loginLimiter,
-		deps:             components.deps,
+		components:       components,
 		storageClient:    storageClient,
 		metrics:          appMetrics,
 		sendNotification: components.notificationService.NotifySlotCancelled,
@@ -143,7 +141,20 @@ func run() error {
 	stopNotificationWorker := startNotificationWorker(context.WithoutCancel(ctx), components.notificationService)
 	defer stopNotificationWorker()
 
-	stopWorkers, err := startBackgroundWorkers(ctx, logger, components.deps, components.sessionStore, components.loginLimiter)
+	// Deferred before the workers so it runs after them and before the pool
+	// closes: a reset mail still in flight queries for the account it is for.
+	defer func() {
+		components.resetWaiters.Wait()
+		logger.Info("password reset dispatches drained")
+	}()
+
+	stopWorkers, err := startBackgroundWorkers(ctx, logger, workerDeps{
+		deps:            components.deps,
+		sessionStore:    components.sessionStore,
+		resetTokenStore: components.resetTokenStore,
+		loginLimiter:    components.loginLimiter,
+		resetLimiter:    components.resetLimiter,
+	})
 	if err != nil {
 		logger.ErrorContext(ctx, "failed to start background workers", slog.Any("error", err))
 		return err

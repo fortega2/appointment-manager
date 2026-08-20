@@ -49,6 +49,7 @@ type ResetHandlerConfig struct {
 	Mail     Mailer
 	Limiter  *ratelimit.Limiter
 	Waiters  *sync.WaitGroup
+	Metrics  ResetMetrics
 	BaseURL  string
 	TokenTTL time.Duration
 }
@@ -62,6 +63,7 @@ type ResetHandler struct {
 	mail     Mailer
 	limiter  *ratelimit.Limiter
 	waiters  *sync.WaitGroup
+	metrics  ResetMetrics
 	baseURL  string
 	tokenTTL time.Duration
 }
@@ -104,6 +106,11 @@ func NewResetHandler(cfg ResetHandlerConfig) (*ResetHandler, error) {
 		return nil, errors.Join(errs...)
 	}
 
+	resetMetrics := cfg.Metrics
+	if resetMetrics == nil {
+		resetMetrics = noopResetMetrics{}
+	}
+
 	return &ResetHandler{
 		logger:   cfg.Logger,
 		tokens:   cfg.Tokens,
@@ -113,6 +120,7 @@ func NewResetHandler(cfg ResetHandlerConfig) (*ResetHandler, error) {
 		mail:     cfg.Mail,
 		limiter:  cfg.Limiter,
 		waiters:  cfg.Waiters,
+		metrics:  resetMetrics,
 		baseURL:  strings.TrimRight(cfg.BaseURL, "/"),
 		tokenTTL: cfg.TokenTTL,
 	}, nil
@@ -233,6 +241,8 @@ func (h *ResetHandler) confirmResetHandler() http.HandlerFunc {
 			return
 		}
 
+		h.metrics.RecordPasswordResetCompleted()
+
 		// No auto-login: a reset proves control of the mailbox, not of the account.
 		w.Header().Set("HX-Redirect", "/login")
 		w.WriteHeader(http.StatusOK)
@@ -290,8 +300,11 @@ func (h *ResetHandler) sendResetLink(ctx context.Context, email string) error {
 	}
 
 	if err := h.mail.Send(ctx, message); err != nil {
+		h.metrics.RecordPasswordResetMailFailed()
+
 		return fmt.Errorf("send reset mail: %w", err)
 	}
+	h.metrics.RecordPasswordResetMailSent()
 
 	return nil
 }

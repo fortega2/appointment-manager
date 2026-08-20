@@ -26,6 +26,7 @@ const (
 	subsystemNotifications = "notifications"
 	subsystemPassword      = "password"
 	subsystemLogin         = "login"
+	subsystemPasswordReset = "password_reset"
 )
 
 const (
@@ -34,6 +35,8 @@ const (
 	outcomeCancelledByClinic = "cancelled_by_clinic"
 	outcomeAbsent            = "absent"
 	outcomeExpired           = "expired"
+	outcomeSent              = "sent"
+	outcomeFailed            = "failed"
 )
 
 // Why a notification was thrown away. queue_full is the ordinary saturation
@@ -110,6 +113,10 @@ type Metrics struct {
 	loginRateLimitedAccount   prometheus.Counter
 	loginRateLimitedIP        prometheus.Counter
 	loginRateLimiterEvictions prometheus.Counter
+
+	passwordResetMailSent   prometheus.Counter
+	passwordResetMailFailed prometheus.Counter
+	passwordResetsCompleted prometheus.Counter
 }
 
 // New builds a Metrics backed by a private registry (never the global default)
@@ -271,6 +278,33 @@ func New() *Metrics {
 		[]string{"reason"},
 	)
 
+	// Dashboard: sum by (outcome) (rate(appt_password_reset_mail_total[15m]))
+	// Alert:     increase(appt_password_reset_mail_total{outcome="failed"}[15m]) > 0
+	//
+	// A relay the app cannot reach is otherwise invisible: the requester is told
+	// the same thing either way, by design, so this counter is the only signal
+	// that the flow is broken.
+	passwordResetMail := factory.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: namespace,
+			Subsystem: subsystemPasswordReset,
+			Name:      "mail_total",
+			Help:      "Total number of password reset mails, by whether the relay accepted them.",
+		},
+		[]string{"outcome"},
+	)
+
+	// Dashboard: increase(appt_password_resets_completed_total[24h])
+	// Alert:     increase(appt_password_resets_completed_total[1h]) > 3
+	passwordResetsCompleted := factory.NewCounter(
+		prometheus.CounterOpts{
+			Namespace: namespace,
+			Subsystem: subsystemPasswordReset,
+			Name:      "completed_total",
+			Help:      "Total number of passwords actually changed through a reset link.",
+		},
+	)
+
 	// Dashboard: sum by (scope) (rate(appt_login_rate_limited_total[5m]))
 	// Alert:     increase(appt_login_rate_limited_total{scope="account"}[15m]) > 0
 	loginRateLimited := factory.NewCounterVec(
@@ -309,6 +343,9 @@ func New() *Metrics {
 	loginRateLimitedAccount := loginRateLimited.WithLabelValues(rateLimitScopeAccount)
 	loginRateLimitedIP := loginRateLimited.WithLabelValues(rateLimitScopeIP)
 
+	passwordResetMailSent := passwordResetMail.WithLabelValues(outcomeSent)
+	passwordResetMailFailed := passwordResetMail.WithLabelValues(outcomeFailed)
+
 	return &Metrics{
 		reg:                      reg,
 		httpRequests:             httpRequests,
@@ -326,6 +363,9 @@ func New() *Metrics {
 
 		loginRateLimitedAccount:   loginRateLimitedAccount,
 		loginRateLimitedIP:        loginRateLimitedIP,
+		passwordResetMailSent:     passwordResetMailSent,
+		passwordResetMailFailed:   passwordResetMailFailed,
+		passwordResetsCompleted:   passwordResetsCompleted,
 		loginRateLimiterEvictions: loginRateLimiterEvictions,
 	}
 }
@@ -357,6 +397,16 @@ func (m *Metrics) RecordAppointmentCreated() { m.apptCreated.Inc() }
 
 // RecordAppointmentAttended counts one appointment that transitioned to attended.
 func (m *Metrics) RecordAppointmentAttended() { m.apptFinalized.WithLabelValues(outcomeAttended).Inc() }
+
+// RecordPasswordResetMailSent counts a reset mail the relay accepted. It is the
+// only evidence one left: the requester is answered the same way regardless.
+func (m *Metrics) RecordPasswordResetMailSent() { m.passwordResetMailSent.Inc() }
+
+// RecordPasswordResetMailFailed counts a reset mail the relay refused.
+func (m *Metrics) RecordPasswordResetMailFailed() { m.passwordResetMailFailed.Inc() }
+
+// RecordPasswordResetCompleted counts a password actually changed by a link.
+func (m *Metrics) RecordPasswordResetCompleted() { m.passwordResetsCompleted.Inc() }
 
 // RecordAppointmentsCancelled counts n appointments cancelled at the patient's
 // request. Clinic-initiated cancellations are counted separately by
