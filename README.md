@@ -10,6 +10,7 @@ A production-grade medical appointment scheduling system built entirely in Go. D
 - **Appointment lifecycle** — book, cancel, and mark appointments as attended. Business rules enforce cancellation windows (cancel before 24h, otherwise mark as absent) and attendance windows (only during the appointment period).
 - **Concurrency safety** — all status transitions are atomic with optimistic locking (`UPDATE ... WHERE status = ?`), and slot capacity checks use `SELECT ... FOR UPDATE` within transactions.
 - **Authentication** — session-based login for administrative staff (assistants) with Argon2id password hashing.
+- **Password recovery** — a single-use link mailed to the assistant, plus an offline CLI for when mail is unavailable. See ADR 0010.
 - **Dual interface** — JSON REST API under `/api/v1/` for programmatic access, plus an HTMX-powered HTML interface for day-to-day use.
 
 ## Tech Stack
@@ -18,12 +19,14 @@ A production-grade medical appointment scheduling system built entirely in Go. D
 |---|---|
 | Language | Go 1.26 |
 | HTTP | `net/http`, `http.ServeMux` — no router frameworks |
-| Database | PostgreSQL 17 + `pgx` driver |
+| Database | PostgreSQL 18 + `pgx` driver |
 | Migrations | `golang-migrate` with embedded SQL |
 | Templates | `a-h/templ` — type-safe HTML templates |
 | Frontend | HTMX + Alpine.js + Tailwind CSS (self-hosted, pinned versions — no CDN) |
-| Auth | Session-based (in-memory store) + Argon2id |
+| Auth | Session-based (Postgres-backed, ADR 0006) + Argon2id |
 | Container | Multi-stage Docker (scratch-based) + docker-compose |
+| Mail | `wneessen/go-mail` over SMTP; Mailpit as the dev catcher |
+| Observability | Prometheus metrics + OpenTelemetry tracing |
 | Testing | `testify` (assert, require, mock) + `testcontainers-go` |
 | Linting | `golangci-lint` with 35+ linters (strict config) |
 
@@ -34,7 +37,8 @@ A production-grade medical appointment scheduling system built entirely in Go. D
 │                HTTP Server (:8080)               │
 │  ┌───────────────────────────────────────────┐  │
 │  │            Middleware Chain                │  │
-│  │  RequestID → Logger → Gzip → CSRF → Auth  │  │
+│  │  Tracing → Metrics → Logger → RequestID   │  │
+│  │           → Gzip → CSRF → Auth            │  │
 │  └───────────────────────────────────────────┘  │
 │  ┌──────────────────┐  ┌──────────────────┐    │
 │  │  REST API         │  │  HTMX UI          │    │
@@ -59,24 +63,36 @@ A production-grade medical appointment scheduling system built entirely in Go. D
 ```
 ├── cmd/
 │   ├── server/               # Entrypoint, dependency wiring
-│   └── healthcheck/          # Docker HEALTHCHECK CLI
+│   ├── healthcheck/          # Docker HEALTHCHECK CLI
+│   └── resetpassword/        # Offline password reset CLI (ADR 0010)
 ├── internal/
 │   ├── appointment/          # Entity, service, REST + UI handlers, repository
 │   ├── assistant/            # Entity, service, REST handler, repository
 │   ├── professional/         # Entity, REST + UI handlers, repository
 │   ├── patient/              # Entity, REST + UI handlers, repository
 │   ├── slot/                 # Entity, UI handler, repository, queries
+│   ├── prescription/         # Entity, UI handler, repository
 │   ├── healthinsurance/      # Lookup repository
-│   ├── auth/                 # Login/logout handlers (JSON + form)
+│   ├── domain/               # Shared value types
+│   ├── auth/                 # Login, logout and password reset handlers
+│   ├── session/              # Session store, Postgres-backed (ADR 0006)
+│   ├── password/             # Argon2id hashing and the length rule
+│   ├── passwordreset/        # Single-use reset tokens (ADR 0010)
+│   ├── mailer/               # SMTP client for outbound mail
+│   ├── notification/         # In-memory notification queue (ADR 0002)
+│   ├── ratelimit/            # Token-bucket limiter (ADR 0009)
+│   ├── worker/               # Periodic background jobs
+│   ├── storage/              # S3-compatible object storage client
+│   ├── metrics/              # Prometheus collectors
+│   ├── tracing/              # OpenTelemetry setup
 │   ├── i18n/                 # Message catalogs, locale resolution (es/en)
 │   ├── health/               # Liveness + readiness probes
-│   ├── session/              # In-memory session store
-│   ├── password/             # Argon2id hashing
-│   ├── middleware/           # RequestID, logger, gzip, CSRF, auth
+│   ├── middleware/           # RequestID, logger, gzip, CSRF, auth, locale
 │   ├── web/                  # DecodeJSON, RFC 9457 Problem Details
 │   ├── db/                   # Pool creation, migrations
 │   ├── server/               # Graceful shutdown lifecycle
-│   └── ui/                   # Page templates (login, home, layout, components)
+│   └── ui/                   # templ views + static assets
+├── documents/decisions/      # Architecture Decision Records
 └── docker/                   # Dockerfiles, compose, env
 ```
 
