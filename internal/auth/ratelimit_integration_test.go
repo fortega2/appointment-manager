@@ -84,7 +84,7 @@ func TestSuccessfulLoginRestoresTheAccountAllowance(t *testing.T) {
 
 	require.Equal(t, http.StatusOK, rec.Code)
 	assert.Equal(t, "3", rec.Header().Get(rateLimitHeaderRemaining),
-		"getting it right must not leave the user rationed: there is no password reset to escape with")
+		"getting it right must not leave the user rationed")
 }
 
 func TestDisabledLimiterAdvertisesNothing(t *testing.T) {

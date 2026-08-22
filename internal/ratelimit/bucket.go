@@ -77,7 +77,7 @@ func (b *bucket) consume() {
 
 // fill puts the bucket back to full, which is what a proven-legitimate caller
 // earns. Without it, five typos would leave the account on a token every few
-// minutes, and this application has no password-reset flow to escape that.
+// minutes.
 func (b *bucket) fill(cfg bucketConfig) {
 	b.tokens = cfg.burst
 }

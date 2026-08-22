@@ -187,8 +187,7 @@ func (l *Limiter) RecordSuccess(address netip.Addr, account string) Decision {
 // RecordAbandoned gives back the token an attempt spent when the attempt never
 // reached the password check at all — the account lookup failed, or no hashing
 // slot was free. Nothing was learned about the credentials, so charging for it
-// would let an outage ration a caller who did nothing wrong, and this
-// application has no password-reset flow to escape that.
+// would let an outage ration a caller who did nothing wrong.
 //
 // Only the account is refunded, and by one token rather than refilled: the
 // attempt proved nothing, so it earns its charge back and no more. The address

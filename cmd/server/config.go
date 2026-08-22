@@ -57,7 +57,7 @@ const (
 	// useless for a guesser. The address allowance is looser because one
 	// household or clinic can share an address, and refilling to full on a
 	// successful login is what keeps the tighter account limit from stranding
-	// anyone -- there is no password-reset flow to escape it with.
+	// anyone -- and the password reset of ADR 0010 is the way out if it does.
 	defaultLoginRateLimitAccountBurst  = 5
 	defaultLoginRateLimitAccountRefill = 3 * time.Minute
 	defaultLoginRateLimitIPBurst       = 20
