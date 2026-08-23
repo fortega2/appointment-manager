@@ -49,13 +49,6 @@ func main() {
 }
 
 func run(args []string, stdout, stderr io.Writer) int {
-	if stdout == nil {
-		stdout = io.Discard
-	}
-	if stderr == nil {
-		stderr = io.Discard
-	}
-
 	email, timeout, err := parseFlags(args)
 	if err != nil {
 		fmt.Fprintf(stderr, "resetpassword usage error: %v\n", err)
