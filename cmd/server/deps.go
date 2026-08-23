@@ -237,7 +237,9 @@ func initializeAppComponents(
 	// A separate limiter, not the login one: sharing would let reset requests
 	// spend the login allowance, and a successful login would refill the reset
 	// budget. See ADR 0010.
-	resetLimiter, err := ratelimit.New(resetLimiterCfg, appMetrics)
+	// The nil metrics are deliberate: ratelimit reports through the appt_login_*
+	// counters, so instrumenting this one would fire the credential-stuffing alert.
+	resetLimiter, err := ratelimit.New(resetLimiterCfg, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize password reset rate limiter: %w", err)
 	}
