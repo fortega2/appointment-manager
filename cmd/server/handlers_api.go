@@ -46,7 +46,6 @@ func initializeResetHandler(
 		Waiters:  components.resetWaiters,
 		Metrics:  appMetrics,
 		BaseURL:  components.appBaseURL,
-		TokenTTL: components.resetTokenTTL,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to create password reset handler: %w", err)

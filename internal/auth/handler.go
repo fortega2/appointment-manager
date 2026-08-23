@@ -22,6 +22,7 @@ const (
 	failedGetAssistByEmailMsg string = "failed to get assistant by email"
 	failedCreateSessionMsg    string = "failed to create session"
 	failedDeleteSessionMsg    string = "failed to delete session"
+	loginRefusedMsg           string = "login attempt refused for exceeding its allowance"
 
 	loginErrorFormKey string = "auth.error.form"
 	loginErrorBusyKey string = "auth.error.busy"
@@ -106,7 +107,7 @@ func (h *Handler) loginAPIHandler() http.HandlerFunc {
 			return
 		}
 
-		decision, addr := h.checkRateLimit(w, r, req.Email)
+		decision, addr := checkRateLimit(w, r, h.logger, h.limiter, req.Email, loginRefusedMsg)
 		if !decision.Allowed {
 			web.WriteProblem(w, web.NewTooManyRequestsProblem(r.URL.Path))
 			return
@@ -147,20 +148,30 @@ func (h *Handler) loginAPIHandler() http.HandlerFunc {
 	}
 }
 
-// checkRateLimit charges one attempt against the login allowance, writes the
+// checkRateLimit charges one attempt against limiter's allowance, writes the
 // advisory headers and returns the decision along with the address it charged.
-// It runs before verifyCredentials on purpose: a refused attempt then
-// costs no Argon2 slot, which is the whole point of having it here rather than
-// after the fact.
+// refusedMsg names the flow in the warning, so login and password reset stay
+// distinguishable in the logs while sharing one implementation.
+//
+// It runs before any password work on purpose: a refused attempt then costs no
+// Argon2 slot, which is the whole point of having it here rather than after the
+// fact.
 //
 // A request whose address cannot be resolved shares one bucket with every other
 // such request. That is a fallback for a case this deployment does not produce
 // — the app is only reachable through a proxy that always sets the header — and
 // collapsing them is safer than handing each an unlimited budget.
-func (h *Handler) checkRateLimit(w http.ResponseWriter, r *http.Request, email string) (ratelimit.Decision, netip.Addr) {
+func checkRateLimit(
+	w http.ResponseWriter,
+	r *http.Request,
+	logger *slog.Logger,
+	limiter *ratelimit.Limiter,
+	email string,
+	refusedMsg string,
+) (ratelimit.Decision, netip.Addr) {
 	addr, _ := web.ClientIP(r)
 
-	decision := h.limiter.Allow(addr, email)
+	decision := limiter.Allow(addr, email)
 	if !decision.Enforced() {
 		return decision, addr
 	}
@@ -170,9 +181,9 @@ func (h *Handler) checkRateLimit(w http.ResponseWriter, r *http.Request, email s
 		web.SetRetryAfter(w.Header(), decision.RetryAfter)
 		// The address is logged but the email is not: it is attacker-controlled
 		// and bounded only by maxBytesReader, so it has no place in a log line.
-		h.logger.WarnContext(
+		logger.WarnContext(
 			r.Context(),
-			"login attempt refused for exceeding its allowance",
+			refusedMsg,
 			slog.String("client_ip", addr.String()),
 			slog.Int64("retry_after_seconds", web.RetryAfterSeconds(decision.RetryAfter)))
 	}
@@ -299,7 +310,7 @@ func (h *Handler) processLoginUIHandler() http.HandlerFunc {
 			return
 		}
 
-		decision, addr := h.checkRateLimit(w, r, email)
+		decision, addr := checkRateLimit(w, r, h.logger, h.limiter, email, loginRefusedMsg)
 		if !decision.Allowed {
 			seconds := web.RetryAfterSeconds(decision.RetryAfter)
 			renderErrorN(

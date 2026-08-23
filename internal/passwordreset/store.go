@@ -65,6 +65,11 @@ func NewStore(storer Storer, ttl time.Duration) (*Store, error) {
 	return &Store{storer: storer, ttl: ttl}, nil
 }
 
+// TTL is how long a token issued by Create stays redeemable.
+func (s *Store) TTL() time.Duration {
+	return s.ttl
+}
+
 // Create issues a reset token for the assistant and returns the token to put in
 // the link. Only the token's digest is stored. Any token the assistant already
 // held is invalidated, so asking for a second link voids the first.

@@ -11,11 +11,10 @@ var (
 )
 
 var (
-	ErrNilResetTokenStore  = errors.New("reset token store cannot be nil")
-	ErrNilMailer           = errors.New("mailer cannot be nil")
-	ErrNilWaitGroup        = errors.New("wait group cannot be nil")
-	ErrEmptyBaseURL        = errors.New("base url cannot be empty")
-	ErrNonPositiveTokenTTL = errors.New("reset token ttl must be positive")
+	ErrNilResetTokenStore = errors.New("reset token store cannot be nil")
+	ErrNilMailer          = errors.New("mailer cannot be nil")
+	ErrNilWaitGroup       = errors.New("wait group cannot be nil")
+	ErrEmptyBaseURL       = errors.New("base url cannot be empty")
 )
 
 // Outcomes of verifyCredentials. errInvalidCredentials covers both an unknown

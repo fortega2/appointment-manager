@@ -12,7 +12,7 @@ import (
 )
 
 // resetMailHTML carries its own styling because mail clients drop external
-// stylesheets. It lives here, not in internal/ui, so Tailwind never scans it.
+// stylesheets. Tailwind never scans it: input.css globs .templ files only.
 var resetMailHTML = template.Must(template.New("reset").Parse(`<html>
 <body style="margin:0;padding:24px;background:#f3f4f6;font-family:Arial,Helvetica,sans-serif;color:#111827">
 <div style="max-width:480px;margin:0 auto;background:#ffffff;padding:32px;border-radius:8px">
@@ -45,7 +45,7 @@ func (h *ResetHandler) resetMessage(ctx context.Context, recipient, token string
 		Action:   i18n.T(ctx, resetMailActionKey),
 		URL:      h.resetURL(token),
 		Fallback: i18n.T(ctx, resetMailFallbackKey),
-		Expiry:   i18n.T(ctx, resetMailExpiryKey, i18n.M{"minutes": int(h.tokenTTL / time.Minute)}),
+		Expiry:   i18n.T(ctx, resetMailExpiryKey, i18n.M{"minutes": int(h.tokens.TTL() / time.Minute)}),
 		Ignore:   i18n.T(ctx, resetMailIgnoreKey),
 	}
 

@@ -5,8 +5,7 @@ package auth
 const (
 	resetNoticeSentKey string = "auth.forgot.sent"
 
-	resetErrorEmailKey       string = "auth.error.reset_email"
-	resetErrorRateLimitedKey string = "auth.error.rate_limited"
+	resetErrorEmailKey string = "auth.error.reset_email"
 	//nolint:gosec // G101 false positive: a message catalog key, not a credential.
 	resetErrorTokenKey string = "auth.error.reset_token"
 	//nolint:gosec // G101 false positive: a message catalog key, not a credential.
@@ -27,6 +26,7 @@ const (
 )
 
 const (
+	resetRefusedMsg         string = "password reset refused for exceeding its allowance"
 	failedDispatchResetMsg  string = "failed to dispatch password reset"
 	failedConsumeResetMsg   string = "failed to consume password reset token"
 	failedClearSessionsMsg  string = "failed to clear sessions after a password reset"

@@ -15,7 +15,6 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
-	"net/netip"
 	"strings"
 	"sync"
 	"time"
@@ -51,7 +50,6 @@ type ResetHandlerConfig struct {
 	Waiters  *sync.WaitGroup
 	Metrics  ResetMetrics
 	BaseURL  string
-	TokenTTL time.Duration
 }
 
 type ResetHandler struct {
@@ -65,7 +63,6 @@ type ResetHandler struct {
 	waiters  *sync.WaitGroup
 	metrics  ResetMetrics
 	baseURL  string
-	tokenTTL time.Duration
 }
 
 func NewResetHandler(cfg ResetHandlerConfig) (*ResetHandler, error) {
@@ -98,9 +95,6 @@ func NewResetHandler(cfg ResetHandlerConfig) (*ResetHandler, error) {
 	if strings.TrimSpace(cfg.BaseURL) == "" {
 		errs = append(errs, ErrEmptyBaseURL)
 	}
-	if cfg.TokenTTL <= 0 {
-		errs = append(errs, ErrNonPositiveTokenTTL)
-	}
 
 	if len(errs) > 0 {
 		return nil, errors.Join(errs...)
@@ -122,7 +116,6 @@ func NewResetHandler(cfg ResetHandlerConfig) (*ResetHandler, error) {
 		waiters:  cfg.Waiters,
 		metrics:  resetMetrics,
 		baseURL:  strings.TrimRight(cfg.BaseURL, "/"),
-		tokenTTL: cfg.TokenTTL,
 	}, nil
 }
 
@@ -153,12 +146,12 @@ func (h *ResetHandler) requestResetHandler() http.HandlerFunc {
 			return
 		}
 
-		if decision, _ := h.checkRateLimit(w, r, email); !decision.Allowed {
+		if decision, _ := checkRateLimit(w, r, h.logger, h.limiter, email, resetRefusedMsg); !decision.Allowed {
 			seconds := web.RetryAfterSeconds(decision.RetryAfter)
 			renderErrorN(
 				w, r, h.logger,
 				http.StatusTooManyRequests,
-				resetErrorRateLimitedKey,
+				loginErrorRateLimitedKey,
 				int(seconds),
 				i18n.M{"seconds": seconds})
 
@@ -307,31 +300,6 @@ func (h *ResetHandler) sendResetLink(ctx context.Context, email string) error {
 	h.metrics.RecordPasswordResetMailSent()
 
 	return nil
-}
-
-func (h *ResetHandler) checkRateLimit(
-	w http.ResponseWriter,
-	r *http.Request,
-	email string,
-) (ratelimit.Decision, netip.Addr) {
-	addr, _ := web.ClientIP(r)
-
-	decision := h.limiter.Allow(addr, email)
-	if !decision.Enforced() {
-		return decision, addr
-	}
-
-	web.SetRateLimitHeaders(w.Header(), decision.Limit, decision.Remaining, decision.Reset)
-	if !decision.Allowed {
-		web.SetRetryAfter(w.Header(), decision.RetryAfter)
-		h.logger.WarnContext(
-			r.Context(),
-			"password reset refused for exceeding its allowance",
-			slog.String("client_ip", addr.String()),
-			slog.Int64("retry_after_seconds", web.RetryAfterSeconds(decision.RetryAfter)))
-	}
-
-	return decision, addr
 }
 
 func (h *ResetHandler) renderPage(w http.ResponseWriter, r *http.Request, page templ.Component) {

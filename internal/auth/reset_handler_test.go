@@ -6,7 +6,6 @@ import (
 	"appointment-manager/internal/mailer"
 	"appointment-manager/internal/password"
 	"appointment-manager/internal/passwordreset"
-	"appointment-manager/internal/ratelimit"
 	"appointment-manager/internal/session"
 	"context"
 	"log/slog"
@@ -59,10 +58,9 @@ func (m *stubMailer) messages() []mailer.Message {
 }
 
 type stubResetRepo struct {
-	mu       sync.Mutex
-	account  *assistant.Assistant
-	newHash  string
-	updateID uuid.UUID
+	mu      sync.Mutex
+	account *assistant.Assistant
+	newHash string
 }
 
 func (r *stubResetRepo) GetByEmail(_ context.Context, email string) (*assistant.Assistant, error) {
@@ -77,11 +75,10 @@ func (r *stubResetRepo) GetByEmail(_ context.Context, email string) (*assistant.
 	return &copied, nil
 }
 
-func (r *stubResetRepo) UpdatePasswordHash(_ context.Context, id uuid.UUID, passwordHash string) error {
+func (r *stubResetRepo) UpdatePasswordHash(_ context.Context, _ uuid.UUID, passwordHash string) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	r.updateID = id
 	r.newHash = passwordHash
 
 	return nil
@@ -147,11 +144,9 @@ func (s *stubTokenStorer) DeleteExpired(_ context.Context, before time.Time) (in
 }
 
 type resetFixture struct {
-	handler  *ResetHandler
 	mux      *http.ServeMux
 	mail     *stubMailer
 	repo     *stubResetRepo
-	storer   *stubTokenStorer
 	sessions *session.Store
 	waiters  *sync.WaitGroup
 	account  assistant.Assistant
@@ -183,16 +178,6 @@ func newResetFixtureWithBurst(t *testing.T, burst int) *resetFixture {
 	repo := &stubResetRepo{account: &account}
 	waiters := &sync.WaitGroup{}
 
-	limiter, err := ratelimit.New(ratelimit.Config{
-		Enabled:       true,
-		AccountBurst:  burst,
-		AccountRefill: limiterRefill,
-		IPBurst:       burst,
-		IPRefill:      limiterRefill,
-		MaxEntries:    limiterMaxEntries,
-	}, nil)
-	require.NoError(t, err)
-
 	handler, err := NewResetHandler(ResetHandlerConfig{
 		Logger:   slog.New(slog.DiscardHandler),
 		Tokens:   tokens,
@@ -200,10 +185,9 @@ func newResetFixtureWithBurst(t *testing.T, burst int) *resetFixture {
 		Repo:     repo,
 		Hasher:   password.NewArgon2(nil),
 		Mail:     stubMail,
-		Limiter:  limiter,
+		Limiter:  newLimiterWithBurst(t, burst),
 		Waiters:  waiters,
 		BaseURL:  resetBaseURL,
-		TokenTTL: resetTTL,
 	})
 	require.NoError(t, err)
 
@@ -211,11 +195,9 @@ func newResetFixtureWithBurst(t *testing.T, burst int) *resetFixture {
 	handler.RegisterHandlers(mux)
 
 	return &resetFixture{
-		handler:  handler,
 		mux:      mux,
 		mail:     stubMail,
 		repo:     repo,
-		storer:   storer,
 		sessions: sessions,
 		waiters:  waiters,
 		account:  account,
@@ -292,16 +274,6 @@ func TestNewResetHandlerValidation(t *testing.T) {
 		storer := newStubTokenStorer()
 		tokens, err := passwordreset.NewStore(storer, resetTTL)
 		require.NoError(t, err)
-		limiter, err := ratelimit.New(ratelimit.Config{
-			Enabled:       true,
-			AccountBurst:  roomyBurst,
-			AccountRefill: limiterRefill,
-			IPBurst:       roomyBurst,
-			IPRefill:      limiterRefill,
-			MaxEntries:    limiterMaxEntries,
-		}, nil)
-		require.NoError(t, err)
-
 		return ResetHandlerConfig{
 			Logger:   slog.New(slog.DiscardHandler),
 			Tokens:   tokens,
@@ -309,10 +281,9 @@ func TestNewResetHandlerValidation(t *testing.T) {
 			Repo:     &stubResetRepo{},
 			Hasher:   password.NewArgon2(nil),
 			Mail:     &stubMailer{},
-			Limiter:  limiter,
+			Limiter:  newTestLimiter(t),
 			Waiters:  &sync.WaitGroup{},
 			BaseURL:  resetBaseURL,
-			TokenTTL: resetTTL,
 		}
 	}
 
@@ -330,7 +301,6 @@ func TestNewResetHandlerValidation(t *testing.T) {
 		{name: "nil limiter", mutate: func(c *ResetHandlerConfig) { c.Limiter = nil }, expected: ErrNilRateLimiter},
 		{name: "nil wait group", mutate: func(c *ResetHandlerConfig) { c.Waiters = nil }, expected: ErrNilWaitGroup},
 		{name: "blank base url", mutate: func(c *ResetHandlerConfig) { c.BaseURL = "   " }, expected: ErrEmptyBaseURL},
-		{name: "zero ttl", mutate: func(c *ResetHandlerConfig) { c.TokenTTL = 0 }, expected: ErrNonPositiveTokenTTL},
 	}
 
 	for _, tt := range tests {
