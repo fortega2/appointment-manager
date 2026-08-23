@@ -22,17 +22,24 @@ func initializeMailer(ctx context.Context, logger *slog.Logger) (*mailer.Client,
 		return nil, fmt.Errorf("failed to create smtp client: %w", err)
 	}
 
+	// Detached smoke test; it must not delay startup (ADR 0010, Decision 8).
+	go probeRelay(ctx, logger, client, cfg)
+
+	return client, nil
+}
+
+func probeRelay(ctx context.Context, logger *slog.Logger, client *mailer.Client, cfg mailer.Config) {
 	if err := client.VerifyConnection(ctx); err != nil {
 		logger.ErrorContext(ctx, "smtp relay is not reachable, password reset mails will fail",
 			slog.String("host", cfg.Host),
 			slog.Int("port", cfg.Port),
 			slog.Any("error", err))
-	} else {
-		logger.InfoContext(ctx, "smtp relay reachable",
-			slog.String("host", cfg.Host),
-			slog.Int("port", cfg.Port),
-			slog.Bool("tls", cfg.UseTLS))
+
+		return
 	}
 
-	return client, nil
+	logger.InfoContext(ctx, "smtp relay reachable",
+		slog.String("host", cfg.Host),
+		slog.Int("port", cfg.Port),
+		slog.Bool("tls", cfg.UseTLS))
 }
