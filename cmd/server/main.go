@@ -119,8 +119,6 @@ func run() error {
 		storageClient:    storageClient,
 		metrics:          appMetrics,
 		sendNotification: components.notificationService.NotifySlotCancelled,
-		locale:           components.locale,
-		isDev:            components.isDev,
 	})
 	if err != nil {
 		logger.Error("failed to initialize server handlers", slog.Any("error", err))

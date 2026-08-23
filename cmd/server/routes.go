@@ -1,7 +1,6 @@
 package main
 
 import (
-	"appointment-manager/internal/i18n"
 	"appointment-manager/internal/metrics"
 	"appointment-manager/internal/middleware"
 	"appointment-manager/internal/storage"
@@ -20,15 +19,13 @@ type handlerConfig struct {
 	storageClient    *storage.Client
 	metrics          *metrics.Metrics
 	sendNotification func(context.Context, uuid.UUID)
-	locale           i18n.Locale
-	isDev            bool
 }
 
 // initializeServerHandlers builds every handler and wires it to a mux. Errors
 // are returned wrapped rather than logged here: run logs them once, so the
 // context of the failure is carried by the error chain itself.
 func initializeServerHandlers(cfg handlerConfig) (http.Handler, error) {
-	authHandler, err := initializeAuthHandler(cfg.logger, cfg.components.sessionStore, cfg.components.deps, cfg.components.loginLimiter, cfg.isDev)
+	authHandler, err := initializeAuthHandler(cfg.logger, cfg.components.sessionStore, cfg.components.deps, cfg.components.loginLimiter, cfg.components.isDev)
 	if err != nil {
 		return nil, err
 	}
@@ -64,7 +61,7 @@ func initializeServerHandlers(cfg handlerConfig) (http.Handler, error) {
 	if err != nil {
 		return nil, err
 	}
-	uiLanguageHandler, err := initializeUILanguageHandler(cfg.logger, cfg.isDev)
+	uiLanguageHandler, err := initializeUILanguageHandler(cfg.logger, cfg.components.isDev)
 	if err != nil {
 		return nil, err
 	}
@@ -82,7 +79,7 @@ func initializeServerHandlers(cfg handlerConfig) (http.Handler, error) {
 	// replaces the request, which from inside the Chain would hide r.Pattern from
 	// the observability middlewares (see middleware.Guard). The login page needs
 	// it too, hence a guard for the routes that have no session yet.
-	localeMiddleware := middleware.Locale(cfg.locale)
+	localeMiddleware := middleware.Locale(cfg.components.locale)
 
 	publicUI := middleware.Guard(mux, localeMiddleware)
 	authHandler.RegisterHandlers(publicUI)
@@ -92,7 +89,7 @@ func initializeServerHandlers(cfg handlerConfig) (http.Handler, error) {
 	// Protected routes are registered on mux itself through a guard rather than
 	// on a nested mux, so the pattern the observability middlewares observe is
 	// the specific route and not the catch-all (see middleware.Guard).
-	apiProtected := middleware.Guard(mux, middleware.Session(cfg.components.sessionStore, cfg.isDev))
+	apiProtected := middleware.Guard(mux, middleware.Session(cfg.components.sessionStore, cfg.components.isDev))
 	assistantHandler.RegisterHandlers(apiProtected)
 	appointmentHandler.RegisterHandlers(apiProtected)
 	professionalHandler.RegisterHandlers(apiProtected)
@@ -103,7 +100,7 @@ func initializeServerHandlers(cfg handlerConfig) (http.Handler, error) {
 		mux,
 		localeMiddleware,
 		middleware.Prescriptions(prescriptionsEnabled),
-		middleware.UISession(cfg.components.sessionStore, cfg.isDev),
+		middleware.UISession(cfg.components.sessionStore, cfg.components.isDev),
 	)
 	uiHomeHandler.RegisterHandlers(uiProtected)
 	professionalHandler.RegisterUIHandlers(uiProtected)
@@ -128,7 +125,7 @@ func initializeServerHandlers(cfg handlerConfig) (http.Handler, error) {
 	apiProtected.HandleFallback("/api/")
 	uiProtected.HandleFallback("/")
 
-	csrfMiddleware, err := middleware.CSRF(cfg.logger, cfg.isDev, serverAddr)
+	csrfMiddleware, err := middleware.CSRF(cfg.logger, cfg.components.isDev, serverAddr)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize CSRF middleware: %w", err)
 	}
