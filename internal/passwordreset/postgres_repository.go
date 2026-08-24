@@ -19,25 +19,20 @@ const (
 	consumeErrMsg       = "consume password reset token: %w"
 	deleteExpiredErrMsg = "delete expired password reset tokens: %w"
 
-	// The DELETE and the INSERT touch disjoint rows -- the new digest is 256
-	// bits of crypto/rand and cannot collide with what is being removed -- so
-	// neither half needs to observe the other. That is what makes the single
-	// snapshot a data-modifying CTE runs under harmless here, unlike the case
-	// ADR 0005 warns about, and it buys atomicity: an assistant can never end
-	// up holding two live links.
+	// Upsert, not delete-then-insert: two concurrent issues for the same account
+	// would both find nothing to delete and leave two live links behind.
+	//nolint:gosec // G101 false positive: a SQL statement, not a credential.
 	createPasswordResetTokenQuery = `
-		WITH replaced AS (
-			DELETE FROM
-				public.password_reset_token
-			WHERE
-				assistant_id = $2
-		)
 		INSERT INTO public.password_reset_token (
 			id,
 			assistant_id,
 			created_at,
 			expires_at
 		) VALUES ($1, $2, $3, $4)
+		ON CONFLICT (assistant_id) DO UPDATE SET
+			id = EXCLUDED.id,
+			created_at = EXCLUDED.created_at,
+			expires_at = EXCLUDED.expires_at
 	`
 
 	//nolint:gosec // G101 false positive: a SQL statement, not a credential.

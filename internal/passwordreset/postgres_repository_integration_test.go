@@ -181,8 +181,8 @@ func TestPostgresRepositoryCreateReplacesTheAssistantsToken(t *testing.T) {
 	assert.Equal(t, integrationOther, surviving.ID)
 }
 
-// TestPostgresRepositoryCreateLeavesOtherAssistantsAlone guards the WHERE clause
-// of the CTE's DELETE: replacing one assistant's link must not touch anyone else's.
+// TestPostgresRepositoryCreateLeavesOtherAssistantsAlone guards the upsert's
+// conflict target: replacing one assistant's link must not touch anyone else's.
 func TestPostgresRepositoryCreateLeavesOtherAssistantsAlone(t *testing.T) {
 	testcontainers.SkipIfProviderIsNotHealthy(t)
 
@@ -269,6 +269,36 @@ func TestPostgresRepositoryDeleteExpired(t *testing.T) {
 	active, err := repo.Get(ctx, integrationOther)
 	require.NoError(t, err)
 	assert.Equal(t, integrationOther, active.ID)
+}
+
+// TestPostgresRepositoryCreateKeepsOneLiveLink pins the unique index: without it
+// two concurrent issues for the same account both leave a link behind.
+func TestPostgresRepositoryCreateKeepsOneLiveLink(t *testing.T) {
+	testcontainers.SkipIfProviderIsNotHealthy(t)
+
+	ctx := context.Background()
+	pool := newIntegrationPool(ctx, t)
+	repo := newIntegrationRepository(t, pool)
+
+	assistantID := seedAssistant(ctx, t, pool, integrationEmail)
+	now := time.Now().UTC()
+
+	first := passwordreset.Token{
+		ID:          integrationDigest,
+		AssistantID: assistantID,
+		CreatedAt:   now,
+		ExpiresAt:   now.Add(integrationTTL),
+	}
+	second := first
+	second.ID = integrationOther
+
+	errs := make(chan error, 2)
+	go func() { errs <- repo.Create(ctx, first) }()
+	go func() { errs <- repo.Create(ctx, second) }()
+	require.NoError(t, <-errs)
+	require.NoError(t, <-errs)
+
+	assert.Equal(t, int64(1), countTokens(ctx, t, pool))
 }
 
 func TestPostgresRepositoryDeletingAssistantCascades(t *testing.T) {
