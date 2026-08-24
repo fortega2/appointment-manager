@@ -6,6 +6,7 @@ package main
 import (
 	"appointment-manager/internal/assistant"
 	"appointment-manager/internal/password"
+	"appointment-manager/internal/passwordreset"
 	"appointment-manager/internal/session"
 	"context"
 	"crypto/rand"
@@ -58,7 +59,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
-	plain, closed, err := resetPassword(ctx, email)
+	result, err := resetPassword(ctx, email)
 	if err != nil {
 		fmt.Fprintf(stderr, "resetpassword failed: %v\n", err)
 		return exitFailure
@@ -66,8 +67,9 @@ func run(args []string, stdout, stderr io.Writer) int {
 
 	// The password is the only thing on stdout, so it can be captured without
 	// filtering diagnostics back out.
-	fmt.Fprintln(stdout, plain)
-	fmt.Fprintf(stderr, "password reset for %s, %d session(s) closed\n", email, closed)
+	fmt.Fprintln(stdout, result.password)
+	fmt.Fprintf(stderr, "password reset for %s, %d session(s) closed, %d reset link(s) revoked\n",
+		email, result.sessions, result.links)
 
 	return exitSuccess
 }
@@ -96,13 +98,17 @@ func parseFlags(args []string) (string, time.Duration, error) {
 	return trimmed, *timeout, nil
 }
 
-// resetPassword returns the new plaintext password and how many sessions it
-// closed. It reports the password last, so a failed update never hands out one
-// that was not stored.
-func resetPassword(ctx context.Context, email string) (string, int64, error) {
+// rescueResult is what the rescue changed.
+type rescueResult struct {
+	password string
+	sessions int64
+	links    int64
+}
+
+func resetPassword(ctx context.Context, email string) (rescueResult, error) {
 	databaseURL := strings.TrimSpace(os.Getenv(databaseURLEnv))
 	if databaseURL == "" {
-		return "", 0, errMissingDatabaseURL
+		return rescueResult{}, errMissingDatabaseURL
 	}
 
 	// pgxpool directly rather than db.NewPostgresPool: that one applies the
@@ -110,41 +116,46 @@ func resetPassword(ctx context.Context, email string) (string, int64, error) {
 	// because a half-applied migration left it dirty. See ADR 0010.
 	pool, err := pgxpool.New(ctx, databaseURL)
 	if err != nil {
-		return "", 0, fmt.Errorf("connect to database: %w", err)
+		return rescueResult{}, fmt.Errorf("connect to database: %w", err)
 	}
 	defer pool.Close()
 
 	// pgxpool.New connects lazily, so without this a bad host would surface as
 	// a confusing failure inside the first query instead.
 	if err := pool.Ping(ctx); err != nil {
-		return "", 0, fmt.Errorf("ping database: %w", err)
+		return rescueResult{}, fmt.Errorf("ping database: %w", err)
 	}
 
 	assistants, err := assistant.NewPostgresRepository(pool)
 	if err != nil {
-		return "", 0, err
+		return rescueResult{}, err
 	}
 
 	sessions, err := session.NewPostgresRepository(pool)
 	if err != nil {
-		return "", 0, err
+		return rescueResult{}, err
+	}
+
+	links, err := passwordreset.NewPostgresRepository(pool)
+	if err != nil {
+		return rescueResult{}, err
 	}
 
 	a, err := assistants.GetByEmail(ctx, email)
 	if err != nil {
-		return "", 0, fmt.Errorf("look up assistant: %w", err)
+		return rescueResult{}, fmt.Errorf("look up assistant: %w", err)
 	}
 
 	plain, err := generatePassword()
 	if err != nil {
-		return "", 0, err
+		return rescueResult{}, err
 	}
 
 	// The login's own hasher: other Argon2 parameters would write a hash no
 	// login could verify, locking the account out silently.
 	hash, err := password.NewArgon2(nil).Hash(ctx, plain)
 	if err != nil {
-		return "", 0, fmt.Errorf("hash password: %w", err)
+		return rescueResult{}, fmt.Errorf("hash password: %w", err)
 	}
 
 	// Sessions first: if the update then fails the account is merely logged
@@ -152,14 +163,21 @@ func resetPassword(ctx context.Context, email string) (string, int64, error) {
 	// password its owner no longer knows. See ADR 0010.
 	closed, err := sessions.DeleteByAssistant(ctx, a.ID.String())
 	if err != nil {
-		return "", 0, fmt.Errorf("close sessions: %w", err)
+		return rescueResult{}, fmt.Errorf("close sessions: %w", err)
+	}
+
+	// This command runs when the mail path is not trusted, so a link already in
+	// somebody's inbox must not outlive the rescue.
+	revoked, err := links.DeleteByAssistant(ctx, a.ID)
+	if err != nil {
+		return rescueResult{}, fmt.Errorf("revoke reset links: %w", err)
 	}
 
 	if err := assistants.UpdatePasswordHash(ctx, a.ID, hash); err != nil {
-		return "", 0, fmt.Errorf("update password hash: %w", err)
+		return rescueResult{}, fmt.Errorf("update password hash: %w", err)
 	}
 
-	return plain, closed, nil
+	return rescueResult{password: plain, sessions: closed, links: revoked}, nil
 }
 
 // generatePassword returns a fresh random password, checked against the same

@@ -271,6 +271,44 @@ func TestPostgresRepositoryDeleteExpired(t *testing.T) {
 	assert.Equal(t, integrationOther, active.ID)
 }
 
+// TestPostgresRepositoryDeleteByAssistant covers the offline rescue: a link
+// already in somebody's inbox must not outlive it.
+func TestPostgresRepositoryDeleteByAssistant(t *testing.T) {
+	testcontainers.SkipIfProviderIsNotHealthy(t)
+
+	ctx := context.Background()
+	pool := newIntegrationPool(ctx, t)
+	repo := newIntegrationRepository(t, pool)
+
+	rescued := seedAssistant(ctx, t, pool, integrationEmail)
+	bystander := seedAssistant(ctx, t, pool, "other@email.com")
+	now := time.Now().UTC()
+
+	require.NoError(t, repo.Create(ctx, passwordreset.Token{
+		ID:          integrationDigest,
+		AssistantID: rescued,
+		CreatedAt:   now,
+		ExpiresAt:   now.Add(integrationTTL),
+	}))
+	require.NoError(t, repo.Create(ctx, passwordreset.Token{
+		ID:          integrationOther,
+		AssistantID: bystander,
+		CreatedAt:   now,
+		ExpiresAt:   now.Add(integrationTTL),
+	}))
+
+	revoked, err := repo.DeleteByAssistant(ctx, rescued)
+	require.NoError(t, err)
+	assert.Equal(t, int64(1), revoked)
+
+	_, err = repo.Get(ctx, integrationDigest)
+	assert.ErrorIs(t, err, passwordreset.ErrTokenNotFound)
+
+	surviving, err := repo.Get(ctx, integrationOther)
+	require.NoError(t, err)
+	assert.Equal(t, integrationOther, surviving.ID)
+}
+
 // TestPostgresRepositoryCreateKeepsOneLiveLink pins the unique index: without it
 // two concurrent issues for the same account both leave a link behind.
 func TestPostgresRepositoryCreateKeepsOneLiveLink(t *testing.T) {

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -14,10 +15,11 @@ import (
 const (
 	constraintFkPasswordResetTokenAssistant = "fk_password_reset_token_assistant"
 
-	createErrMsg        = "create password reset token: %w"
-	getErrMsg           = "get password reset token: %w"
-	consumeErrMsg       = "consume password reset token: %w"
-	deleteExpiredErrMsg = "delete expired password reset tokens: %w"
+	createErrMsg            = "create password reset token: %w"
+	getErrMsg               = "get password reset token: %w"
+	consumeErrMsg           = "consume password reset token: %w"
+	deleteExpiredErrMsg     = "delete expired password reset tokens: %w"
+	deleteByAssistantErrMsg = "delete password reset tokens by assistant: %w"
 
 	// Upsert, not delete-then-insert: two concurrent issues for the same account
 	// would both find nothing to delete and leave two live links behind.
@@ -70,6 +72,14 @@ const (
 			public.password_reset_token
 		WHERE
 			expires_at < $1
+	`
+
+	//nolint:gosec // G101 false positive: a SQL statement, not a credential.
+	deletePasswordResetTokensByAssistantQuery = `
+		DELETE FROM
+			public.password_reset_token
+		WHERE
+			assistant_id = $1
 	`
 )
 
@@ -148,6 +158,16 @@ func (r *PostgresRepository) DeleteExpired(ctx context.Context, before time.Time
 	tag, err := r.pool.Exec(ctx, deleteExpiredPasswordResetTokensQuery, before)
 	if err != nil {
 		return 0, fmt.Errorf(deleteExpiredErrMsg, err)
+	}
+
+	return tag.RowsAffected(), nil
+}
+
+// DeleteByAssistant revokes every outstanding link the assistant holds.
+func (r *PostgresRepository) DeleteByAssistant(ctx context.Context, assistantID uuid.UUID) (int64, error) {
+	tag, err := r.pool.Exec(ctx, deletePasswordResetTokensByAssistantQuery, assistantID)
+	if err != nil {
+		return 0, fmt.Errorf(deleteByAssistantErrMsg, err)
 	}
 
 	return tag.RowsAffected(), nil
