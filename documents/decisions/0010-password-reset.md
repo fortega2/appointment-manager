@@ -5,7 +5,7 @@
 - **Scope:** `internal/mailer` (`Client`, `Config`, `Message`, `NewClient`, `VerifyConnection`,
   `Send`, `tlsPolicy`, `containsLineBreak`, and the sentinels in `errors.go`),
   `internal/passwordreset` (`Store`, `Storer`, `PostgresRepository`, `Create`, `Verify`,
-  `Consume`, `DeleteExpired`), `internal/password` (`Validate`, `MinLength`, `MaxLength`,
+  `Consume`, `DeleteExpired`, `DeleteByAssistant`), `internal/password` (`Validate`, `MinLength`, `MaxLength`,
   `ErrPasswordTooShort`, `ErrPasswordTooLong`), `internal/auth` (`ResetHandler`,
   `ResetHandlerConfig`, `Mailer`, `ResetRepo`, `ResetMetrics`, `dispatch`, `sendResetLink`,
   `resetMessage`, `resetURL`, `rejectWeakPassword`, and the package-level render helpers in
@@ -48,9 +48,11 @@ or any of the machinery a 6-digit code would demand. What the database stores is
 `hex(sha256(token))`, never the token itself: a stolen dump cannot be replayed, exactly as with
 session cookies in ADR 0006.
 
-Expiry is absolute, written once at creation, defaulting to 30 minutes. Creating a token deletes
-the assistant's previous ones, so at most one link is ever live and asking again invalidates the
-old mail.
+Expiry is absolute, written once at creation, defaulting to 30 minutes. Creating a token replaces
+the assistant's previous one, so at most one link is ever live and asking again invalidates the
+old mail. That replacement is an upsert on a unique `assistant_id`, not a delete followed by an
+insert: two concurrent requests for the same account would both read the same snapshot, find
+nothing to delete, and leave two live links behind. The index is what makes one of them lose.
 
 **The cost, accepted knowingly:** a token in a URL is written to the browser's history and to
 Caddy's access logs. That is tolerable here — the logs are ours, on our own VPS, the token is
@@ -108,7 +110,8 @@ and no window between checking and spending in which a second request could slip
 
 ## Decision 4 — Sessions are cleared before the new hash is written
 
-The confirm step runs: validate → `Consume` → `Hash` → `DeleteByAssistant` → `UpdatePasswordHash`.
+The confirm step runs: validate → rate limit → `Verify` → `Hash` → `Consume` →
+`DeleteByAssistant` → `UpdatePasswordHash`.
 
 The order of the last two is a security decision, not an accident. Either write can fail
 independently, so the question is which partial state is survivable:
@@ -122,8 +125,14 @@ independently, so the question is which partial state is survivable:
 The second is the one that must never happen, so the cheap failure is the one that is allowed to.
 `cmd/resetpassword` follows the same order for the same reason.
 
-Password validation runs *before* `Consume`, so a rejected password costs a retry on the same link
-rather than a whole new mail.
+Everything that can fail cheaply runs *before* `Consume`, so a rejected password, a saturated
+hasher or a spent budget costs a retry on the same link rather than a whole new mail. `Verify`
+covers the token without spending it, which is also what keeps an Argon2 slot out of reach of a
+caller who holds no live link.
+
+`Consume` cannot move any later: the two writes after it must not run twice for one link. A failure
+in either of them therefore does leave the link spent, and the copy says so — those paths render
+`auth.error.reset_spent` ("request a new one"), not the `auth.error.reset_failed` retry prompt.
 
 ## Decision 5 — A completed reset does not log anyone in
 
@@ -169,6 +178,12 @@ bound, since that number is about memory, not about either policy.
 ADR 0008. It maps `password.ErrTooManyConcurrentHashes` to `503` with the `auth.error.busy`
 catalog key, identically to login: a saturated hasher is a capacity problem, and telling the
 caller their token was bad would be a lie.
+
+That route is rate limited too, since it is unauthenticated and reaches the shared hasher. It has
+no email to key the account bucket on, so the key is the link's own token: that bounds a retry loop
+against one link, while the address bucket — shared with `POST /forgot-password` — bounds a flood
+of invented ones. Both buckets are spent only after the form itself is accepted, so mistyping the
+confirmation field costs nothing.
 
 ## Decision 8 — The mailer's constructor performs no I/O, and an unreachable relay is not fatal
 
@@ -323,7 +338,12 @@ then fails — meaning the emergency escape hatch would stop working in precisel
 made it necessary. What is given up is the pool-sizing validation and the `timezone=UTC` runtime
 parameter, and neither applies: the command passes no pool options and reads no timestamps.
 
-Three further properties of the command are deliberate:
+Four further properties of the command are deliberate:
+
+- **It revokes outstanding reset links.** The command exists for when the mail path is not
+  trusted, so a link already sitting in an inbox must not survive the rescue and let its holder
+  choose the password afterwards. It clears them alongside the sessions, before the new hash is
+  written, for the reason Decision 4 gives.
 
 - **No `-password` flag.** The password is generated from `crypto/rand` and printed once, so it
   never reaches shell history or another user's `ps`. It goes to stdout alone, with diagnostics on
