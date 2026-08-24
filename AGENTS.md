@@ -51,6 +51,7 @@ symbols it governs.
   - `internal/assistant`
   - `internal/auth`
   - `internal/password`
+  - `internal/passwordreset`
   - `internal/web`
 - Domain packages:
   - `internal/professional`
@@ -63,6 +64,10 @@ symbols it governs.
   - `internal/db/migrations`
   - `internal/middleware`
   - `internal/session`
+  - `internal/token` (opaque bearer tokens and their digests, shared by session and password reset)
+  - `internal/ratelimit`
+  - `internal/mailer` (SMTP client; needs `SMTP_*` env vars, see README)
+  - `internal/notification`
   - `internal/storage` (S3-compatible client; needs `STORAGE_*` env vars, see README)
   - `internal/server`
   - `internal/health`

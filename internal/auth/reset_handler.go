@@ -209,7 +209,7 @@ func (h *ResetHandler) confirmResetHandler() http.HandlerFunc {
 				return
 			}
 
-			h.logger.ErrorContext(r.Context(), failedUpdatePasswordMsg, slog.Any("error", err))
+			h.logger.ErrorContext(r.Context(), failedHashPasswordMsg, slog.Any("error", err))
 			renderError(w, r, h.logger, http.StatusInternalServerError, resetErrorFailedKey)
 
 			return

@@ -1,11 +1,8 @@
 package session
 
 import (
+	"appointment-manager/internal/token"
 	"context"
-	"crypto/rand"
-	"crypto/sha256"
-	"encoding/base64"
-	"encoding/hex"
 	"fmt"
 	"time"
 )
@@ -14,7 +11,7 @@ const (
 	CookieName      = "appointment_manager_session"
 	SessionDuration = 24 * time.Hour
 
-	bytesPerSession = 32
+	bytesPerSession uint = 32
 )
 
 // Session is an authenticated assistant. ID is the digest of the token the
@@ -51,14 +48,14 @@ func NewStore(storer Storer) (*Store, error) {
 // Create persists a session for the assistant and returns the token to put in
 // the cookie. Only the token's digest is stored.
 func (s *Store) Create(ctx context.Context, userID string) (string, error) {
-	token, err := generateToken()
+	raw, err := token.Generate(bytesPerSession)
 	if err != nil {
 		return "", fmt.Errorf("create: %w", err)
 	}
 	now := time.Now()
 
 	if err := s.storer.Create(ctx, Session{
-		ID:        hashToken(token),
+		ID:        token.Hash(raw),
 		UserID:    userID,
 		CreatedAt: now,
 		ExpiresAt: now.Add(SessionDuration),
@@ -66,13 +63,13 @@ func (s *Store) Create(ctx context.Context, userID string) (string, error) {
 		return "", fmt.Errorf("create: %w", err)
 	}
 
-	return token, nil
+	return raw, nil
 }
 
 // Get resolves a cookie token into its session. An expired session yields
 // ErrSessionExpired and is left for DeleteExpired to remove.
-func (s *Store) Get(ctx context.Context, token string) (*Session, error) {
-	session, err := s.storer.Get(ctx, hashToken(token))
+func (s *Store) Get(ctx context.Context, cookieToken string) (*Session, error) {
+	session, err := s.storer.Get(ctx, token.Hash(cookieToken))
 	if err != nil {
 		return nil, fmt.Errorf("get: %w", err)
 	}
@@ -86,8 +83,8 @@ func (s *Store) Get(ctx context.Context, token string) (*Session, error) {
 
 // Delete removes the session behind a cookie token. It returns
 // ErrSessionNotFound if there was none.
-func (s *Store) Delete(ctx context.Context, token string) error {
-	if err := s.storer.Delete(ctx, hashToken(token)); err != nil {
+func (s *Store) Delete(ctx context.Context, cookieToken string) error {
+	if err := s.storer.Delete(ctx, token.Hash(cookieToken)); err != nil {
 		return fmt.Errorf("delete: %w", err)
 	}
 
@@ -114,21 +111,4 @@ func (s *Store) DeleteExpired(ctx context.Context) (int64, error) {
 	}
 
 	return removed, nil
-}
-
-func generateToken() (string, error) {
-	b := make([]byte, bytesPerSession)
-	if _, err := rand.Read(b); err != nil {
-		return "", fmt.Errorf("generate token: %w", err)
-	}
-
-	return base64.URLEncoding.EncodeToString(b), nil
-}
-
-// hashToken derives the stored session key from a cookie token. An unsalted
-// SHA-256 is enough: the token is 256 bits of crypto/rand.
-func hashToken(token string) string {
-	sum := sha256.Sum256([]byte(token))
-
-	return hex.EncodeToString(sum[:])
 }

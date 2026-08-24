@@ -1,6 +1,7 @@
 package passwordreset
 
 import (
+	"appointment-manager/internal/token"
 	"context"
 	"errors"
 	"testing"
@@ -170,17 +171,17 @@ func TestStoreCreatePersistsDigestNotToken(t *testing.T) {
 	storer := newStubStorer()
 	store := newTestStore(t, storer)
 
-	token, err := store.Create(t.Context(), uuid.Must(uuid.NewV7()))
+	tken, err := store.Create(t.Context(), uuid.Must(uuid.NewV7()))
 	require.NoError(t, err)
 
 	require.Len(t, storer.tokens, 1)
-	_, storedUnderToken := storer.tokens[token]
+	_, storedUnderToken := storer.tokens[tken]
 	assert.False(t, storedUnderToken, "the token carried by the link must never be the stored key")
 
-	stored, ok := storer.tokens[hashToken(token)]
+	stored, ok := storer.tokens[token.Hash(tken)]
 	require.True(t, ok)
 	assert.Len(t, stored.ID, 64)
-	assert.NotEqual(t, token, stored.ID)
+	assert.NotEqual(t, tken, stored.ID)
 	assert.True(t, stored.ExpiresAt.After(stored.CreatedAt))
 }
 
@@ -272,8 +273,8 @@ func TestStoreVerifyExpired(t *testing.T) {
 	t.Parallel()
 
 	storer := newStubStorer()
-	storer.tokens[hashToken("expired")] = Token{
-		ID:          hashToken("expired"),
+	storer.tokens[token.Hash("expired")] = Token{
+		ID:          token.Hash("expired"),
 		AssistantID: uuid.Must(uuid.NewV7()),
 		CreatedAt:   time.Now().Add(2 * pastOffset),
 		ExpiresAt:   time.Now().Add(pastOffset),
@@ -349,8 +350,8 @@ func TestStoreConsumeExpiredSpendsTheTokenAnyway(t *testing.T) {
 	t.Parallel()
 
 	storer := newStubStorer()
-	storer.tokens[hashToken("expired")] = Token{
-		ID:          hashToken("expired"),
+	storer.tokens[token.Hash("expired")] = Token{
+		ID:          token.Hash("expired"),
 		AssistantID: uuid.Must(uuid.NewV7()),
 		CreatedAt:   time.Now().Add(2 * pastOffset),
 		ExpiresAt:   time.Now().Add(pastOffset),

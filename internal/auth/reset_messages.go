@@ -28,11 +28,13 @@ const (
 )
 
 const (
-	resetRefusedMsg         string = "password reset refused for exceeding its allowance"
-	resetConfirmRefusedMsg  string = "password reset confirmation refused for exceeding its allowance"
-	failedDispatchResetMsg  string = "failed to dispatch password reset"
-	failedVerifyResetMsg    string = "failed to verify password reset token"
-	failedConsumeResetMsg   string = "failed to consume password reset token"
+	resetRefusedMsg        string = "password reset refused for exceeding its allowance"
+	resetConfirmRefusedMsg string = "password reset confirmation refused for exceeding its allowance"
+	failedDispatchResetMsg string = "failed to dispatch password reset"
+	failedVerifyResetMsg   string = "failed to verify password reset token"
+	failedConsumeResetMsg  string = "failed to consume password reset token"
+	//nolint:gosec // G101 false positive: a log message, not a credential.
+	failedHashPasswordMsg   string = "failed to hash the new password"
 	failedClearSessionsMsg  string = "failed to clear sessions after a password reset"
 	failedUpdatePasswordMsg string = "failed to update the password hash"
 	renderResetPageMsg      string = "error rendering a password reset page"

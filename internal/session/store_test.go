@@ -1,6 +1,7 @@
 package session
 
 import (
+	"appointment-manager/internal/token"
 	"context"
 	"errors"
 	"testing"
@@ -135,17 +136,17 @@ func TestStoreCreatePersistsDigestNotToken(t *testing.T) {
 	storer := newStubStorer()
 	store := newTestStore(t, storer)
 
-	token, err := store.Create(t.Context(), sessionUserID)
+	tken, err := store.Create(t.Context(), sessionUserID)
 	require.NoError(t, err)
 
 	require.Len(t, storer.sessions, 1)
-	_, storedUnderToken := storer.sessions[token]
+	_, storedUnderToken := storer.sessions[tken]
 	assert.False(t, storedUnderToken, "the raw cookie token must never be the stored key")
 
-	stored, ok := storer.sessions[hashToken(token)]
+	stored, ok := storer.sessions[token.Hash(tken)]
 	require.True(t, ok)
 	assert.Len(t, stored.ID, 64)
-	assert.NotEqual(t, token, stored.ID)
+	assert.NotEqual(t, tken, stored.ID)
 }
 
 func TestStoreCreateStorerError(t *testing.T) {
@@ -190,8 +191,8 @@ func TestStoreGetExpired(t *testing.T) {
 	t.Parallel()
 
 	storer := newStubStorer()
-	storer.sessions[hashToken("expired")] = Session{
-		ID:        hashToken("expired"),
+	storer.sessions[token.Hash("expired")] = Session{
+		ID:        token.Hash("expired"),
 		UserID:    sessionUserID,
 		CreatedAt: time.Now().Add(-2 * time.Hour),
 		ExpiresAt: time.Now().Add(-1 * time.Hour),

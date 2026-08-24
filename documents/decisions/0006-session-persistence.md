@@ -2,8 +2,8 @@
 
 - **Date:** 2026-08-05
 - **Status:** Accepted
-- **Scope:** `internal/session` (`Store`, `Storer`, `PostgresRepository`, `hashToken`,
-  `generateToken`), the `public.session` table in
+- **Scope:** `internal/session` (`Store`, `Storer`, `PostgresRepository`), `internal/token`
+  (`Generate`, `Hash`), the `public.session` table in
   `internal/db/migrations/000012_session_table.up.sql`, and the `expire-sessions` job in
   `cmd/server/worker.go`
 
@@ -38,8 +38,10 @@ effect on the very next request, everywhere, with nothing to invalidate.
 
 ## Decision 2 — The table stores a digest of the token, never the token
 
-`generateToken` produces 32 bytes of `crypto/rand`, base64-URL encoded; that string is what the
-cookie carries. What `public.session.id` stores is `hex(sha256(token))`.
+`token.Generate` produces 32 bytes of `crypto/rand`, base64-URL encoded; that string is what the
+cookie carries. What `public.session.id` stores is `token.Hash` of it, `hex(sha256(token))`. The
+two live in `internal/token` because ADR 0010's reset links need exactly the same primitive, and
+one copy of this reasoning is enough.
 
 The property this buys: read access to the `session` table is not enough to impersonate anyone.
 A database dump, a stray backup, a read replica, a `SELECT` by an operator — none of them yield a

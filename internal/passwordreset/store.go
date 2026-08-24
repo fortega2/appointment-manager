@@ -4,11 +4,8 @@
 package passwordreset
 
 import (
+	"appointment-manager/internal/token"
 	"context"
-	"crypto/rand"
-	"crypto/sha256"
-	"encoding/base64"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"time"
@@ -16,7 +13,7 @@ import (
 	"github.com/google/uuid"
 )
 
-const bytesPerToken = 32
+const bytesPerToken uint = 32
 
 // Token is one outstanding reset link. ID is the digest of the token the link
 // carries, never the token itself.
@@ -78,14 +75,14 @@ func (s *Store) Create(ctx context.Context, assistantID uuid.UUID) (string, erro
 		return "", fmt.Errorf("create: %w", ErrNilAssistantID)
 	}
 
-	token, err := generateToken()
+	raw, err := token.Generate(bytesPerToken)
 	if err != nil {
 		return "", fmt.Errorf("create: %w", err)
 	}
 	now := time.Now()
 
 	if err := s.storer.Create(ctx, Token{
-		ID:          hashToken(token),
+		ID:          token.Hash(raw),
 		AssistantID: assistantID,
 		CreatedAt:   now,
 		ExpiresAt:   now.Add(s.ttl),
@@ -93,14 +90,14 @@ func (s *Store) Create(ctx context.Context, assistantID uuid.UUID) (string, erro
 		return "", fmt.Errorf("create: %w", err)
 	}
 
-	return token, nil
+	return raw, nil
 }
 
 // Verify reports whether a link's token is still redeemable without spending
 // it, so the page behind the link can say "this link expired" before asking for
 // a password rather than after.
-func (s *Store) Verify(ctx context.Context, token string) error {
-	stored, err := s.storer.Get(ctx, hashToken(token))
+func (s *Store) Verify(ctx context.Context, linkToken string) error {
+	stored, err := s.storer.Get(ctx, token.Hash(linkToken))
 	if err != nil {
 		return fmt.Errorf("verify: %w", err)
 	}
@@ -115,8 +112,8 @@ func (s *Store) Verify(ctx context.Context, token string) error {
 // Consume redeems a link's token and reports whose password it authorises to
 // change. Redeeming is a delete, so the token is spent even when it turns out
 // to have expired and two racing requests cannot both succeed.
-func (s *Store) Consume(ctx context.Context, token string) (uuid.UUID, error) {
-	consumed, err := s.storer.Consume(ctx, hashToken(token))
+func (s *Store) Consume(ctx context.Context, linkToken string) (uuid.UUID, error) {
+	consumed, err := s.storer.Consume(ctx, token.Hash(linkToken))
 	if err != nil {
 		return uuid.Nil, fmt.Errorf("consume: %w", err)
 	}
@@ -137,20 +134,4 @@ func (s *Store) DeleteExpired(ctx context.Context) (int64, error) {
 	}
 
 	return removed, nil
-}
-
-func generateToken() (string, error) {
-	b := make([]byte, bytesPerToken)
-	if _, err := rand.Read(b); err != nil {
-		return "", fmt.Errorf("generate token: %w", err)
-	}
-
-	return base64.URLEncoding.EncodeToString(b), nil
-}
-
-// hashToken derives the stored key from a link's token. An unsalted SHA-256 is
-// enough: the token is 256 bits of crypto/rand.
-func hashToken(token string) string {
-	sum := sha256.Sum256([]byte(token))
-	return hex.EncodeToString(sum[:])
 }
