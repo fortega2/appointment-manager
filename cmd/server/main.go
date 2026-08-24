@@ -12,7 +12,6 @@ import (
 	"os"
 	"os/signal"
 	"strings"
-	"sync"
 	"syscall"
 	"time"
 
@@ -118,7 +117,7 @@ func run() error {
 		return err
 	}
 
-	handler, err := initializeServerHandlers(handlerConfig{
+	handler, shutdownFunc, err := initializeServerHandlers(handlerConfig{
 		logger:           logger,
 		components:       components,
 		storageClient:    storageClient,
@@ -147,13 +146,19 @@ func run() error {
 	// Deferred before the workers so it runs after them and before the pool
 	// closes: a reset mail still in flight queries for the account it is for.
 	defer func() {
-		if drained(components.resetWaiters, resetDrainTimeout) {
-			logger.Info("password reset dispatches drained")
+		ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), resetDrainTimeout)
+		defer cancel()
+
+		start := time.Now()
+
+		err := shutdownFunc(ctx)
+		if err == nil {
+			logger.InfoContext(ctx, "password reset dispatches drained")
 			return
 		}
 
-		logger.Warn("password reset dispatches abandoned at shutdown",
-			slog.Duration("waited", resetDrainTimeout))
+		logger.WarnContext(ctx, "password reset dispatches abandoned at shutdown",
+			slog.Duration("waited", time.Since(start)), slog.Any("error", err))
 	}()
 
 	stopWorkers, err := startBackgroundWorkers(ctx, logger, workerDeps{
@@ -182,25 +187,4 @@ func run() error {
 	}
 
 	return nil
-}
-
-// drained reports whether the group emptied within the timeout. An unbounded
-// Wait would hand the shutdown deadline to the SMTP relay.
-func drained(wg *sync.WaitGroup, timeout time.Duration) bool {
-	done := make(chan struct{})
-
-	go func() {
-		wg.Wait()
-		close(done)
-	}()
-
-	timer := time.NewTimer(timeout)
-	defer timer.Stop()
-
-	select {
-	case <-done:
-		return true
-	case <-timer.C:
-		return false
-	}
 }

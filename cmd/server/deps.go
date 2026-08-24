@@ -22,8 +22,6 @@ import (
 	"log/slog"
 	"os"
 	"strings"
-	"sync"
-	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -156,9 +154,7 @@ type appComponents struct {
 	loginLimiter        *ratelimit.Limiter
 	resetLimiter        *ratelimit.Limiter
 	mailClient          *mailer.Client
-	resetWaiters        *sync.WaitGroup
 	appBaseURL          string
-	resetTokenTTL       time.Duration
 	locale              i18n.Locale
 	isDev               bool
 }
@@ -267,9 +263,7 @@ func initializeAppComponents(
 		loginLimiter:        loginLimiter,
 		resetLimiter:        resetLimiter,
 		mailClient:          mailClient,
-		resetWaiters:        &sync.WaitGroup{},
 		appBaseURL:          appBaseURL,
-		resetTokenTTL:       resetTokenTTL,
 		locale:              locale,
 		isDev:               env == "" || strings.EqualFold(env, environmentDevelopment),
 	}, nil

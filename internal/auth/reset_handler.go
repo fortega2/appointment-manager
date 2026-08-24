@@ -37,8 +37,7 @@ type ResetRepo interface {
 	UpdatePasswordHash(ctx context.Context, id uuid.UUID, passwordHash string) error
 }
 
-// ResetHandlerConfig carries the handler's dependencies. Waiters is the group
-// the shutdown drains, so a mail in flight is not cut off.
+// ResetHandlerConfig carries the handler's dependencies.
 type ResetHandlerConfig struct {
 	Logger   *slog.Logger
 	Tokens   *passwordreset.Store
@@ -47,7 +46,6 @@ type ResetHandlerConfig struct {
 	Hasher   *password.Argon2
 	Mail     Mailer
 	Limiter  *ratelimit.Limiter
-	Waiters  *sync.WaitGroup
 	Metrics  ResetMetrics
 	BaseURL  string
 }
@@ -89,9 +87,6 @@ func NewResetHandler(cfg ResetHandlerConfig) (*ResetHandler, error) {
 	if cfg.Limiter == nil {
 		errs = append(errs, ErrNilRateLimiter)
 	}
-	if cfg.Waiters == nil {
-		errs = append(errs, ErrNilWaitGroup)
-	}
 	if strings.TrimSpace(cfg.BaseURL) == "" {
 		errs = append(errs, ErrEmptyBaseURL)
 	}
@@ -113,7 +108,7 @@ func NewResetHandler(cfg ResetHandlerConfig) (*ResetHandler, error) {
 		hasher:   cfg.Hasher,
 		mail:     cfg.Mail,
 		limiter:  cfg.Limiter,
-		waiters:  cfg.Waiters,
+		waiters:  &sync.WaitGroup{},
 		metrics:  resetMetrics,
 		baseURL:  strings.TrimRight(cfg.BaseURL, "/"),
 	}, nil
@@ -126,6 +121,23 @@ func (h *ResetHandler) RegisterHandlers(mux web.Mux) {
 	mux.Handle("POST /forgot-password", h.requestResetHandler())
 	mux.Handle("GET /reset-password", h.showResetPasswordHandler())
 	mux.Handle("POST /reset-password", h.confirmResetHandler())
+}
+
+// Shutdown waits for the detached goroutines to finish. It is called at server
+// shutdown so a mail in flight is not cut off. The context bounds the wait.
+func (h *ResetHandler) Shutdown(ctx context.Context) error {
+	done := make(chan struct{})
+	go func() {
+		h.waiters.Wait()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 }
 
 func (h *ResetHandler) showForgotPasswordHandler() http.HandlerFunc {

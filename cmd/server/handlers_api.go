@@ -43,7 +43,6 @@ func initializeResetHandler(
 		Hasher:   components.deps.passwordHasher,
 		Mail:     components.mailClient,
 		Limiter:  components.resetLimiter,
-		Waiters:  components.resetWaiters,
 		Metrics:  appMetrics,
 		BaseURL:  components.appBaseURL,
 	})

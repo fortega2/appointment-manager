@@ -21,53 +21,55 @@ type handlerConfig struct {
 	sendNotification func(context.Context, uuid.UUID)
 }
 
+type resetShutdownFunc func(context.Context) error
+
 // initializeServerHandlers builds every handler and wires it to a mux. Errors
 // are returned wrapped rather than logged here: run logs them once, so the
 // context of the failure is carried by the error chain itself.
-func initializeServerHandlers(cfg handlerConfig) (http.Handler, error) {
+func initializeServerHandlers(cfg handlerConfig) (http.Handler, resetShutdownFunc, error) {
 	authHandler, err := initializeAuthHandler(cfg.logger, cfg.components.sessionStore, cfg.components.deps, cfg.components.loginLimiter, cfg.components.isDev)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	assistantHandler, err := initializeAssistantHandler(cfg.logger, cfg.components.deps)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	appointmentHandler, err := initializeAppointmentHandler(cfg.logger, cfg.components.deps)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	professionalHandler, err := initializeProfessionalHandler(cfg.logger, cfg.components.deps)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	patientHandler, err := initializePatientHandler(cfg.logger, cfg.components.deps)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	slotHandler, err := initializeSlotHandler(cfg.logger, cfg.components.deps, cfg.sendNotification)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	healthHandler, err := initializeHealthHandler(cfg.logger, cfg.components.deps)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	uiHomeHandler, err := initializeUIHomeHandler(cfg.logger)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	uiAppointmentHandler, err := initializeUIAppointmentHandler(cfg.logger, cfg.components.deps)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	uiLanguageHandler, err := initializeUILanguageHandler(cfg.logger, cfg.components.isDev)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	resetHandler, err := initializeResetHandler(cfg.logger, cfg.components, cfg.metrics)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	mux := http.NewServeMux()
@@ -111,7 +113,7 @@ func initializeServerHandlers(cfg handlerConfig) (http.Handler, error) {
 	if prescriptionsEnabled {
 		uiPrescriptionHandler, err := initializeUIPrescriptionHandler(cfg.logger, cfg.components.deps, cfg.storageClient)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		uiPrescriptionHandler.RegisterUIHandlers(uiProtected)
 	} else {
@@ -127,7 +129,7 @@ func initializeServerHandlers(cfg handlerConfig) (http.Handler, error) {
 
 	csrfMiddleware, err := middleware.CSRF(cfg.logger, cfg.components.isDev, serverAddr)
 	if err != nil {
-		return nil, fmt.Errorf("failed to initialize CSRF middleware: %w", err)
+		return nil, nil, fmt.Errorf("failed to initialize CSRF middleware: %w", err)
 	}
 	handler := middleware.Chain(
 		mux,
@@ -138,7 +140,7 @@ func initializeServerHandlers(cfg handlerConfig) (http.Handler, error) {
 		middleware.Metrics(cfg.metrics),
 		otelHandler(),
 	)
-	return handler, nil
+	return handler, resetHandler.Shutdown, nil
 }
 
 // otelHandler wraps the whole chain in an OpenTelemetry server span so every

@@ -144,11 +144,11 @@ func (s *stubTokenStorer) DeleteExpired(_ context.Context, before time.Time) (in
 }
 
 type resetFixture struct {
+	handler  *ResetHandler
 	mux      *http.ServeMux
 	mail     *stubMailer
 	repo     *stubResetRepo
 	sessions *session.Store
-	waiters  *sync.WaitGroup
 	account  assistant.Assistant
 }
 
@@ -176,7 +176,6 @@ func newResetFixtureWithBurst(t *testing.T, burst int) *resetFixture {
 	sessions := newTestSessionStore(t)
 	stubMail := &stubMailer{}
 	repo := &stubResetRepo{account: &account}
-	waiters := &sync.WaitGroup{}
 
 	handler, err := NewResetHandler(ResetHandlerConfig{
 		Logger:   slog.New(slog.DiscardHandler),
@@ -186,7 +185,6 @@ func newResetFixtureWithBurst(t *testing.T, burst int) *resetFixture {
 		Hasher:   password.NewArgon2(nil),
 		Mail:     stubMail,
 		Limiter:  newLimiterWithBurst(t, burst),
-		Waiters:  waiters,
 		BaseURL:  resetBaseURL,
 	})
 	require.NoError(t, err)
@@ -195,11 +193,11 @@ func newResetFixtureWithBurst(t *testing.T, burst int) *resetFixture {
 	handler.RegisterHandlers(mux)
 
 	return &resetFixture{
+		handler:  handler,
 		mux:      mux,
 		mail:     stubMail,
 		repo:     repo,
 		sessions: sessions,
-		waiters:  waiters,
 		account:  account,
 	}
 }
@@ -215,7 +213,7 @@ func (f *resetFixture) post(t *testing.T, path string, form url.Values) *httptes
 
 	rec := httptest.NewRecorder()
 	f.mux.ServeHTTP(rec, req)
-	f.waiters.Wait()
+	require.NoError(t, f.handler.Shutdown(t.Context()))
 
 	return rec
 }
@@ -282,7 +280,6 @@ func TestNewResetHandlerValidation(t *testing.T) {
 			Hasher:   password.NewArgon2(nil),
 			Mail:     &stubMailer{},
 			Limiter:  newTestLimiter(t),
-			Waiters:  &sync.WaitGroup{},
 			BaseURL:  resetBaseURL,
 		}
 	}
@@ -299,7 +296,6 @@ func TestNewResetHandlerValidation(t *testing.T) {
 		{name: "nil hasher", mutate: func(c *ResetHandlerConfig) { c.Hasher = nil }, expected: ErrNilPasswordHasher},
 		{name: "nil mailer", mutate: func(c *ResetHandlerConfig) { c.Mail = nil }, expected: ErrNilMailer},
 		{name: "nil limiter", mutate: func(c *ResetHandlerConfig) { c.Limiter = nil }, expected: ErrNilRateLimiter},
-		{name: "nil wait group", mutate: func(c *ResetHandlerConfig) { c.Waiters = nil }, expected: ErrNilWaitGroup},
 		{name: "blank base url", mutate: func(c *ResetHandlerConfig) { c.BaseURL = "   " }, expected: ErrEmptyBaseURL},
 	}
 
