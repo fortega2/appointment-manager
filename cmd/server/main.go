@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/signal"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -26,6 +27,10 @@ const (
 	serverIdleTimeout       = 60 * time.Second
 	serverMaxHeaderBytes    = 1 << 20
 	serverShutdownTimeout   = 3 * time.Second
+
+	// Clears auth.dispatchTimeout so an in-flight mail finishes, and stays under
+	// the stop_grace_period in docker/docker-compose.yml so SIGKILL never wins.
+	resetDrainTimeout = 50 * time.Second
 )
 
 func main() {
@@ -142,8 +147,13 @@ func run() error {
 	// Deferred before the workers so it runs after them and before the pool
 	// closes: a reset mail still in flight queries for the account it is for.
 	defer func() {
-		components.resetWaiters.Wait()
-		logger.Info("password reset dispatches drained")
+		if drained(components.resetWaiters, resetDrainTimeout) {
+			logger.Info("password reset dispatches drained")
+			return
+		}
+
+		logger.Warn("password reset dispatches abandoned at shutdown",
+			slog.Duration("waited", resetDrainTimeout))
 	}()
 
 	stopWorkers, err := startBackgroundWorkers(ctx, logger, workerDeps{
@@ -172,4 +182,25 @@ func run() error {
 	}
 
 	return nil
+}
+
+// drained reports whether the group emptied within the timeout. An unbounded
+// Wait would hand the shutdown deadline to the SMTP relay.
+func drained(wg *sync.WaitGroup, timeout time.Duration) bool {
+	done := make(chan struct{})
+
+	go func() {
+		wg.Wait()
+		close(done)
+	}()
+
+	timer := time.NewTimer(timeout)
+	defer timer.Stop()
+
+	select {
+	case <-done:
+		return true
+	case <-timer.C:
+		return false
+	}
 }

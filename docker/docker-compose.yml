@@ -58,6 +58,9 @@ services:
       - ${API_PORT:-8080}
       - ${METRICS_PORT:-9090}
     restart: unless-stopped
+    # Longer than the reset drain in cmd/server/main.go; the default 10s would
+    # SIGKILL the process mid-drain whenever the relay is slow.
+    stop_grace_period: 60s
     read_only: true
     tmpfs:
       - /tmp
