@@ -16,6 +16,8 @@ const (
 	resetErrorTooLongKey string = "auth.error.reset_too_long"
 	//nolint:gosec // G101 false positive: a message catalog key, not a credential.
 	resetErrorFailedKey string = "auth.error.reset_failed"
+	//nolint:gosec // G101 false positive: a message catalog key, not a credential.
+	resetErrorSpentKey string = "auth.error.reset_spent"
 
 	resetMailSubjectKey  string = "auth.mail.reset.subject"
 	resetMailGreetingKey string = "auth.mail.reset.greeting"
@@ -27,7 +29,9 @@ const (
 
 const (
 	resetRefusedMsg         string = "password reset refused for exceeding its allowance"
+	resetConfirmRefusedMsg  string = "password reset confirmation refused for exceeding its allowance"
 	failedDispatchResetMsg  string = "failed to dispatch password reset"
+	failedVerifyResetMsg    string = "failed to verify password reset token"
 	failedConsumeResetMsg   string = "failed to consume password reset token"
 	failedClearSessionsMsg  string = "failed to clear sessions after a password reset"
 	failedUpdatePasswordMsg string = "failed to update the password hash"

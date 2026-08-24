@@ -146,15 +146,7 @@ func (h *ResetHandler) requestResetHandler() http.HandlerFunc {
 			return
 		}
 
-		if decision, _ := checkRateLimit(w, r, h.logger, h.limiter, email, resetRefusedMsg); !decision.Allowed {
-			seconds := web.RetryAfterSeconds(decision.RetryAfter)
-			renderErrorN(
-				w, r, h.logger,
-				http.StatusTooManyRequests,
-				loginErrorRateLimitedKey,
-				int(seconds),
-				i18n.M{"seconds": seconds})
-
+		if answered := h.refuseOverBudget(w, r, email, resetRefusedMsg); answered {
 			return
 		}
 
@@ -190,15 +182,21 @@ func (h *ResetHandler) confirmResetHandler() http.HandlerFunc {
 			renderError(w, r, h.logger, http.StatusBadRequest, resetErrorMismatchKey)
 			return
 		}
-		// Validating before Consume leaves the link usable, so a rejected
-		// password costs a retry rather than a whole new mail.
+		// Rejected before the limiter so fumbling the confirmation field costs
+		// nothing: the budget exists to protect the hash, not to punish typing.
 		if answered := h.rejectWeakPassword(w, r, plain); answered {
 			return
 		}
 
-		assistantID, err := h.tokens.Consume(r.Context(), r.FormValue("token"))
-		if err != nil {
-			h.logger.WarnContext(r.Context(), failedConsumeResetMsg, slog.Any("error", err))
+		token := r.FormValue("token")
+		if answered := h.refuseOverBudget(w, r, token, resetConfirmRefusedMsg); answered {
+			return
+		}
+
+		// Verify before hashing so only a live link can occupy an Argon2 slot, and
+		// Consume after it so a hash that never lands leaves the link redeemable.
+		if err := h.tokens.Verify(r.Context(), token); err != nil {
+			h.logger.WarnContext(r.Context(), failedVerifyResetMsg, slog.Any("error", err))
 			renderError(w, r, h.logger, http.StatusBadRequest, resetErrorTokenKey)
 
 			return
@@ -217,19 +215,29 @@ func (h *ResetHandler) confirmResetHandler() http.HandlerFunc {
 			return
 		}
 
+		assistantID, err := h.tokens.Consume(r.Context(), token)
+		if err != nil {
+			h.logger.WarnContext(r.Context(), failedConsumeResetMsg, slog.Any("error", err))
+			renderError(w, r, h.logger, http.StatusBadRequest, resetErrorTokenKey)
+
+			return
+		}
+
+		// Past here the link is spent, so the copy stops promising a retry.
+		//
 		// Sessions go before the new hash: if the update then fails the account is
 		// merely logged out, where the reverse order would leave a stolen session
 		// alive. See ADR 0010.
 		if _, err := h.sessions.DeleteByAssistant(r.Context(), assistantID.String()); err != nil {
 			h.logger.ErrorContext(r.Context(), failedClearSessionsMsg, slog.Any("error", err))
-			renderError(w, r, h.logger, http.StatusInternalServerError, resetErrorFailedKey)
+			renderError(w, r, h.logger, http.StatusInternalServerError, resetErrorSpentKey)
 
 			return
 		}
 
 		if err := h.repo.UpdatePasswordHash(r.Context(), assistantID, hash); err != nil {
 			h.logger.ErrorContext(r.Context(), failedUpdatePasswordMsg, slog.Any("error", err))
-			renderError(w, r, h.logger, http.StatusInternalServerError, resetErrorFailedKey)
+			renderError(w, r, h.logger, http.StatusInternalServerError, resetErrorSpentKey)
 
 			return
 		}
@@ -240,6 +248,27 @@ func (h *ResetHandler) confirmResetHandler() http.HandlerFunc {
 		w.Header().Set("HX-Redirect", "/login")
 		w.WriteHeader(http.StatusOK)
 	}
+}
+
+// refuseOverBudget reports whether it already answered the request. The account
+// key is the email when asking for a link and the token when redeeming one --
+// that route never sees an email, and without a budget an anonymous caller
+// could hold the Argon2 slots the login shares.
+func (h *ResetHandler) refuseOverBudget(w http.ResponseWriter, r *http.Request, key, refusedMsg string) bool {
+	decision, _ := checkRateLimit(w, r, h.logger, h.limiter, key, refusedMsg)
+	if decision.Allowed {
+		return false
+	}
+
+	seconds := web.RetryAfterSeconds(decision.RetryAfter)
+	renderErrorN(
+		w, r, h.logger,
+		http.StatusTooManyRequests,
+		loginErrorRateLimitedKey,
+		int(seconds),
+		i18n.M{"seconds": seconds})
+
+	return true
 }
 
 // rejectWeakPassword reports whether it already answered the request.

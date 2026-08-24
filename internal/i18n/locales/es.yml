@@ -64,6 +64,7 @@ es:
       reset_too_short: "La contraseña debe tener al menos %{count} caracteres"
       reset_too_long: "La contraseña no puede superar los %{count} caracteres"
       reset_failed: "No se pudo cambiar la contraseña. Probá de nuevo."
+      reset_spent: "No se pudo cambiar la contraseña y el link ya no sirve. Pedí uno nuevo."
   home:
     title: "Panel"
     welcome: "Bienvenido a Appointment Manager"

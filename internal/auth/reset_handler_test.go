@@ -505,6 +505,25 @@ func TestForgotPasswordThrottlesRepeatedRequests(t *testing.T) {
 	assert.Len(t, fixture.mail.messages(), 1)
 }
 
+// TestConfirmResetThrottlesRepeatedAttempts keeps the redeem route from being a
+// free way to hold the Argon2 slots the login shares.
+func TestConfirmResetThrottlesRepeatedAttempts(t *testing.T) {
+	t.Parallel()
+
+	fixture := newResetFixtureWithBurst(t, 1)
+	form := url.Values{
+		"token":                 {fixture.issueToken(t)},
+		"password":              {strongPass},
+		"password_confirmation": {strongPass},
+	}
+
+	require.Equal(t, http.StatusOK, fixture.post(t, resetPath, form).Code)
+
+	throttled := fixture.post(t, resetPath, form)
+	assert.Equal(t, http.StatusTooManyRequests, throttled.Code)
+	assert.NotEmpty(t, throttled.Header().Get("Retry-After"))
+}
+
 func TestConfirmResetRejectsAnOverlongPassword(t *testing.T) {
 	t.Parallel()
 

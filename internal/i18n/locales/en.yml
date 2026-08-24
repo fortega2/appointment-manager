@@ -64,6 +64,7 @@ en:
       reset_too_short: "The password must be at least %{count} characters"
       reset_too_long: "The password cannot be longer than %{count} characters"
       reset_failed: "The password could not be changed. Please try again."
+      reset_spent: "The password could not be changed and the link is no longer valid. Request a new one."
   home:
     title: "Dashboard"
     welcome: "Welcome to Appointment Manager"
