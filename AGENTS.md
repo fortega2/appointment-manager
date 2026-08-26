@@ -43,7 +43,7 @@ symbols it governs.
 
 ## 1) Repository Snapshot
 
-- Language: Go (`go 1.26.6` in `go.mod`).
+- Language: Go (`go 1.27.0` in `go.mod`).
 - Module: `appointment-manager`.
 - Main entrypoint: `cmd/server/main.go`.
 - Core packages:
@@ -115,7 +115,7 @@ Notes:
 - `//nolint:<linter>` must be specific and justified.
 - Run vulnerability scan: `govulncheck ./...`
 - `govulncheck` takes the stdlib version from `go env GOVERSION`. Distro Go builds bake the
-  enabled experiments into that string (`go1.26.6-X:nodwarf5` on Arch/CachyOS), which is not
+  enabled experiments into that string (`go1.27.0-X:nodwarf5` on Arch/CachyOS), which is not
   valid semver, so every standard-library finding is dropped *silently* — the scan reports
   "No vulnerabilities found" instead of failing. That is why `lefthook.yml` runs it as
   `GOVERSION=$(go env GOVERSION | cut -d- -f1) govulncheck ...`; do not drop that prefix.
@@ -123,7 +123,11 @@ Notes:
   and `make check-css` (on `.templ` changes) in parallel on every commit — a failing commit may be
   any of these, not just CSS drift.
 - `golangci-lint` must be built with a Go toolchain whose language version is >= the one in the
-  `go` directive of `go.mod` (currently `1.26`; the patch level does not matter), otherwise it refuses to run (`can't load config: the Go language version ... is lower than the targeted Go version`). If your installed binary is out of date, update it with `go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest` (or per https://golangci-lint.run/welcome/install/).
+  `go` directive of `go.mod` (currently `1.27`; the patch level does not matter), otherwise it refuses to run (`can't load config: the Go language version ... is lower than the targeted Go version`). If your installed binary is out of date, update it with `go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest` (or per https://golangci-lint.run/welcome/install/).
+- `govulncheck` has the same toolchain constraint as `golangci-lint` above: a binary built with an
+  older Go than the `go` directive fails every package with `package requires newer Go version
+  go1.N (application built with go1.N-1)` and exits non-zero, which breaks the `lefthook` pre-commit
+  hook. On every Go major bump, reinstall both: `go install golang.org/x/vuln/cmd/govulncheck@latest`.
 - `formatters.enable` in `.golangci.yml` includes `gofmt`, so `golangci-lint run ./...` also fails on unformatted files — a separate manual `gofmt -w` pass shouldn't normally be needed, but is listed above as a fallback.
 
 ## 4) Test Commands
