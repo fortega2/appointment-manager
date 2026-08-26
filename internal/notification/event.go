@@ -1,6 +1,6 @@
 package notification
 
-import "github.com/google/uuid"
+import "uuid"
 
 // EventKind identifies what happened, so a single queue can carry every kind of
 // notification the service learns to send rather than growing one channel per

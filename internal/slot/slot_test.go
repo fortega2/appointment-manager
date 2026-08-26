@@ -5,8 +5,8 @@ import (
 	"errors"
 	"testing"
 	"time"
+	"uuid"
 
-	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -32,7 +32,7 @@ func TestNewSlot(t *testing.T) {
 
 	require.NoError(t, err)
 	require.NotNil(t, created)
-	assert.NotEqual(t, uuid.Nil, created.ID)
+	assert.NotEqual(t, uuid.Nil(), created.ID)
 	assert.Equal(t, parsedProfessionalID, created.ProfessionalID)
 	assert.Equal(t, parsedDate, created.Date)
 	assert.True(t, parsedStartTime.Equal(created.StartTime))
@@ -60,7 +60,7 @@ func TestNewSlotValidation(t *testing.T) {
 	}{
 		{
 			name:          "professional ID is nil",
-			professional:  uuid.Nil,
+			professional:  uuid.Nil(),
 			date:          parsedDate,
 			startTime:     parsedStartTime,
 			endTime:       parsedEndTime,

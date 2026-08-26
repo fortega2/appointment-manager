@@ -13,8 +13,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
-
-	"github.com/google/uuid"
+	"uuid"
 )
 
 const (
@@ -245,14 +244,14 @@ func (h *Handler) parsePatientIDFromPath(r *http.Request, w http.ResponseWriter)
 	if pathValueID == "" {
 		h.logger.WarnContext(ctx, missingIDInPathMsg)
 		h.createSnackbarError(ctx, w, http.StatusBadRequest, errKeyMissingID, "missingIDInPath")
-		return uuid.Nil, errors.New(missingIDInPathMsg)
+		return uuid.Nil(), errors.New(missingIDInPathMsg)
 	}
 
 	patientID, err := domain.ParseID(pathValueID)
 	if err != nil {
 		h.logger.WarnContext(ctx, "invalid patient id in path", slog.Any("error", err), slog.String("id", pathValueID))
 		h.createSnackbarError(ctx, w, http.StatusBadRequest, errKeyInvalidID, "invalidIDInPath")
-		return uuid.Nil, err
+		return uuid.Nil(), err
 	}
 	return patientID, nil
 }

@@ -7,8 +7,8 @@ import (
 	"context"
 	"net/http"
 	"testing"
+	"uuid"
 
-	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -28,10 +28,10 @@ func TestCreateEndpointRejectsPatientWithoutActivePrescription(t *testing.T) {
 
 	pool := newIntegrationPool(ctx, t)
 
-	professionalID := uuid.Must(uuid.NewV7())
-	assistantID := uuid.Must(uuid.NewV7())
-	patientID := uuid.Must(uuid.NewV7())
-	slotID := uuid.Must(uuid.NewV7())
+	professionalID := uuid.NewV7()
+	assistantID := uuid.NewV7()
+	patientID := uuid.NewV7()
+	slotID := uuid.NewV7()
 
 	insertProfessional(ctx, t, pool, professionalID)
 	insertAssistant(ctx, t, pool, assistantID)
@@ -56,11 +56,11 @@ func TestCreateEndpointConsumesLastSessionAndCompletesPrescription(t *testing.T)
 
 	pool := newIntegrationPool(ctx, t)
 
-	professionalID := uuid.Must(uuid.NewV7())
-	assistantID := uuid.Must(uuid.NewV7())
-	patientID := uuid.Must(uuid.NewV7())
-	slotOneID := uuid.Must(uuid.NewV7())
-	slotTwoID := uuid.Must(uuid.NewV7())
+	professionalID := uuid.NewV7()
+	assistantID := uuid.NewV7()
+	patientID := uuid.NewV7()
+	slotOneID := uuid.NewV7()
+	slotTwoID := uuid.NewV7()
 
 	insertProfessional(ctx, t, pool, professionalID)
 	insertAssistant(ctx, t, pool, assistantID)
@@ -92,11 +92,11 @@ func TestCreateEndpointRejectsWhenPrescriptionExhausted(t *testing.T) {
 
 	pool := newIntegrationPool(ctx, t)
 
-	professionalID := uuid.Must(uuid.NewV7())
-	assistantID := uuid.Must(uuid.NewV7())
-	patientID := uuid.Must(uuid.NewV7())
-	consumedSlotID := uuid.Must(uuid.NewV7())
-	newSlotID := uuid.Must(uuid.NewV7())
+	professionalID := uuid.NewV7()
+	assistantID := uuid.NewV7()
+	patientID := uuid.NewV7()
+	consumedSlotID := uuid.NewV7()
+	newSlotID := uuid.NewV7()
 
 	insertProfessional(ctx, t, pool, professionalID)
 	insertAssistant(ctx, t, pool, assistantID)
@@ -107,7 +107,7 @@ func TestCreateEndpointRejectsWhenPrescriptionExhausted(t *testing.T) {
 
 	// Direct insert consumes the single session without triggering the
 	// auto-complete logic, leaving the prescription ACTIVE but exhausted.
-	insertAppointment(ctx, t, pool, uuid.Must(uuid.NewV7()), consumedSlotID, patientID, professionalID, assistantID, statusConfirmedValue, nil)
+	insertAppointment(ctx, t, pool, uuid.NewV7(), consumedSlotID, patientID, professionalID, assistantID, statusConfirmedValue, nil)
 
 	mux := newIntegrationMux(t, pool)
 
@@ -130,13 +130,13 @@ func TestPatientSessionBalanceViewExcludesCancelledAppointments(t *testing.T) {
 
 	pool := newIntegrationPool(ctx, t)
 
-	professionalID := uuid.Must(uuid.NewV7())
-	assistantID := uuid.Must(uuid.NewV7())
-	patientID := uuid.Must(uuid.NewV7())
-	confirmedSlotID := uuid.Must(uuid.NewV7())
-	cancelledSlotID := uuid.Must(uuid.NewV7())
-	absentSlotID := uuid.Must(uuid.NewV7())
-	clinicCancelledSlotID := uuid.Must(uuid.NewV7())
+	professionalID := uuid.NewV7()
+	assistantID := uuid.NewV7()
+	patientID := uuid.NewV7()
+	confirmedSlotID := uuid.NewV7()
+	cancelledSlotID := uuid.NewV7()
+	absentSlotID := uuid.NewV7()
+	clinicCancelledSlotID := uuid.NewV7()
 
 	insertProfessional(ctx, t, pool, professionalID)
 	insertAssistant(ctx, t, pool, assistantID)
@@ -147,10 +147,10 @@ func TestPatientSessionBalanceViewExcludesCancelledAppointments(t *testing.T) {
 	insertSlot(ctx, t, pool, absentSlotID, professionalID, "2026-03-04", "11:00:00+00", "11:30:00+00", 2, false)
 	insertSlot(ctx, t, pool, clinicCancelledSlotID, professionalID, "2026-03-04", "12:00:00+00", "12:30:00+00", 2, true)
 
-	insertAppointment(ctx, t, pool, uuid.Must(uuid.NewV7()), confirmedSlotID, patientID, professionalID, assistantID, statusConfirmedValue, nil)
-	insertAppointment(ctx, t, pool, uuid.Must(uuid.NewV7()), cancelledSlotID, patientID, professionalID, assistantID, statusCancelledValue, nil)
-	insertAppointment(ctx, t, pool, uuid.Must(uuid.NewV7()), absentSlotID, patientID, professionalID, assistantID, statusAbsentValue, nil)
-	insertAppointment(ctx, t, pool, uuid.Must(uuid.NewV7()), clinicCancelledSlotID, patientID, professionalID, assistantID, statusCancelledByClinicValue, nil)
+	insertAppointment(ctx, t, pool, uuid.NewV7(), confirmedSlotID, patientID, professionalID, assistantID, statusConfirmedValue, nil)
+	insertAppointment(ctx, t, pool, uuid.NewV7(), cancelledSlotID, patientID, professionalID, assistantID, statusCancelledValue, nil)
+	insertAppointment(ctx, t, pool, uuid.NewV7(), absentSlotID, patientID, professionalID, assistantID, statusAbsentValue, nil)
+	insertAppointment(ctx, t, pool, uuid.NewV7(), clinicCancelledSlotID, patientID, professionalID, assistantID, statusCancelledByClinicValue, nil)
 
 	// total 3 - consumed 2 (confirmed + absent) = 1 remaining; neither
 	// cancellation status is charged.

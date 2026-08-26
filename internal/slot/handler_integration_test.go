@@ -8,10 +8,10 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"uuid"
 
 	"appointment-manager/internal/i18n"
 
-	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go"
@@ -99,7 +99,7 @@ func TestCancelUIHandlerReturnsNotFoundForUnknownSlot(t *testing.T) {
 	pool := newSlotIntegrationPool(ctx, t)
 	calls := &recordedCalls{}
 
-	rec := doCancel(ctx, t, newSlotIntegrationMux(t, pool, calls), uuid.Must(uuid.NewV7()))
+	rec := doCancel(ctx, t, newSlotIntegrationMux(t, pool, calls), uuid.NewV7())
 
 	assert.Equal(t, http.StatusNotFound, rec.Code)
 	assert.Empty(t, calls.cancelledSlotIDs)

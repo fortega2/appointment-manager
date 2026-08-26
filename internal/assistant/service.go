@@ -3,8 +3,7 @@ package assistant
 import (
 	"context"
 	"strings"
-
-	"github.com/google/uuid"
+	"uuid"
 )
 
 type Repository interface {
@@ -53,20 +52,20 @@ type CreateInput struct {
 
 func (s *Service) Create(ctx context.Context, input CreateInput) (uuid.UUID, error) {
 	if err := validateCreateInput(input); err != nil {
-		return uuid.Nil, err
+		return uuid.Nil(), err
 	}
 
 	hashedPassword, err := s.hasher.Hash(ctx, input.Password)
 	if err != nil {
-		return uuid.Nil, err
+		return uuid.Nil(), err
 	}
 	if strings.TrimSpace(hashedPassword) == "" {
-		return uuid.Nil, ErrEmptyPasswordHash
+		return uuid.Nil(), ErrEmptyPasswordHash
 	}
 
 	assist, err := NewAssistant(input.FirstName, input.LastName, input.Email, hashedPassword)
 	if err != nil {
-		return uuid.Nil, err
+		return uuid.Nil(), err
 	}
 
 	return s.repo.Create(ctx, *assist)

@@ -11,8 +11,8 @@ import (
 	"net/http"
 	"testing"
 	"time"
+	"uuid"
 
-	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go"
@@ -103,7 +103,7 @@ func newSlotIntegrationMux(t *testing.T, pool *pgxpool.Pool, calls *recordedCall
 func seedCancellableSlot(ctx context.Context, t *testing.T, pool *pgxpool.Pool) uuid.UUID {
 	t.Helper()
 
-	professionalID := uuid.Must(uuid.NewV7())
+	professionalID := uuid.NewV7()
 	insertProfessionalForSlot(ctx, t, pool, professionalID)
 
 	newRecord, err := slot.NewSlot(

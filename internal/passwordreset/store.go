@@ -9,8 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"time"
-
-	"github.com/google/uuid"
+	"uuid"
 )
 
 const bytesPerToken uint = 32
@@ -71,7 +70,7 @@ func (s *Store) TTL() time.Duration {
 // the link. Only the token's digest is stored. Any token the assistant already
 // held is invalidated, so asking for a second link voids the first.
 func (s *Store) Create(ctx context.Context, assistantID uuid.UUID) (string, error) {
-	if assistantID == uuid.Nil {
+	if assistantID == uuid.Nil() {
 		return "", fmt.Errorf("create: %w", ErrNilAssistantID)
 	}
 
@@ -115,11 +114,11 @@ func (s *Store) Verify(ctx context.Context, linkToken string) error {
 func (s *Store) Consume(ctx context.Context, linkToken string) (uuid.UUID, error) {
 	consumed, err := s.storer.Consume(ctx, token.Hash(linkToken))
 	if err != nil {
-		return uuid.Nil, fmt.Errorf("consume: %w", err)
+		return uuid.Nil(), fmt.Errorf("consume: %w", err)
 	}
 
 	if time.Now().After(consumed.ExpiresAt) {
-		return uuid.Nil, fmt.Errorf("consume: %w", ErrTokenExpired)
+		return uuid.Nil(), fmt.Errorf("consume: %w", ErrTokenExpired)
 	}
 
 	return consumed.AssistantID, nil

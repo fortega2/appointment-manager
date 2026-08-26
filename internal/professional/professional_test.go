@@ -3,8 +3,8 @@ package professional
 import (
 	"errors"
 	"testing"
+	"uuid"
 
-	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -25,7 +25,7 @@ func TestNewProfessional(t *testing.T) {
 
 	require.NoError(t, err)
 	require.NotNil(t, created)
-	assert.NotEqual(t, uuid.Nil, created.ID)
+	assert.NotEqual(t, uuid.Nil(), created.ID)
 	assert.Equal(t, professionalFirstName, created.FirstName)
 	assert.Equal(t, professionalLastName, created.LastName)
 	assert.Equal(t, professionalPhone, created.Phone)

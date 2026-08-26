@@ -8,8 +8,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
-
-	"github.com/google/uuid"
+	"uuid"
 )
 
 // initializeNotificationService builds the notification service from the

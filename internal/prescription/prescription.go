@@ -2,10 +2,9 @@ package prescription
 
 import (
 	"strings"
+	"uuid"
 
 	"appointment-manager/internal/domain"
-
-	"github.com/google/uuid"
 )
 
 type Status int16
@@ -25,7 +24,7 @@ type Prescription struct {
 }
 
 func New(patientID uuid.UUID, filePath string, totalSessions int) (*Prescription, error) {
-	if patientID == uuid.Nil {
+	if patientID == uuid.Nil() {
 		return nil, ErrNilPatientID
 	}
 

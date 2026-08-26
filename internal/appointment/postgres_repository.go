@@ -7,8 +7,8 @@ import (
 	"slices"
 	"strings"
 	"time"
+	"uuid"
 
-	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -319,23 +319,23 @@ func (r *PostgresRepository) List(ctx context.Context, filter ListFilter) ([]App
 func (r *PostgresRepository) Create(ctx context.Context, appoint Appointment) (uuid.UUID, error) {
 	tx, err := r.pool.BeginTx(ctx, pgx.TxOptions{})
 	if err != nil {
-		return uuid.Nil, fmt.Errorf("begin create appointment transaction: %w", err)
+		return uuid.Nil(), fmt.Errorf("begin create appointment transaction: %w", err)
 	}
 	defer func() {
 		_ = tx.Rollback(ctx)
 	}()
 
 	if err := lockPatientForUpdate(ctx, tx, appoint.PatientID); err != nil {
-		return uuid.Nil, err
+		return uuid.Nil(), err
 	}
 
 	prescriptionID, isLastSession, err := reserveActivePrescriptionSession(ctx, tx, appoint.PatientID)
 	if err != nil {
-		return uuid.Nil, err
+		return uuid.Nil(), err
 	}
 
 	if err := validateSlotForBooking(ctx, tx, appoint.PatientID, appoint.SlotID); err != nil {
-		return uuid.Nil, err
+		return uuid.Nil(), err
 	}
 
 	if _, err := tx.Exec(
@@ -350,9 +350,9 @@ func (r *PostgresRepository) Create(ctx context.Context, appoint Appointment) (u
 		prescriptionID,
 	); err != nil {
 		if mappedErr := mapCreateAppointmentConstraintError(err); mappedErr != nil {
-			return uuid.Nil, mappedErr
+			return uuid.Nil(), mappedErr
 		}
-		return uuid.Nil, fmt.Errorf("create db appointment: %w", err)
+		return uuid.Nil(), fmt.Errorf("create db appointment: %w", err)
 	}
 
 	// This booking consumed the last authorized session, so the prescription
@@ -360,12 +360,12 @@ func (r *PostgresRepository) Create(ctx context.Context, appoint Appointment) (u
 	// index so the patient can later be assigned a new active prescription.
 	if isLastSession {
 		if err := completePrescription(ctx, tx, prescriptionID); err != nil {
-			return uuid.Nil, err
+			return uuid.Nil(), err
 		}
 	}
 
 	if err := tx.Commit(ctx); err != nil {
-		return uuid.Nil, fmt.Errorf("commit create appointment transaction: %w", err)
+		return uuid.Nil(), fmt.Errorf("commit create appointment transaction: %w", err)
 	}
 
 	return appoint.ID, nil
@@ -599,15 +599,15 @@ func validateSlotForBooking(ctx context.Context, tx pgx.Tx, patientID, slotID uu
 func reserveActivePrescriptionSession(ctx context.Context, tx pgx.Tx, patientID uuid.UUID) (uuid.UUID, bool, error) {
 	prescriptionID, totalSessions, err := lockActivePrescriptionForUpdate(ctx, tx, patientID)
 	if err != nil {
-		return uuid.Nil, false, err
+		return uuid.Nil(), false, err
 	}
 
 	consumedSessions, err := countConsumedSessions(ctx, tx, prescriptionID)
 	if err != nil {
-		return uuid.Nil, false, err
+		return uuid.Nil(), false, err
 	}
 	if consumedSessions >= int64(totalSessions) {
-		return uuid.Nil, false, ErrNoRemainingSessions
+		return uuid.Nil(), false, ErrNoRemainingSessions
 	}
 
 	isLastSession := consumedSessions+1 >= int64(totalSessions)
@@ -620,9 +620,9 @@ func lockActivePrescriptionForUpdate(ctx context.Context, tx pgx.Tx, patientID u
 	var totalSessions int16
 	if err := tx.QueryRow(ctx, selectActivePrescriptionForUpdateQuery, patientID).Scan(&prescriptionID, &totalSessions); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return uuid.Nil, 0, ErrNoActivePrescription
+			return uuid.Nil(), 0, ErrNoActivePrescription
 		}
-		return uuid.Nil, 0, fmt.Errorf("lock active prescription for update: %w", err)
+		return uuid.Nil(), 0, fmt.Errorf("lock active prescription for update: %w", err)
 	}
 
 	return prescriptionID, totalSessions, nil

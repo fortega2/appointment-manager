@@ -2,8 +2,7 @@ package appointment
 
 import (
 	"fmt"
-
-	"github.com/google/uuid"
+	"uuid"
 
 	"appointment-manager/internal/domain"
 )

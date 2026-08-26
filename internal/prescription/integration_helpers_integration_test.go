@@ -8,8 +8,8 @@ import (
 	"appointment-manager/internal/storage"
 	"context"
 	"testing"
+	"uuid"
 
-	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go"
@@ -100,7 +100,7 @@ func seedPatient(ctx context.Context, t *testing.T, pool *pgxpool.Pool) uuid.UUI
 func seedPatientNamed(ctx context.Context, t *testing.T, pool *pgxpool.Pool, firstName, lastName string) uuid.UUID {
 	t.Helper()
 
-	id := uuid.Must(uuid.NewV7())
+	id := uuid.NewV7()
 	_, err := pool.Exec(ctx, `
 		INSERT INTO patient (
 			id,

@@ -5,8 +5,8 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"uuid"
 
-	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
@@ -56,7 +56,7 @@ func (m *serviceRepoMock) Get(ctx context.Context, id uuid.UUID) (*assistant.Ass
 func (m *serviceRepoMock) Create(ctx context.Context, record assistant.Assistant) (uuid.UUID, error) {
 	args := m.Called(ctx, record)
 	if args.Get(0) == nil {
-		return uuid.Nil, args.Error(1)
+		return uuid.Nil(), args.Error(1)
 	}
 
 	return args.Get(0).(uuid.UUID), args.Error(1)
@@ -212,7 +212,7 @@ func TestServiceCreate(t *testing.T) {
 		})
 
 		require.Error(t, createErr)
-		assert.Equal(t, uuid.Nil, id)
+		assert.Equal(t, uuid.Nil(), id)
 		assert.True(t, errors.Is(createErr, assistant.ErrPasswordRequired))
 		hasher.AssertNotCalled(t, "Hash", mock.Anything)
 		repo.AssertNotCalled(t, "Create", mock.Anything, mock.Anything)
@@ -236,7 +236,7 @@ func TestServiceCreate(t *testing.T) {
 		})
 
 		require.Error(t, createErr)
-		assert.Equal(t, uuid.Nil, id)
+		assert.Equal(t, uuid.Nil(), id)
 		hasher.AssertExpectations(t)
 		repo.AssertNotCalled(t, "Create", mock.Anything, mock.Anything)
 	})
@@ -259,7 +259,7 @@ func TestServiceCreate(t *testing.T) {
 		})
 
 		require.Error(t, createErr)
-		assert.Equal(t, uuid.Nil, id)
+		assert.Equal(t, uuid.Nil(), id)
 		assert.True(t, errors.Is(createErr, assistant.ErrEmptyPasswordHash))
 		hasher.AssertExpectations(t)
 		repo.AssertNotCalled(t, "Create", mock.Anything, mock.Anything)
@@ -281,7 +281,7 @@ func TestServiceCreate(t *testing.T) {
 		})
 
 		require.Error(t, createErr)
-		assert.Equal(t, uuid.Nil, id)
+		assert.Equal(t, uuid.Nil(), id)
 		assert.True(t, errors.Is(createErr, assistant.ErrFirstNameRequired))
 		hasher.AssertNotCalled(t, "Hash", mock.Anything)
 		repo.AssertNotCalled(t, "Create", mock.Anything, mock.Anything)
@@ -301,7 +301,7 @@ func TestServiceCreate(t *testing.T) {
 				record.LastName == serviceAssistantLastNames &&
 				record.Email == serviceAssistantEmail &&
 				record.PasswordHash == serviceAssistantHash
-		})).Return(uuid.Nil, errors.New(serviceBoomErrMsg)).Once()
+		})).Return(uuid.Nil(), errors.New(serviceBoomErrMsg)).Once()
 
 		id, createErr := svc.Create(context.Background(), assistant.CreateInput{
 			FirstName: serviceAssistantNames,
@@ -311,7 +311,7 @@ func TestServiceCreate(t *testing.T) {
 		})
 
 		require.Error(t, createErr)
-		assert.Equal(t, uuid.Nil, id)
+		assert.Equal(t, uuid.Nil(), id)
 		hasher.AssertExpectations(t)
 		repo.AssertExpectations(t)
 	})

@@ -8,8 +8,8 @@ import (
 	"context"
 	"testing"
 	"time"
+	"uuid"
 
-	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -68,7 +68,7 @@ func newSessionIntegrationRepository(t *testing.T, pool *pgxpool.Pool) *session.
 func seedAssistant(ctx context.Context, t *testing.T, pool *pgxpool.Pool, email string) uuid.UUID {
 	t.Helper()
 
-	id := uuid.Must(uuid.NewV7())
+	id := uuid.NewV7()
 	_, err := pool.Exec(ctx, `
 		INSERT INTO assistant (id, first_name, last_name, email, password_hash)
 		VALUES ($1, $2, $3, $4, $5)
@@ -136,7 +136,7 @@ func TestPostgresRepositoryCreateUnknownAssistant(t *testing.T) {
 	now := time.Now().UTC()
 	err := repo.Create(ctx, session.Session{
 		ID:        sessionIntegrationHash,
-		UserID:    uuid.Must(uuid.NewV7()).String(),
+		UserID:    uuid.NewV7().String(),
 		CreatedAt: now,
 		ExpiresAt: now.Add(session.SessionDuration),
 	})
@@ -264,7 +264,7 @@ func TestPostgresRepositoryDeleteByAssistantUnknownAssistant(t *testing.T) {
 	pool := newSessionIntegrationPool(ctx, t)
 	repo := newSessionIntegrationRepository(t, pool)
 
-	removed, err := repo.DeleteByAssistant(ctx, uuid.Must(uuid.NewV7()).String())
+	removed, err := repo.DeleteByAssistant(ctx, uuid.NewV7().String())
 	require.NoError(t, err)
 	assert.Zero(t, removed)
 }

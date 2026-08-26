@@ -9,8 +9,7 @@ import (
 	"log/slog"
 	"net/http"
 	"reflect"
-
-	"github.com/google/uuid"
+	"uuid"
 )
 
 const (

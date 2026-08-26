@@ -3,8 +3,7 @@ package patient
 import (
 	"strings"
 	"unicode/utf8"
-
-	"github.com/google/uuid"
+	"uuid"
 
 	"appointment-manager/internal/domain"
 )

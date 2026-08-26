@@ -9,8 +9,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"uuid"
 
-	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
@@ -40,7 +40,7 @@ func (m *mockService) List(ctx context.Context, input appointment.ListInput) ([]
 func (m *mockService) Create(ctx context.Context, input appointment.CreateInput) (uuid.UUID, error) {
 	args := m.Called(ctx, input)
 	if args.Get(0) == nil {
-		return uuid.Nil, args.Error(1)
+		return uuid.Nil(), args.Error(1)
 	}
 
 	return args.Get(0).(uuid.UUID), args.Error(1)
@@ -165,7 +165,7 @@ func TestListEndpointReturnsInternalServerErrorWhenServiceFails(t *testing.T) {
 func TestCreateEndpointValidationAndBusinessErrors(t *testing.T) {
 	t.Parallel()
 
-	body := `{"slot_id":"` + uuid.Must(uuid.NewV7()).String() + `","patient_id":"` + uuid.Must(uuid.NewV7()).String() + `","professional_id":"` + uuid.Must(uuid.NewV7()).String() + `","assistant_id":"` + uuid.Must(uuid.NewV7()).String() + `"}`
+	body := `{"slot_id":"` + uuid.NewV7().String() + `","patient_id":"` + uuid.NewV7().String() + `","professional_id":"` + uuid.NewV7().String() + `","assistant_id":"` + uuid.NewV7().String() + `"}`
 
 	tests := []struct {
 		name           string
@@ -184,7 +184,7 @@ func TestCreateEndpointValidationAndBusinessErrors(t *testing.T) {
 			svc := new(mockService)
 			mux := newMuxWithHandler(t, svc)
 
-			svc.On("Create", mock.Anything, mock.Anything).Return(uuid.Nil, tt.err).Once()
+			svc.On("Create", mock.Anything, mock.Anything).Return(uuid.Nil(), tt.err).Once()
 
 			req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, unitAppointmentsPath, bytes.NewBufferString(body))
 			req.Header.Set(unitHeaderContentType, unitContentTypeJSON)
@@ -202,7 +202,7 @@ func TestCreateEndpointValidationAndBusinessErrors(t *testing.T) {
 func TestCancelEndpointValidationAndBusinessErrors(t *testing.T) {
 	t.Parallel()
 
-	id := uuid.Must(uuid.NewV7())
+	id := uuid.NewV7()
 
 	tests := []struct {
 		name           string
@@ -242,7 +242,7 @@ func TestCancelEndpointValidationAndBusinessErrors(t *testing.T) {
 func TestAttendEndpointValidationAndBusinessErrors(t *testing.T) {
 	t.Parallel()
 
-	id := uuid.Must(uuid.NewV7())
+	id := uuid.NewV7()
 
 	tests := []struct {
 		name           string

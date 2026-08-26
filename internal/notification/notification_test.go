@@ -11,8 +11,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+	"uuid"
 
-	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -72,7 +72,7 @@ func noRecipients(_ context.Context, _ uuid.UUID) (notification.SlotCancellation
 
 // withRecipient resolves every slot to a single affected patient.
 func withRecipient(_ context.Context, _ uuid.UUID) (notification.SlotCancellation, error) {
-	return oneRecipient(uuid.Must(uuid.NewV7()).String()), nil
+	return oneRecipient(uuid.NewV7().String()), nil
 }
 
 // failingLookup stands in for an unreachable database.
@@ -381,9 +381,9 @@ func TestServiceDrainsQueuedNotifications(t *testing.T) {
 	stop := runService(t, svc)
 
 	slotIDs := []uuid.UUID{
-		uuid.Must(uuid.NewV7()),
-		uuid.Must(uuid.NewV7()),
-		uuid.Must(uuid.NewV7()),
+		uuid.NewV7(),
+		uuid.NewV7(),
+		uuid.NewV7(),
 	}
 	for _, slotID := range slotIDs {
 		svc.NotifySlotCancelled(context.Background(), slotID)
@@ -416,7 +416,7 @@ func TestNotifySlotCancelledDropsWhenQueueIsFull(t *testing.T) {
 	go func() {
 		defer close(done)
 		for range 10 {
-			svc.NotifySlotCancelled(context.Background(), uuid.Must(uuid.NewV7()))
+			svc.NotifySlotCancelled(context.Background(), uuid.NewV7())
 		}
 	}()
 
@@ -449,7 +449,7 @@ func TestServiceFlushesQueueOnShutdown(t *testing.T) {
 		svc.Run(ctx)
 	}()
 
-	slotID := uuid.Must(uuid.NewV7())
+	slotID := uuid.NewV7()
 	svc.NotifySlotCancelled(context.Background(), slotID)
 
 	cancel()
@@ -479,7 +479,7 @@ func TestServiceRunStopsOnContextCancellation(t *testing.T) {
 	// Producers outlive the drain loop, so enqueuing after it stopped must stay
 	// safe -- the channel is never closed.
 	assert.NotPanics(t, func() {
-		svc.NotifySlotCancelled(context.Background(), uuid.Must(uuid.NewV7()))
+		svc.NotifySlotCancelled(context.Background(), uuid.NewV7())
 	})
 }
 
@@ -495,7 +495,7 @@ func TestNotifySlotCancelledIgnoresCallerContextCancellation(t *testing.T) {
 	cancelledCtx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	slotID := uuid.Must(uuid.NewV7())
+	slotID := uuid.NewV7()
 	svc.NotifySlotCancelled(cancelledCtx, slotID)
 
 	require.Eventually(t, func() bool {
@@ -523,7 +523,7 @@ func TestServiceDrainIsQuietWhenNothingIsQueued(t *testing.T) {
 func TestSendSlotCancelledKeepsContactDetailsOutOfLogs(t *testing.T) {
 	t.Parallel()
 
-	patientID := uuid.Must(uuid.NewV7())
+	patientID := uuid.NewV7()
 	lookup := func(_ context.Context, _ uuid.UUID) (notification.SlotCancellation, error) {
 		return oneRecipient(patientID.String()), nil
 	}
@@ -531,7 +531,7 @@ func TestSendSlotCancelledKeepsContactDetailsOutOfLogs(t *testing.T) {
 	svc, buf := newRecordingService(t, drainInterval, bufferSize, lookup)
 	stop := runService(t, svc)
 
-	slotID := uuid.Must(uuid.NewV7())
+	slotID := uuid.NewV7()
 	svc.NotifySlotCancelled(context.Background(), slotID)
 
 	require.Eventually(t, func() bool {
@@ -561,7 +561,7 @@ func TestSendSlotCancelledWithoutRecipientsIsNotAnError(t *testing.T) {
 	svc, buf := newRecordingService(t, drainInterval, bufferSize, noRecipients)
 	stop := runService(t, svc)
 
-	svc.NotifySlotCancelled(context.Background(), uuid.Must(uuid.NewV7()))
+	svc.NotifySlotCancelled(context.Background(), uuid.NewV7())
 
 	require.Eventually(t, func() bool {
 		return hasMessage(buf.String(), noRecipientsMessage)
@@ -583,7 +583,7 @@ func TestSendSlotCancelledStopsWhenLookupFails(t *testing.T) {
 	svc, buf := newRecordingService(t, drainInterval, bufferSize, failingLookup)
 	stop := runService(t, svc)
 
-	svc.NotifySlotCancelled(context.Background(), uuid.Must(uuid.NewV7()))
+	svc.NotifySlotCancelled(context.Background(), uuid.NewV7())
 
 	require.Eventually(t, func() bool {
 		return hasMessage(buf.String(), lookupFailedMessage)
@@ -601,19 +601,19 @@ func TestSendSlotCancelledStopsWhenLookupFails(t *testing.T) {
 func TestServiceKeepsDrainingAfterALookupFailure(t *testing.T) {
 	t.Parallel()
 
-	failing := uuid.Must(uuid.NewV7())
+	failing := uuid.NewV7()
 	lookup := func(_ context.Context, slotID uuid.UUID) (notification.SlotCancellation, error) {
 		if slotID == failing {
 			return notification.SlotCancellation{}, errors.New(lookupBoomError)
 		}
 
-		return oneRecipient(uuid.Must(uuid.NewV7()).String()), nil
+		return oneRecipient(uuid.NewV7().String()), nil
 	}
 
 	svc, buf := newRecordingService(t, drainInterval, bufferSize, lookup)
 	stop := runService(t, svc)
 
-	healthy := uuid.Must(uuid.NewV7())
+	healthy := uuid.NewV7()
 	svc.NotifySlotCancelled(context.Background(), failing)
 	svc.NotifySlotCancelled(context.Background(), healthy)
 
@@ -651,7 +651,7 @@ func TestServiceCountsQueueFullDrops(t *testing.T) {
 
 	const attempts = 10
 	for range attempts {
-		svc.NotifySlotCancelled(context.Background(), uuid.Must(uuid.NewV7()))
+		svc.NotifySlotCancelled(context.Background(), uuid.NewV7())
 	}
 
 	got := spy.snapshot()
@@ -697,7 +697,7 @@ func TestServiceRecordsSendOutcomes(t *testing.T) {
 			svc, spy := newMeteredService(t, drainInterval, bufferSize, tt.lookup)
 			stop := runService(t, svc)
 
-			svc.NotifySlotCancelled(context.Background(), uuid.Must(uuid.NewV7()))
+			svc.NotifySlotCancelled(context.Background(), uuid.NewV7())
 
 			want := processedKey{kind: kindSlotCancelled, outcome: tt.outcome}
 			require.Eventually(t, func() bool {
@@ -728,7 +728,7 @@ func TestServiceObservesEverySendOnce(t *testing.T) {
 
 	const notifications = 3
 	for range notifications {
-		svc.NotifySlotCancelled(context.Background(), uuid.Must(uuid.NewV7()))
+		svc.NotifySlotCancelled(context.Background(), uuid.NewV7())
 	}
 
 	require.Eventually(t, func() bool {

@@ -11,8 +11,7 @@ import (
 	"net/http"
 	"strconv"
 	"time"
-
-	"github.com/google/uuid"
+	"uuid"
 )
 
 // cancelAppointmentsFunc cancels every confirmed appointment booked on a slot.

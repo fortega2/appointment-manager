@@ -8,8 +8,8 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"uuid"
 
-	"github.com/google/uuid"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
 

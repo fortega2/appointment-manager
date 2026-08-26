@@ -6,8 +6,8 @@ import (
 	"errors"
 	"testing"
 	"time"
+	"uuid"
 
-	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -156,7 +156,7 @@ func TestStoreCreateAndVerify(t *testing.T) {
 	t.Parallel()
 
 	store := newTestStore(t, newStubStorer())
-	assistantID := uuid.Must(uuid.NewV7())
+	assistantID := uuid.NewV7()
 
 	token, err := store.Create(t.Context(), assistantID)
 	require.NoError(t, err)
@@ -171,7 +171,7 @@ func TestStoreCreatePersistsDigestNotToken(t *testing.T) {
 	storer := newStubStorer()
 	store := newTestStore(t, storer)
 
-	tken, err := store.Create(t.Context(), uuid.Must(uuid.NewV7()))
+	tken, err := store.Create(t.Context(), uuid.NewV7())
 	require.NoError(t, err)
 
 	require.Len(t, storer.tokens, 1)
@@ -189,7 +189,7 @@ func TestStoreCreateIssuesADistinctTokenEachTime(t *testing.T) {
 	t.Parallel()
 
 	store := newTestStore(t, newStubStorer())
-	assistantID := uuid.Must(uuid.NewV7())
+	assistantID := uuid.NewV7()
 
 	first, err := store.Create(t.Context(), assistantID)
 	require.NoError(t, err)
@@ -206,7 +206,7 @@ func TestStoreCreateVoidsThePreviousLink(t *testing.T) {
 
 	storer := newStubStorer()
 	store := newTestStore(t, storer)
-	assistantID := uuid.Must(uuid.NewV7())
+	assistantID := uuid.NewV7()
 
 	first, err := store.Create(t.Context(), assistantID)
 	require.NoError(t, err)
@@ -227,7 +227,7 @@ func TestStoreCreateNilAssistantID(t *testing.T) {
 
 	store := newTestStore(t, newStubStorer())
 
-	token, err := store.Create(t.Context(), uuid.Nil)
+	token, err := store.Create(t.Context(), uuid.Nil())
 	require.Error(t, err)
 	assert.Empty(t, token)
 	assert.ErrorIs(t, err, ErrNilAssistantID)
@@ -240,7 +240,7 @@ func TestStoreCreateStorerError(t *testing.T) {
 	storer.createErr = errStorerFailed
 	store := newTestStore(t, storer)
 
-	token, err := store.Create(t.Context(), uuid.Must(uuid.NewV7()))
+	token, err := store.Create(t.Context(), uuid.NewV7())
 	require.Error(t, err)
 	assert.Empty(t, token)
 	assert.ErrorIs(t, err, errStorerFailed)
@@ -261,7 +261,7 @@ func TestStoreVerifyTamperedToken(t *testing.T) {
 
 	store := newTestStore(t, newStubStorer())
 
-	token, err := store.Create(t.Context(), uuid.Must(uuid.NewV7()))
+	token, err := store.Create(t.Context(), uuid.NewV7())
 	require.NoError(t, err)
 
 	err = store.Verify(t.Context(), token+"tampered")
@@ -275,7 +275,7 @@ func TestStoreVerifyExpired(t *testing.T) {
 	storer := newStubStorer()
 	storer.tokens[token.Hash("expired")] = Token{
 		ID:          token.Hash("expired"),
-		AssistantID: uuid.Must(uuid.NewV7()),
+		AssistantID: uuid.NewV7(),
 		CreatedAt:   time.Now().Add(2 * pastOffset),
 		ExpiresAt:   time.Now().Add(pastOffset),
 	}
@@ -294,7 +294,7 @@ func TestStoreVerifyDoesNotSpendTheToken(t *testing.T) {
 
 	storer := newStubStorer()
 	store := newTestStore(t, storer)
-	assistantID := uuid.Must(uuid.NewV7())
+	assistantID := uuid.NewV7()
 
 	token, err := store.Create(t.Context(), assistantID)
 	require.NoError(t, err)
@@ -312,7 +312,7 @@ func TestStoreConsume(t *testing.T) {
 	t.Parallel()
 
 	store := newTestStore(t, newStubStorer())
-	assistantID := uuid.Must(uuid.NewV7())
+	assistantID := uuid.NewV7()
 
 	token, err := store.Create(t.Context(), assistantID)
 	require.NoError(t, err)
@@ -330,7 +330,7 @@ func TestStoreConsumeIsSingleUse(t *testing.T) {
 	storer := newStubStorer()
 	store := newTestStore(t, storer)
 
-	token, err := store.Create(t.Context(), uuid.Must(uuid.NewV7()))
+	token, err := store.Create(t.Context(), uuid.NewV7())
 	require.NoError(t, err)
 
 	_, err = store.Consume(t.Context(), token)
@@ -339,7 +339,7 @@ func TestStoreConsumeIsSingleUse(t *testing.T) {
 
 	consumed, err := store.Consume(t.Context(), token)
 	require.Error(t, err)
-	assert.Equal(t, uuid.Nil, consumed)
+	assert.Equal(t, uuid.Nil(), consumed)
 	assert.ErrorIs(t, err, ErrTokenNotFound)
 }
 
@@ -352,7 +352,7 @@ func TestStoreConsumeExpiredSpendsTheTokenAnyway(t *testing.T) {
 	storer := newStubStorer()
 	storer.tokens[token.Hash("expired")] = Token{
 		ID:          token.Hash("expired"),
-		AssistantID: uuid.Must(uuid.NewV7()),
+		AssistantID: uuid.NewV7(),
 		CreatedAt:   time.Now().Add(2 * pastOffset),
 		ExpiresAt:   time.Now().Add(pastOffset),
 	}
@@ -360,7 +360,7 @@ func TestStoreConsumeExpiredSpendsTheTokenAnyway(t *testing.T) {
 
 	consumed, err := store.Consume(t.Context(), "expired")
 	require.Error(t, err)
-	assert.Equal(t, uuid.Nil, consumed)
+	assert.Equal(t, uuid.Nil(), consumed)
 	assert.ErrorIs(t, err, ErrTokenExpired)
 	assert.Empty(t, storer.tokens)
 }
@@ -372,7 +372,7 @@ func TestStoreConsumeNotFound(t *testing.T) {
 
 	consumed, err := store.Consume(t.Context(), "missing")
 	require.Error(t, err)
-	assert.Equal(t, uuid.Nil, consumed)
+	assert.Equal(t, uuid.Nil(), consumed)
 	assert.ErrorIs(t, err, ErrTokenNotFound)
 }
 
@@ -385,7 +385,7 @@ func TestStoreConsumeStorerError(t *testing.T) {
 
 	consumed, err := store.Consume(t.Context(), "any")
 	require.Error(t, err)
-	assert.Equal(t, uuid.Nil, consumed)
+	assert.Equal(t, uuid.Nil(), consumed)
 	assert.ErrorIs(t, err, errStorerFailed)
 }
 

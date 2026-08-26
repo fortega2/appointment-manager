@@ -4,10 +4,10 @@ import (
 	"bytes"
 	"mime/multipart"
 	"testing"
+	"uuid"
 
 	"appointment-manager/internal/storage"
 
-	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -74,7 +74,7 @@ func TestServiceCreateNilFile(t *testing.T) {
 
 	_, header := newMultipartFile(t, "prescription.pdf", []byte("%PDF-1.4 test"))
 
-	p, err := svc.Create(t.Context(), uuid.Must(uuid.NewV7()), 10, nil, header)
+	p, err := svc.Create(t.Context(), uuid.NewV7(), 10, nil, header)
 
 	require.Error(t, err)
 	assert.Nil(t, p)
@@ -89,7 +89,7 @@ func TestServiceCreateNilFileHeader(t *testing.T) {
 
 	file, _ := newMultipartFile(t, "prescription.pdf", []byte("%PDF-1.4 test"))
 
-	p, err := svc.Create(t.Context(), uuid.Must(uuid.NewV7()), 10, file, nil)
+	p, err := svc.Create(t.Context(), uuid.NewV7(), 10, file, nil)
 
 	require.Error(t, err)
 	assert.Nil(t, p)
@@ -104,7 +104,7 @@ func TestServiceCreateUnsupportedFileType(t *testing.T) {
 
 	file, header := newMultipartFile(t, "notes.txt", []byte("just a plain text file"))
 
-	p, err := svc.Create(t.Context(), uuid.Must(uuid.NewV7()), 10, file, header)
+	p, err := svc.Create(t.Context(), uuid.NewV7(), 10, file, header)
 
 	require.Error(t, err)
 	assert.Nil(t, p)

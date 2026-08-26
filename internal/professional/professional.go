@@ -2,8 +2,7 @@ package professional
 
 import (
 	"strings"
-
-	"github.com/google/uuid"
+	"uuid"
 
 	"appointment-manager/internal/domain"
 )

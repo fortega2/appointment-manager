@@ -11,8 +11,8 @@ import (
 	"net/http"
 	"testing"
 	"time"
+	"uuid"
 
-	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go"
@@ -110,7 +110,7 @@ func TestServiceCreateWithInvalidPatientDoesNotPersist(t *testing.T) {
 	svc, err := prescription.NewService(repo, storageClient)
 	require.NoError(t, err)
 
-	invalidPatientID := uuid.Must(uuid.NewV7())
+	invalidPatientID := uuid.NewV7()
 	file, header := newServiceTestMultipartFile(t, "prescription.pdf", []byte(serviceTestFileContent))
 
 	created, err := svc.Create(ctx, invalidPatientID, serviceTestSessions, file, header)

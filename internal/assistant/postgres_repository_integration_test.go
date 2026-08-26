@@ -10,8 +10,8 @@ import (
 	"fmt"
 	"testing"
 	"time"
+	"uuid"
 
-	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -40,7 +40,7 @@ func TestPostgresRepositoryCreateListGet(t *testing.T) {
 
 	createdIDs := make([]uuid.UUID, 0, 2)
 	for i := range 2 {
-		newID := uuid.Must(uuid.NewV7())
+		newID := uuid.NewV7()
 		createdID, err := repo.Create(ctx, assistant.Assistant{
 			ID:           newID,
 			FirstName:    fmt.Sprintf(repoNamesFmt, i),
@@ -91,17 +91,17 @@ func TestPostgresRepositoryCreateDuplicateEmail(t *testing.T) {
 
 	duplicateEmail := "duplicate@email.com"
 	firstID, err := repo.Create(ctx, assistant.Assistant{
-		ID:           uuid.Must(uuid.NewV7()),
+		ID:           uuid.NewV7(),
 		FirstName:    "First",
 		LastName:     "Assistant",
 		Email:        duplicateEmail,
 		PasswordHash: "hash-1",
 	})
 	require.NoError(t, err)
-	assert.NotEqual(t, uuid.Nil, firstID)
+	assert.NotEqual(t, uuid.Nil(), firstID)
 
 	secondID, err := repo.Create(ctx, assistant.Assistant{
-		ID:           uuid.Must(uuid.NewV7()),
+		ID:           uuid.NewV7(),
 		FirstName:    "Second",
 		LastName:     "Assistant",
 		Email:        duplicateEmail,
@@ -109,7 +109,7 @@ func TestPostgresRepositoryCreateDuplicateEmail(t *testing.T) {
 	})
 
 	require.Error(t, err)
-	assert.Equal(t, uuid.Nil, secondID)
+	assert.Equal(t, uuid.Nil(), secondID)
 	assert.True(t, errors.Is(err, assistant.ErrEmailAlreadyExists))
 }
 
@@ -173,7 +173,7 @@ func newIntegrationRepository(ctx context.Context, t *testing.T) (*assistant.Pos
 func seedIntegrationAssistant(ctx context.Context, t *testing.T, repo *assistant.PostgresRepository) uuid.UUID {
 	t.Helper()
 
-	id := uuid.Must(uuid.NewV7())
+	id := uuid.NewV7()
 	created, err := repo.Create(ctx, assistant.Assistant{
 		ID:           id,
 		FirstName:    fmt.Sprintf(repoNamesFmt, 0),

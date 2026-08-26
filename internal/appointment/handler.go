@@ -10,8 +10,7 @@ import (
 	"log/slog"
 	"net/http"
 	"reflect"
-
-	"github.com/google/uuid"
+	"uuid"
 )
 
 const (
@@ -214,12 +213,12 @@ func isActionBusinessError(err error) bool {
 func parseAppointmentID(r *http.Request) (uuid.UUID, error) {
 	rawID := r.PathValue("id")
 	if rawID == "" {
-		return uuid.Nil, ErrAppointmentIDRequired
+		return uuid.Nil(), ErrAppointmentIDRequired
 	}
 
 	parsedID, err := domain.ParseID(rawID)
 	if err != nil {
-		return uuid.Nil, ErrInvalidAppointmentID
+		return uuid.Nil(), ErrInvalidAppointmentID
 	}
 
 	return parsedID, nil

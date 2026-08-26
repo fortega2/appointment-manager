@@ -10,12 +10,11 @@ import (
 	"reflect"
 	"strconv"
 	"time"
+	"uuid"
 
 	"appointment-manager/internal/domain"
 	"appointment-manager/internal/ui/components"
 	"appointment-manager/internal/web"
-
-	"github.com/google/uuid"
 )
 
 const (

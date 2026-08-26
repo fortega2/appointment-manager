@@ -14,8 +14,8 @@ import (
 	"errors"
 	"log/slog"
 	"time"
+	"uuid"
 
-	"github.com/google/uuid"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 )

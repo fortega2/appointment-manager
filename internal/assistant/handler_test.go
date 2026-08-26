@@ -11,8 +11,8 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"uuid"
 
-	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
@@ -81,7 +81,7 @@ func (m *mockService) Get(ctx context.Context, id uuid.UUID) (*assistant.Assista
 func (m *mockService) Create(ctx context.Context, input assistant.CreateInput) (uuid.UUID, error) {
 	args := m.Called(ctx, input)
 	if args.Get(0) == nil {
-		return uuid.Nil, args.Error(1)
+		return uuid.Nil(), args.Error(1)
 	}
 
 	return args.Get(0).(uuid.UUID), args.Error(1)
@@ -413,7 +413,7 @@ func TestCreateEndpoint(t *testing.T) {
 			LastName:  handlerAssistantLastNames,
 			Email:     handlerAssistantEmail,
 			Password:  handlerAssistantPlainPassword,
-		}).Return(uuid.Nil, assistant.ErrFirstNameRequired).Once()
+		}).Return(uuid.Nil(), assistant.ErrFirstNameRequired).Once()
 
 		mux := newMuxWithHandler(t, svc)
 
@@ -435,7 +435,7 @@ func TestCreateEndpoint(t *testing.T) {
 			LastName:  handlerAssistantLastNames,
 			Email:     handlerAssistantEmail,
 			Password:  handlerAssistantPlainPassword,
-		}).Return(uuid.Nil, errors.New(handlerBoomErrMsg)).Once()
+		}).Return(uuid.Nil(), errors.New(handlerBoomErrMsg)).Once()
 
 		mux := newMuxWithHandler(t, svc)
 
@@ -457,7 +457,7 @@ func TestCreateEndpoint(t *testing.T) {
 			LastName:  handlerAssistantLastNames,
 			Email:     handlerAssistantEmail,
 			Password:  handlerAssistantPlainPassword,
-		}).Return(uuid.Nil, assistant.ErrEmailAlreadyExists).Once()
+		}).Return(uuid.Nil(), assistant.ErrEmailAlreadyExists).Once()
 
 		mux := newMuxWithHandler(t, svc)
 
@@ -480,7 +480,7 @@ func TestCreateEndpoint(t *testing.T) {
 			LastName:  handlerAssistantLastNames,
 			Email:     handlerAssistantEmail,
 			Password:  handlerAssistantPlainPassword,
-		}).Return(uuid.Nil, password.ErrTooManyConcurrentHashes).Once()
+		}).Return(uuid.Nil(), password.ErrTooManyConcurrentHashes).Once()
 
 		mux := newMuxWithHandler(t, svc)
 
@@ -503,7 +503,7 @@ func TestCreateEndpoint(t *testing.T) {
 			LastName:  handlerAssistantLastNames,
 			Email:     handlerAssistantEmail,
 			Password:  handlerAssistantPlainPassword,
-		}).Return(uuid.Nil, assistant.ErrEmptyPasswordHash).Once()
+		}).Return(uuid.Nil(), assistant.ErrEmptyPasswordHash).Once()
 
 		mux := newMuxWithHandler(t, svc)
 
@@ -550,7 +550,7 @@ func TestCreateEndpoint(t *testing.T) {
 			LastName:  handlerAssistantLastNames,
 			Email:     handlerAssistantEmail,
 			Password:  handlerAssistantPlainPassword,
-		}).Return(uuid.Nil, assistant.ErrFirstNameRequired).Once()
+		}).Return(uuid.Nil(), assistant.ErrFirstNameRequired).Once()
 
 		mux := newMuxWithHandler(t, svc)
 

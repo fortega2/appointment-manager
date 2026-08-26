@@ -15,8 +15,7 @@ import (
 	"fmt"
 	"log/slog"
 	"time"
-
-	"github.com/google/uuid"
+	"uuid"
 )
 
 const readinessTimeout = 300 * time.Millisecond

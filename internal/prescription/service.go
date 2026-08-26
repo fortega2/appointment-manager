@@ -8,11 +8,10 @@ import (
 	"mime/multipart"
 	"net/http"
 	"time"
+	"uuid"
 
 	"appointment-manager/internal/domain"
 	"appointment-manager/internal/storage"
-
-	"github.com/google/uuid"
 )
 
 const sniffLen = 512

@@ -6,8 +6,8 @@ import (
 	"appointment-manager/internal/prescription"
 	"context"
 	"testing"
+	"uuid"
 
-	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -71,7 +71,7 @@ func TestRepositoryCreateInvalidPatientReturnsError(t *testing.T) {
 	repo := newPrescriptionIntegrationRepository(t, pool)
 
 	// A random patient ID that was never seeded violates the foreign key.
-	newRecord, err := prescription.New(uuid.Must(uuid.NewV7()), repositoryPrescriptionFilePath, repositoryPrescriptionSessions)
+	newRecord, err := prescription.New(uuid.NewV7(), repositoryPrescriptionFilePath, repositoryPrescriptionSessions)
 	require.NoError(t, err)
 
 	err = repo.Create(ctx, newRecord)
@@ -87,7 +87,7 @@ func TestRepositoryGetByIDNotFound(t *testing.T) {
 	pool := newPrescriptionIntegrationPool(ctx, t)
 	repo := newPrescriptionIntegrationRepository(t, pool)
 
-	found, err := repo.GetByID(ctx, uuid.Must(uuid.NewV7()))
+	found, err := repo.GetByID(ctx, uuid.NewV7())
 	require.Error(t, err)
 	assert.Nil(t, found)
 	assert.ErrorIs(t, err, prescription.ErrPrescriptionNotFound)
@@ -128,7 +128,7 @@ func TestRepositoryUpdateStatusNotFound(t *testing.T) {
 	pool := newPrescriptionIntegrationPool(ctx, t)
 	repo := newPrescriptionIntegrationRepository(t, pool)
 
-	err := repo.UpdateStatus(ctx, uuid.Must(uuid.NewV7()), prescription.StatusCancelled)
+	err := repo.UpdateStatus(ctx, uuid.NewV7(), prescription.StatusCancelled)
 	require.Error(t, err)
 	assert.ErrorIs(t, err, prescription.ErrPrescriptionNotFound)
 }

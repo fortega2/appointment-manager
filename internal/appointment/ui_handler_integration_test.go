@@ -15,8 +15,8 @@ import (
 	"net/url"
 	"testing"
 	"time"
+	"uuid"
 
-	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -137,9 +137,9 @@ func TestShowCreateFormUIHandlerRendersAvailableOptions(t *testing.T) {
 	pool := newIntegrationPool(ctx, t)
 	now := time.Now().UTC().Truncate(time.Second)
 
-	professionalID := uuid.Must(uuid.NewV7())
-	patientID := uuid.Must(uuid.NewV7())
-	slotID := uuid.Must(uuid.NewV7())
+	professionalID := uuid.NewV7()
+	patientID := uuid.NewV7()
+	slotID := uuid.NewV7()
 
 	insertProfessional(ctx, t, pool, professionalID)
 	insertPatient(ctx, t, pool, patientID)
@@ -165,10 +165,10 @@ func TestCreateUIHandlerUsesSessionAssistantID(t *testing.T) {
 	pool := newIntegrationPool(ctx, t)
 	now := time.Now().UTC().Truncate(time.Second)
 
-	professionalID := uuid.Must(uuid.NewV7())
-	patientID := uuid.Must(uuid.NewV7())
-	slotID := uuid.Must(uuid.NewV7())
-	assistantID := uuid.Must(uuid.NewV7())
+	professionalID := uuid.NewV7()
+	patientID := uuid.NewV7()
+	slotID := uuid.NewV7()
+	assistantID := uuid.NewV7()
 
 	insertProfessional(ctx, t, pool, professionalID)
 	insertPatient(ctx, t, pool, patientID)
@@ -222,10 +222,10 @@ func TestCreateUIHandlerRejectsBlockedSlot(t *testing.T) {
 	pool := newIntegrationPool(ctx, t)
 	now := time.Now().UTC().Truncate(time.Second)
 
-	professionalID := uuid.Must(uuid.NewV7())
-	patientID := uuid.Must(uuid.NewV7())
-	slotID := uuid.Must(uuid.NewV7())
-	assistantID := uuid.Must(uuid.NewV7())
+	professionalID := uuid.NewV7()
+	patientID := uuid.NewV7()
+	slotID := uuid.NewV7()
+	assistantID := uuid.NewV7()
 
 	insertProfessional(ctx, t, pool, professionalID)
 	insertPatient(ctx, t, pool, patientID)

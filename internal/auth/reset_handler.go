@@ -18,9 +18,9 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"uuid"
 
 	"github.com/a-h/templ"
-	"github.com/google/uuid"
 )
 
 // dispatchTimeout bounds the detached goroutine. mailer.Send reserves 30s of it.

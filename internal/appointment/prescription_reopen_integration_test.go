@@ -9,8 +9,8 @@ import (
 	"net/http/httptest"
 	"testing"
 	"time"
+	"uuid"
 
-	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -32,11 +32,11 @@ func TestCancelFreeingLastSessionReopensCompletedPrescription(t *testing.T) {
 	pool := newIntegrationPool(ctx, t)
 	now := time.Now().UTC()
 
-	professionalID := uuid.Must(uuid.NewV7())
-	assistantID := uuid.Must(uuid.NewV7())
-	patientID := uuid.Must(uuid.NewV7())
-	firstSlotID := uuid.Must(uuid.NewV7())
-	secondSlotID := uuid.Must(uuid.NewV7())
+	professionalID := uuid.NewV7()
+	assistantID := uuid.NewV7()
+	patientID := uuid.NewV7()
+	firstSlotID := uuid.NewV7()
+	secondSlotID := uuid.NewV7()
 
 	insertProfessional(ctx, t, pool, professionalID)
 	insertAssistant(ctx, t, pool, assistantID)
@@ -138,9 +138,9 @@ func TestCancellingASecondSessionLeavesTheReopenedPrescriptionAlone(t *testing.T
 	pool := newIntegrationPool(ctx, t)
 	now := time.Now().UTC()
 
-	professionalID := uuid.Must(uuid.NewV7())
-	assistantID := uuid.Must(uuid.NewV7())
-	patientID := uuid.Must(uuid.NewV7())
+	professionalID := uuid.NewV7()
+	assistantID := uuid.NewV7()
+	patientID := uuid.NewV7()
 
 	insertProfessional(ctx, t, pool, professionalID)
 	insertAssistant(ctx, t, pool, assistantID)
@@ -151,7 +151,7 @@ func TestCancellingASecondSessionLeavesTheReopenedPrescriptionAlone(t *testing.T
 
 	appointmentIDs := make([]uuid.UUID, 0, 3)
 	for i := range 3 {
-		slotID := uuid.Must(uuid.NewV7())
+		slotID := uuid.NewV7()
 		insertReopenSlot(ctx, t, pool, slotID, professionalID, now.Add(time.Duration(30+i)*time.Hour))
 
 		rec := performCreateRequest(ctx, mux, createRequestBody(t, slotID, patientID, professionalID, assistantID, nil))
@@ -179,10 +179,10 @@ func TestCancelBySlotReopensCompletedPrescription(t *testing.T) {
 	pool := newIntegrationPool(ctx, t)
 	now := time.Now().UTC()
 
-	professionalID := uuid.Must(uuid.NewV7())
-	assistantID := uuid.Must(uuid.NewV7())
-	patientID := uuid.Must(uuid.NewV7())
-	slotID := uuid.Must(uuid.NewV7())
+	professionalID := uuid.NewV7()
+	assistantID := uuid.NewV7()
+	patientID := uuid.NewV7()
+	slotID := uuid.NewV7()
 
 	insertProfessional(ctx, t, pool, professionalID)
 	insertAssistant(ctx, t, pool, assistantID)
@@ -221,11 +221,11 @@ func TestCancelOnBlockedSlotsReopensAtMostOnePrescriptionPerPatient(t *testing.T
 	pool := newIntegrationPool(ctx, t)
 	now := time.Now().UTC()
 
-	professionalID := uuid.Must(uuid.NewV7())
-	assistantID := uuid.Must(uuid.NewV7())
-	patientID := uuid.Must(uuid.NewV7())
-	firstSlotID := uuid.Must(uuid.NewV7())
-	secondSlotID := uuid.Must(uuid.NewV7())
+	professionalID := uuid.NewV7()
+	assistantID := uuid.NewV7()
+	patientID := uuid.NewV7()
+	firstSlotID := uuid.NewV7()
+	secondSlotID := uuid.NewV7()
 
 	insertProfessional(ctx, t, pool, professionalID)
 	insertAssistant(ctx, t, pool, assistantID)
@@ -283,7 +283,7 @@ func TestUpdateStatusDistinguishesMissingFromConcurrentlyChanged(t *testing.T) {
 	err = repo.UpdateStatus(ctx, appointmentID, appointment.StatusCancelled, appointment.StatusConfirmed)
 	assert.ErrorIs(t, err, appointment.ErrAppointmentStatusChanged)
 
-	err = repo.UpdateStatus(ctx, uuid.Must(uuid.NewV7()), appointment.StatusCancelled, appointment.StatusConfirmed)
+	err = repo.UpdateStatus(ctx, uuid.NewV7(), appointment.StatusCancelled, appointment.StatusConfirmed)
 	assert.ErrorIs(t, err, appointment.ErrInvalidAppointmentReference)
 
 	status, _ := fetchAppointmentStatusAndNotes(ctx, t, pool, appointmentID)
@@ -308,10 +308,10 @@ func seedCompletedPrescriptionBooking(
 ) (patientID, prescriptionID, appointmentID uuid.UUID, mux *http.ServeMux) {
 	t.Helper()
 
-	professionalID := uuid.Must(uuid.NewV7())
-	assistantID := uuid.Must(uuid.NewV7())
-	patientID = uuid.Must(uuid.NewV7())
-	slotID := uuid.Must(uuid.NewV7())
+	professionalID := uuid.NewV7()
+	assistantID := uuid.NewV7()
+	patientID = uuid.NewV7()
+	slotID := uuid.NewV7()
 
 	insertProfessional(ctx, t, pool, professionalID)
 	insertAssistant(ctx, t, pool, assistantID)

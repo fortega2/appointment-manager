@@ -9,8 +9,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"uuid"
 
-	"github.com/google/uuid"
 	"go.opentelemetry.io/otel"
 )
 
@@ -159,27 +159,27 @@ func (s *Service) Create(ctx context.Context, input CreateInput) (id uuid.UUID, 
 
 	slotID, err := parseRequiredID(input.SlotID, ErrSlotIDRequired, ErrInvalidSlotID)
 	if err != nil {
-		return uuid.Nil, err
+		return uuid.Nil(), err
 	}
 
 	patientID, err := parseRequiredID(input.PatientID, ErrPatientIDRequired, ErrInvalidPatientID)
 	if err != nil {
-		return uuid.Nil, err
+		return uuid.Nil(), err
 	}
 
 	professionalID, err := parseRequiredID(input.ProfessionalID, ErrProfessionalIDRequired, ErrInvalidProfessionalID)
 	if err != nil {
-		return uuid.Nil, err
+		return uuid.Nil(), err
 	}
 
 	assistantID, err := parseRequiredID(input.AssistantID, ErrAssistantIDRequired, ErrInvalidAssistantID)
 	if err != nil {
-		return uuid.Nil, err
+		return uuid.Nil(), err
 	}
 
 	appointmentID, err := s.repo.Create(ctx, *NewAppointment(slotID, patientID, professionalID, assistantID, input.Notes))
 	if err != nil {
-		return uuid.Nil, err
+		return uuid.Nil(), err
 	}
 
 	s.metrics.RecordAppointmentCreated()
@@ -370,12 +370,12 @@ func parseListInput(input ListInput) (ListFilter, error) {
 
 func parseRequiredID(raw string, requiredErr, invalidErr error) (uuid.UUID, error) {
 	if strings.TrimSpace(raw) == "" {
-		return uuid.Nil, requiredErr
+		return uuid.Nil(), requiredErr
 	}
 
 	parsedID, err := domain.ParseID(raw)
 	if err != nil {
-		return uuid.Nil, invalidErr
+		return uuid.Nil(), invalidErr
 	}
 
 	return parsedID, nil

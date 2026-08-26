@@ -3,8 +3,8 @@ package appointment_test
 import (
 	"appointment-manager/internal/appointment"
 	"testing"
+	"uuid"
 
-	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -12,10 +12,10 @@ import (
 func TestNewAppointment(t *testing.T) {
 	t.Parallel()
 
-	slotID := uuid.Must(uuid.NewV7())
-	patientID := uuid.Must(uuid.NewV7())
-	professionalID := uuid.Must(uuid.NewV7())
-	assistantID := uuid.Must(uuid.NewV7())
+	slotID := uuid.NewV7()
+	patientID := uuid.NewV7()
+	professionalID := uuid.NewV7()
+	assistantID := uuid.NewV7()
 	notes := "follow-up"
 
 	t.Run("with notes", func(t *testing.T) {
@@ -24,7 +24,7 @@ func TestNewAppointment(t *testing.T) {
 		created := appointment.NewAppointment(slotID, patientID, professionalID, assistantID, &notes)
 
 		require.NotNil(t, created)
-		assert.NotEqual(t, uuid.Nil, created.ID)
+		assert.NotEqual(t, uuid.Nil(), created.ID)
 		assert.Equal(t, slotID, created.SlotID)
 		assert.Equal(t, patientID, created.PatientID)
 		assert.Equal(t, professionalID, created.ProfessionalID)
@@ -47,10 +47,10 @@ func TestNewAppointment(t *testing.T) {
 func TestNewAppointmentCreatesUniqueID(t *testing.T) {
 	t.Parallel()
 
-	slotID := uuid.Must(uuid.NewV7())
-	patientID := uuid.Must(uuid.NewV7())
-	professionalID := uuid.Must(uuid.NewV7())
-	assistantID := uuid.Must(uuid.NewV7())
+	slotID := uuid.NewV7()
+	patientID := uuid.NewV7()
+	professionalID := uuid.NewV7()
+	assistantID := uuid.NewV7()
 
 	first := appointment.NewAppointment(slotID, patientID, professionalID, assistantID, nil)
 	second := appointment.NewAppointment(slotID, patientID, professionalID, assistantID, nil)

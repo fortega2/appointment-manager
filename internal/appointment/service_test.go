@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"testing"
 	"time"
+	"uuid"
 
-	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
@@ -31,7 +31,7 @@ func (m *serviceRepoMock) List(ctx context.Context, filter ListFilter) ([]Appoin
 func (m *serviceRepoMock) Create(ctx context.Context, appoint Appointment) (uuid.UUID, error) {
 	args := m.Called(ctx, appoint)
 	if args.Get(0) == nil {
-		return uuid.Nil, args.Error(1)
+		return uuid.Nil(), args.Error(1)
 	}
 
 	return args.Get(0).(uuid.UUID), args.Error(1)
@@ -106,7 +106,7 @@ func TestServiceListSuccess(t *testing.T) {
 	svc, err := NewService(repo, nil)
 	require.NoError(t, err)
 
-	expected := []Appointment{{ID: uuid.Must(uuid.NewV7())}}
+	expected := []Appointment{{ID: uuid.NewV7()}}
 	repo.On("List", mock.Anything, ListFilter{Page: 1, Limit: 20, Status: StatusConfirmed}).Return(expected, nil).Once()
 
 	result, listErr := svc.List(context.Background(), ListInput{})
@@ -177,12 +177,12 @@ func TestServiceCreateSuccess(t *testing.T) {
 	svc, err := NewService(repo, nil)
 	require.NoError(t, err)
 
-	slotID := uuid.Must(uuid.NewV7())
-	patientID := uuid.Must(uuid.NewV7())
-	professionalID := uuid.Must(uuid.NewV7())
-	assistantID := uuid.Must(uuid.NewV7())
+	slotID := uuid.NewV7()
+	patientID := uuid.NewV7()
+	professionalID := uuid.NewV7()
+	assistantID := uuid.NewV7()
 	notes := " follow-up "
-	createdID := uuid.Must(uuid.NewV7())
+	createdID := uuid.NewV7()
 
 	repo.On("Create", mock.Anything, mock.MatchedBy(func(appoint Appointment) bool {
 		return appoint.SlotID == slotID &&
@@ -209,7 +209,7 @@ func TestServiceCreateSuccess(t *testing.T) {
 func TestServiceCancel(t *testing.T) {
 	t.Parallel()
 
-	appointmentID := uuid.Must(uuid.NewV7())
+	appointmentID := uuid.NewV7()
 	referenceTime := time.Date(2026, 2, 1, 10, 0, 0, 0, time.UTC)
 
 	t.Run("confirmed before 24h becomes cancelled", func(t *testing.T) {
@@ -339,7 +339,7 @@ func TestServiceCancel(t *testing.T) {
 func TestServiceAttend(t *testing.T) {
 	t.Parallel()
 
-	appointmentID := uuid.Must(uuid.NewV7())
+	appointmentID := uuid.NewV7()
 	referenceTime := time.Date(2026, 2, 1, 10, 0, 0, 0, time.UTC)
 
 	t.Run("confirmed in slot range becomes attended", func(t *testing.T) {
@@ -450,7 +450,7 @@ func TestServiceActionRepositoryError(t *testing.T) {
 	t.Parallel()
 
 	referenceTime := time.Date(2026, 2, 1, 10, 0, 0, 0, time.UTC)
-	appointmentID := uuid.Must(uuid.NewV7())
+	appointmentID := uuid.NewV7()
 
 	t.Run("cancel propagates update status error", func(t *testing.T) {
 		t.Parallel()
@@ -545,10 +545,10 @@ func (m *serviceMetricsMock) RecordAppointmentsExpired(n int64)           { m.ex
 
 func validCreateInput() CreateInput {
 	return CreateInput{
-		SlotID:         uuid.Must(uuid.NewV7()).String(),
-		PatientID:      uuid.Must(uuid.NewV7()).String(),
-		ProfessionalID: uuid.Must(uuid.NewV7()).String(),
-		AssistantID:    uuid.Must(uuid.NewV7()).String(),
+		SlotID:         uuid.NewV7().String(),
+		PatientID:      uuid.NewV7().String(),
+		ProfessionalID: uuid.NewV7().String(),
+		AssistantID:    uuid.NewV7().String(),
 	}
 }
 
@@ -556,7 +556,7 @@ func TestServiceRecordsBusinessMetrics(t *testing.T) {
 	t.Parallel()
 
 	referenceTime := time.Date(2026, 2, 1, 10, 0, 0, 0, time.UTC)
-	appointmentID := uuid.Must(uuid.NewV7())
+	appointmentID := uuid.NewV7()
 
 	t.Run("create success records created", func(t *testing.T) {
 		t.Parallel()
@@ -566,7 +566,7 @@ func TestServiceRecordsBusinessMetrics(t *testing.T) {
 		svc, err := NewService(repo, recorder)
 		require.NoError(t, err)
 
-		repo.On("Create", mock.Anything, mock.Anything).Return(uuid.Must(uuid.NewV7()), nil).Once()
+		repo.On("Create", mock.Anything, mock.Anything).Return(uuid.NewV7(), nil).Once()
 
 		_, err = svc.Create(context.Background(), validCreateInput())
 
@@ -595,7 +595,7 @@ func TestServiceRecordsBusinessMetrics(t *testing.T) {
 	t.Run("cancel by slot records every cancelled appointment", func(t *testing.T) {
 		t.Parallel()
 
-		slotID := uuid.Must(uuid.NewV7())
+		slotID := uuid.NewV7()
 		repo := new(serviceRepoMock)
 		recorder := &serviceMetricsMock{}
 		svc, err := NewService(repo, recorder)
@@ -615,7 +615,7 @@ func TestServiceRecordsBusinessMetrics(t *testing.T) {
 	t.Run("cancel by slot without bookings records nothing", func(t *testing.T) {
 		t.Parallel()
 
-		slotID := uuid.Must(uuid.NewV7())
+		slotID := uuid.NewV7()
 		repo := new(serviceRepoMock)
 		recorder := &serviceMetricsMock{}
 		svc, err := NewService(repo, recorder)
@@ -631,7 +631,7 @@ func TestServiceRecordsBusinessMetrics(t *testing.T) {
 	t.Run("cancel by slot failure propagates and records nothing", func(t *testing.T) {
 		t.Parallel()
 
-		slotID := uuid.Must(uuid.NewV7())
+		slotID := uuid.NewV7()
 		repo := new(serviceRepoMock)
 		recorder := &serviceMetricsMock{}
 		svc, err := NewService(repo, recorder)

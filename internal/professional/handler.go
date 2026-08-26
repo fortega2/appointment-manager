@@ -11,8 +11,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
-
-	"github.com/google/uuid"
+	"uuid"
 )
 
 const (
@@ -262,14 +261,14 @@ func (h *Handler) parseProfessionalIDFromPath(r *http.Request, w http.ResponseWr
 	if pathValueID == "" {
 		h.logger.WarnContext(ctx, missingIDInPathMessage)
 		h.createSnackbarError(ctx, w, http.StatusBadRequest, errKeyMissingID, "missingIDInPath")
-		return uuid.Nil, errors.New(missingIDInPathMessage)
+		return uuid.Nil(), errors.New(missingIDInPathMessage)
 	}
 
 	professionalID, err := domain.ParseID(pathValueID)
 	if err != nil {
 		h.logger.WarnContext(ctx, "invalid professional id in path", slog.Any("error", err), slog.String("id", pathValueID))
 		h.createSnackbarError(ctx, w, http.StatusBadRequest, errKeyInvalidID, "invalidIDInPath")
-		return uuid.Nil, err
+		return uuid.Nil(), err
 	}
 	return professionalID, nil
 }

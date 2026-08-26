@@ -5,8 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"uuid"
 
-	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -166,9 +166,9 @@ func (r *PostgresRepository) Create(ctx context.Context, assistant Assistant) (u
 	)
 	if err != nil {
 		if isUniqueEmailViolation(err) {
-			return uuid.Nil, ErrEmailAlreadyExists
+			return uuid.Nil(), ErrEmailAlreadyExists
 		}
-		return uuid.Nil, fmt.Errorf("Create: %w", err)
+		return uuid.Nil(), fmt.Errorf("Create: %w", err)
 	}
 
 	return assistant.ID, nil

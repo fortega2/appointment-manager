@@ -3,8 +3,8 @@ package assistant_test
 import (
 	"appointment-manager/internal/assistant"
 	"testing"
+	"uuid"
 
-	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -38,7 +38,7 @@ func TestPostgresRepositoryUpdatePasswordHashRejectsBlank(t *testing.T) {
 
 			repo := &assistant.PostgresRepository{}
 
-			err := repo.UpdatePasswordHash(t.Context(), uuid.Must(uuid.NewV7()), tt.hash)
+			err := repo.UpdatePasswordHash(t.Context(), uuid.NewV7(), tt.hash)
 			require.Error(t, err)
 			assert.ErrorIs(t, err, assistant.ErrEmptyPasswordHash)
 		})

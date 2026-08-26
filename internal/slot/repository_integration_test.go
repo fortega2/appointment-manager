@@ -6,8 +6,8 @@ import (
 	"appointment-manager/internal/slot"
 	"context"
 	"testing"
+	"uuid"
 
-	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go"
@@ -26,7 +26,7 @@ func TestRepositoryCreatePersistsSlot(t *testing.T) {
 	pool := newSlotIntegrationPool(ctx, t)
 	repo := newSlotIntegrationRepository(t, pool)
 
-	professionalID := uuid.Must(uuid.NewV7())
+	professionalID := uuid.NewV7()
 	insertProfessionalForSlot(ctx, t, pool, professionalID)
 
 	startTime := mustParseTime(repositoryStartTime)
@@ -58,7 +58,7 @@ func TestRepositoryCreateReturnsErrorWhenProfessionalNotFound(t *testing.T) {
 	startTime := mustParseTime(repositoryStartTime)
 	endTime := mustParseTime(repositoryEndTime)
 
-	newRecord, err := slot.NewSlot(uuid.Must(uuid.NewV7()), integrationDate, startTime, endTime, repositoryProfessionalMax)
+	newRecord, err := slot.NewSlot(uuid.NewV7(), integrationDate, startTime, endTime, repositoryProfessionalMax)
 	require.NoError(t, err)
 
 	err = repo.Create(ctx, newRecord)
@@ -73,7 +73,7 @@ func TestRepositoryCancelBlocksSlot(t *testing.T) {
 	pool := newSlotIntegrationPool(ctx, t)
 	repo := newSlotIntegrationRepository(t, pool)
 
-	professionalID := uuid.Must(uuid.NewV7())
+	professionalID := uuid.NewV7()
 	insertProfessionalForSlot(ctx, t, pool, professionalID)
 
 	startTime := mustParseTime(repositoryStartTime)
@@ -97,7 +97,7 @@ func TestRepositoryCancelReturnsErrorWhenAlreadyCancelled(t *testing.T) {
 	pool := newSlotIntegrationPool(ctx, t)
 	repo := newSlotIntegrationRepository(t, pool)
 
-	professionalID := uuid.Must(uuid.NewV7())
+	professionalID := uuid.NewV7()
 	insertProfessionalForSlot(ctx, t, pool, professionalID)
 
 	startTime := mustParseTime(repositoryStartTime)
@@ -120,7 +120,7 @@ func TestRepositoryCancelReturnsErrorWhenNotFound(t *testing.T) {
 	pool := newSlotIntegrationPool(ctx, t)
 	repo := newSlotIntegrationRepository(t, pool)
 
-	err := repo.Cancel(ctx, uuid.Must(uuid.NewV7()))
+	err := repo.Cancel(ctx, uuid.NewV7())
 	require.Error(t, err)
 	assert.ErrorIs(t, err, slot.ErrSlotNotFound)
 }
@@ -132,7 +132,7 @@ func TestRepositoryCreateReturnsErrorWhenDatabaseUnavailable(t *testing.T) {
 	pool := newSlotIntegrationPool(ctx, t)
 	repo := newSlotIntegrationRepository(t, pool)
 
-	professionalID := uuid.Must(uuid.NewV7())
+	professionalID := uuid.NewV7()
 	insertProfessionalForSlot(ctx, t, pool, professionalID)
 
 	startTime := mustParseTime(repositoryStartTime)

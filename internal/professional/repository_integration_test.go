@@ -6,8 +6,8 @@ import (
 	"appointment-manager/internal/professional"
 	"context"
 	"testing"
+	"uuid"
 
-	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -49,8 +49,8 @@ func TestRepositoryListReturnsOnlyActiveProfessionals(t *testing.T) {
 	pool := newProfessionalIntegrationPool(ctx, t)
 	repo := newProfessionalIntegrationRepository(t, pool)
 
-	activeID := uuid.Must(uuid.NewV7())
-	inactiveID := uuid.Must(uuid.NewV7())
+	activeID := uuid.NewV7()
+	inactiveID := uuid.NewV7()
 
 	insertProfessional(ctx, t, pool, activeID, "Laura", "Gomez", "1111111111", true)
 	insertProfessional(ctx, t, pool, inactiveID, "Ana", "Perez", "2222222222", false)
@@ -74,7 +74,7 @@ func TestRepositoryListReturnsEmptySliceWhenNoActiveProfessionals(t *testing.T) 
 	pool := newProfessionalIntegrationPool(ctx, t)
 	repo := newProfessionalIntegrationRepository(t, pool)
 
-	insertProfessional(ctx, t, pool, uuid.Must(uuid.NewV7()), "Laura", "Gomez", "1111111111", false)
+	insertProfessional(ctx, t, pool, uuid.NewV7(), "Laura", "Gomez", "1111111111", false)
 
 	list, err := repo.List(ctx)
 	require.NoError(t, err)

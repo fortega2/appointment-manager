@@ -3,8 +3,8 @@ package prescription
 import (
 	"errors"
 	"testing"
+	"uuid"
 
-	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -18,13 +18,13 @@ const (
 func TestNew(t *testing.T) {
 	t.Parallel()
 
-	patientID := uuid.Must(uuid.NewV7())
+	patientID := uuid.NewV7()
 
 	created, err := New(patientID, prescriptionFilePathRaw, prescriptionTotalRaw)
 
 	require.NoError(t, err)
 	require.NotNil(t, created)
-	assert.NotEqual(t, uuid.Nil, created.ID)
+	assert.NotEqual(t, uuid.Nil(), created.ID)
 	assert.Equal(t, patientID, created.PatientID)
 	assert.Equal(t, "prescriptions/laura.pdf", created.FilePath)
 	assert.Equal(t, prescriptionTotalRaw, created.TotalSessions)
@@ -34,7 +34,7 @@ func TestNew(t *testing.T) {
 func TestNewValidation(t *testing.T) {
 	t.Parallel()
 
-	patientID := uuid.Must(uuid.NewV7())
+	patientID := uuid.NewV7()
 
 	tests := []struct {
 		name          string
@@ -45,7 +45,7 @@ func TestNewValidation(t *testing.T) {
 	}{
 		{
 			name:          "nil patient id",
-			patientID:     uuid.Nil,
+			patientID:     uuid.Nil(),
 			filePath:      "prescriptions/laura.pdf",
 			totalSessions: 10,
 			expected:      ErrNilPatientID,

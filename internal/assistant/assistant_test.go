@@ -5,8 +5,8 @@ import (
 	"appointment-manager/internal/domain"
 	"errors"
 	"testing"
+	"uuid"
 
-	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -125,7 +125,7 @@ func TestParseIDValidation(t *testing.T) {
 			parsedID, err := domain.ParseID(tt.raw)
 
 			require.Error(t, err)
-			assert.Equal(t, uuid.Nil, parsedID)
+			assert.Equal(t, uuid.Nil(), parsedID)
 			assert.True(t, errors.Is(err, tt.expected))
 		})
 	}

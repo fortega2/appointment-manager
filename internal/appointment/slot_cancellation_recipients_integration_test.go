@@ -5,8 +5,8 @@ package appointment_test
 import (
 	"context"
 	"testing"
+	"uuid"
 
-	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go"
@@ -28,15 +28,15 @@ func TestSlotCancellationRecipientsExcludesPatientCancellations(t *testing.T) {
 
 	pool := newIntegrationPool(ctx, t)
 
-	professionalID := uuid.Must(uuid.NewV7())
-	assistantID := uuid.Must(uuid.NewV7())
+	professionalID := uuid.NewV7()
+	assistantID := uuid.NewV7()
 	insertProfessional(ctx, t, pool, professionalID)
 	insertAssistant(ctx, t, pool, assistantID)
 
-	clinicCancelledPatientID := uuid.Must(uuid.NewV7())
-	selfCancelledPatientID := uuid.Must(uuid.NewV7())
-	attendedPatientID := uuid.Must(uuid.NewV7())
-	otherSlotPatientID := uuid.Must(uuid.NewV7())
+	clinicCancelledPatientID := uuid.NewV7()
+	selfCancelledPatientID := uuid.NewV7()
+	attendedPatientID := uuid.NewV7()
+	otherSlotPatientID := uuid.NewV7()
 	for _, patientID := range []uuid.UUID{
 		clinicCancelledPatientID,
 		selfCancelledPatientID,
@@ -46,25 +46,25 @@ func TestSlotCancellationRecipientsExcludesPatientCancellations(t *testing.T) {
 		insertPatient(ctx, t, pool, patientID)
 	}
 
-	slotID := uuid.Must(uuid.NewV7())
+	slotID := uuid.NewV7()
 	insertSlot(ctx, t, pool, slotID, professionalID, recipientsSlotDate, "09:00:00+00", "09:30:00+00", 10, true)
 
 	// The clinic called this one off -> must be notified.
-	insertAppointment(ctx, t, pool, uuid.Must(uuid.NewV7()), slotID, clinicCancelledPatientID,
+	insertAppointment(ctx, t, pool, uuid.NewV7(), slotID, clinicCancelledPatientID,
 		professionalID, assistantID, statusCancelledByClinicValue, nil)
 
 	// This patient cancelled themselves days earlier -> must NOT be notified.
-	insertAppointment(ctx, t, pool, uuid.Must(uuid.NewV7()), slotID, selfCancelledPatientID,
+	insertAppointment(ctx, t, pool, uuid.NewV7(), slotID, selfCancelledPatientID,
 		professionalID, assistantID, statusCancelledValue, nil)
 
 	// Same slot but already attended -> nothing to announce.
-	insertAppointment(ctx, t, pool, uuid.Must(uuid.NewV7()), slotID, attendedPatientID,
+	insertAppointment(ctx, t, pool, uuid.NewV7(), slotID, attendedPatientID,
 		professionalID, assistantID, statusAttendedValue, nil)
 
 	// A different slot the clinic also cancelled -> must not leak in.
-	otherSlotID := uuid.Must(uuid.NewV7())
+	otherSlotID := uuid.NewV7()
 	insertSlot(ctx, t, pool, otherSlotID, professionalID, recipientsOtherSlotDate, "09:00:00+00", "09:30:00+00", 10, true)
-	insertAppointment(ctx, t, pool, uuid.Must(uuid.NewV7()), otherSlotID, otherSlotPatientID,
+	insertAppointment(ctx, t, pool, uuid.NewV7(), otherSlotID, otherSlotPatientID,
 		professionalID, assistantID, statusCancelledByClinicValue, nil)
 
 	query, err := appointment.NewQuery(pool)
@@ -91,19 +91,19 @@ func TestSlotCancellationRecipientsHandlesNullEmail(t *testing.T) {
 
 	pool := newIntegrationPool(ctx, t)
 
-	professionalID := uuid.Must(uuid.NewV7())
-	assistantID := uuid.Must(uuid.NewV7())
+	professionalID := uuid.NewV7()
+	assistantID := uuid.NewV7()
 	insertProfessional(ctx, t, pool, professionalID)
 	insertAssistant(ctx, t, pool, assistantID)
 
-	patientID := uuid.Must(uuid.NewV7())
+	patientID := uuid.NewV7()
 	insertPatient(ctx, t, pool, patientID)
 	_, err := pool.Exec(ctx, `UPDATE public.patient SET email = NULL WHERE id = $1`, patientID)
 	require.NoError(t, err)
 
-	slotID := uuid.Must(uuid.NewV7())
+	slotID := uuid.NewV7()
 	insertSlot(ctx, t, pool, slotID, professionalID, recipientsSlotDate, "11:00:00+00", "11:30:00+00", 5, true)
-	insertAppointment(ctx, t, pool, uuid.Must(uuid.NewV7()), slotID, patientID,
+	insertAppointment(ctx, t, pool, uuid.NewV7(), slotID, patientID,
 		professionalID, assistantID, statusCancelledByClinicValue, nil)
 
 	query, err := appointment.NewQuery(pool)
@@ -124,10 +124,10 @@ func TestSlotCancellationRecipientsReturnsEmptyWithoutError(t *testing.T) {
 
 	pool := newIntegrationPool(ctx, t)
 
-	professionalID := uuid.Must(uuid.NewV7())
+	professionalID := uuid.NewV7()
 	insertProfessional(ctx, t, pool, professionalID)
 
-	emptySlotID := uuid.Must(uuid.NewV7())
+	emptySlotID := uuid.NewV7()
 	insertSlot(ctx, t, pool, emptySlotID, professionalID, recipientsSlotDate, "13:00:00+00", "13:30:00+00", 5, true)
 
 	query, err := appointment.NewQuery(pool)
@@ -137,7 +137,7 @@ func TestSlotCancellationRecipientsReturnsEmptyWithoutError(t *testing.T) {
 	require.NoError(t, err)
 	assert.Empty(t, cancellation.Recipients)
 
-	unknown, err := query.SlotCancellationRecipients(ctx, uuid.Must(uuid.NewV7()))
+	unknown, err := query.SlotCancellationRecipients(ctx, uuid.NewV7())
 	require.NoError(t, err)
 	assert.Empty(t, unknown.Recipients)
 }

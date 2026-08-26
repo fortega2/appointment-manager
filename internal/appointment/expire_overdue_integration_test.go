@@ -7,8 +7,8 @@ import (
 	"context"
 	"testing"
 	"time"
+	"uuid"
 
-	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -29,30 +29,30 @@ func TestExpireOverdueMarksPastConfirmedAppointmentsAbsent(t *testing.T) {
 
 	pool := newIntegrationPool(ctx, t)
 
-	professionalID := uuid.Must(uuid.NewV7())
-	assistantID := uuid.Must(uuid.NewV7())
-	patientID := uuid.Must(uuid.NewV7())
+	professionalID := uuid.NewV7()
+	assistantID := uuid.NewV7()
+	patientID := uuid.NewV7()
 
 	insertProfessional(ctx, t, pool, professionalID)
 	insertAssistant(ctx, t, pool, assistantID)
 	insertPatient(ctx, t, pool, patientID)
 
 	// Past slot, CONFIRMED -> expired to ABSENT.
-	pastConfirmedSlotID := uuid.Must(uuid.NewV7())
+	pastConfirmedSlotID := uuid.NewV7()
 	insertSlot(ctx, t, pool, pastConfirmedSlotID, professionalID, pastSlotDate, "09:00:00+00", "09:30:00+00", 1, false)
-	pastConfirmedApptID := uuid.Must(uuid.NewV7())
+	pastConfirmedApptID := uuid.NewV7()
 	insertAppointment(ctx, t, pool, pastConfirmedApptID, pastConfirmedSlotID, patientID, professionalID, assistantID, statusConfirmedValue, nil)
 
 	// Past slot, already ATTENDED -> untouched (not CONFIRMED).
-	pastAttendedSlotID := uuid.Must(uuid.NewV7())
+	pastAttendedSlotID := uuid.NewV7()
 	insertSlot(ctx, t, pool, pastAttendedSlotID, professionalID, pastSlotDate, "10:00:00+00", "10:30:00+00", 1, false)
-	pastAttendedApptID := uuid.Must(uuid.NewV7())
+	pastAttendedApptID := uuid.NewV7()
 	insertAppointment(ctx, t, pool, pastAttendedApptID, pastAttendedSlotID, patientID, professionalID, assistantID, statusAttendedValue, nil)
 
 	// Future slot, CONFIRMED -> untouched (slot has not ended).
-	futureConfirmedSlotID := uuid.Must(uuid.NewV7())
+	futureConfirmedSlotID := uuid.NewV7()
 	insertSlot(ctx, t, pool, futureConfirmedSlotID, professionalID, futureSlotDate, "09:00:00+00", "09:30:00+00", 1, false)
-	futureConfirmedApptID := uuid.Must(uuid.NewV7())
+	futureConfirmedApptID := uuid.NewV7()
 	insertAppointment(ctx, t, pool, futureConfirmedApptID, futureConfirmedSlotID, patientID, professionalID, assistantID, statusConfirmedValue, nil)
 
 	repo, err := appointment.NewPostgresRepository(pool)
@@ -92,17 +92,17 @@ func TestExpireOverdueLeavesAppointmentsOnBlockedSlots(t *testing.T) {
 
 	pool := newIntegrationPool(ctx, t)
 
-	professionalID := uuid.Must(uuid.NewV7())
-	assistantID := uuid.Must(uuid.NewV7())
-	patientID := uuid.Must(uuid.NewV7())
+	professionalID := uuid.NewV7()
+	assistantID := uuid.NewV7()
+	patientID := uuid.NewV7()
 
 	insertProfessional(ctx, t, pool, professionalID)
 	insertAssistant(ctx, t, pool, assistantID)
 	insertPatient(ctx, t, pool, patientID)
 
-	blockedSlotID := uuid.Must(uuid.NewV7())
+	blockedSlotID := uuid.NewV7()
 	insertSlot(ctx, t, pool, blockedSlotID, professionalID, pastSlotDate, "11:00:00+00", "11:30:00+00", 1, true)
-	strandedApptID := uuid.Must(uuid.NewV7())
+	strandedApptID := uuid.NewV7()
 	insertAppointment(ctx, t, pool, strandedApptID, blockedSlotID, patientID, professionalID, assistantID, statusConfirmedValue, nil)
 
 	repo, err := appointment.NewPostgresRepository(pool)

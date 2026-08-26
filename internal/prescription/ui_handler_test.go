@@ -9,8 +9,8 @@ import (
 	"net/http/httptest"
 	"testing"
 	"time"
+	"uuid"
 
-	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
@@ -82,7 +82,7 @@ func TestFileRedirectUIHandlerNotFound(t *testing.T) {
 	t.Parallel()
 
 	svc := new(mockService)
-	prescriptionID := uuid.Must(uuid.NewV7())
+	prescriptionID := uuid.NewV7()
 	svc.On("PresignedGetURL", mock.Anything, prescriptionID, presignExpiry).Return("", ErrPrescriptionNotFound)
 
 	h, err := NewUIHandler(newTestLogger(), svc, &Query{})

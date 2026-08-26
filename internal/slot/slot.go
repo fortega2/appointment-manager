@@ -3,8 +3,7 @@ package slot
 import (
 	"fmt"
 	"time"
-
-	"github.com/google/uuid"
+	"uuid"
 
 	"appointment-manager/internal/domain"
 )
@@ -35,7 +34,7 @@ func NewSlot(professionalID uuid.UUID, date time.Time, startTime time.Time, endT
 }
 
 func validateSlot(professionalID uuid.UUID, date time.Time, startTime time.Time, endTime time.Time, maxCapacity int16) error {
-	if professionalID == uuid.Nil {
+	if professionalID == uuid.Nil() {
 		return ErrInvalidProfessionalID
 	}
 

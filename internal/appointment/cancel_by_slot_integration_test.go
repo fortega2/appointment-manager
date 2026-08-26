@@ -6,8 +6,8 @@ import (
 	"appointment-manager/internal/appointment"
 	"context"
 	"testing"
+	"uuid"
 
-	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go"
@@ -27,19 +27,19 @@ func TestCancelBySlotCancelsOnlyConfirmedAppointmentsOfThatSlot(t *testing.T) {
 
 	pool := newIntegrationPool(ctx, t)
 
-	professionalID := uuid.Must(uuid.NewV7())
-	assistantID := uuid.Must(uuid.NewV7())
+	professionalID := uuid.NewV7()
+	assistantID := uuid.NewV7()
 	insertProfessional(ctx, t, pool, professionalID)
 	insertAssistant(ctx, t, pool, assistantID)
 
 	// The unique partial index on (patient_id, slot_id) WHERE status = 1 forbids
 	// two CONFIRMED appointments for the same patient in one slot, so every
 	// confirmed booking below belongs to a distinct patient.
-	firstPatientID := uuid.Must(uuid.NewV7())
-	secondPatientID := uuid.Must(uuid.NewV7())
-	attendedPatientID := uuid.Must(uuid.NewV7())
-	cancelledPatientID := uuid.Must(uuid.NewV7())
-	otherSlotPatientID := uuid.Must(uuid.NewV7())
+	firstPatientID := uuid.NewV7()
+	secondPatientID := uuid.NewV7()
+	attendedPatientID := uuid.NewV7()
+	cancelledPatientID := uuid.NewV7()
+	otherSlotPatientID := uuid.NewV7()
 	for _, patientID := range []uuid.UUID{
 		firstPatientID,
 		secondPatientID,
@@ -50,27 +50,27 @@ func TestCancelBySlotCancelsOnlyConfirmedAppointmentsOfThatSlot(t *testing.T) {
 		insertPatient(ctx, t, pool, patientID)
 	}
 
-	targetSlotID := uuid.Must(uuid.NewV7())
+	targetSlotID := uuid.NewV7()
 	insertSlot(ctx, t, pool, targetSlotID, professionalID, cancelTargetSlotDate, "09:00:00+00", "09:30:00+00", 10, false)
 
-	firstConfirmedID := uuid.Must(uuid.NewV7())
+	firstConfirmedID := uuid.NewV7()
 	insertAppointment(ctx, t, pool, firstConfirmedID, targetSlotID, firstPatientID, professionalID, assistantID, statusConfirmedValue, nil)
 
-	secondConfirmedID := uuid.Must(uuid.NewV7())
+	secondConfirmedID := uuid.NewV7()
 	insertAppointment(ctx, t, pool, secondConfirmedID, targetSlotID, secondPatientID, professionalID, assistantID, statusConfirmedValue, nil)
 
 	// Same slot, already ATTENDED -> untouched (not CONFIRMED).
-	attendedID := uuid.Must(uuid.NewV7())
+	attendedID := uuid.NewV7()
 	insertAppointment(ctx, t, pool, attendedID, targetSlotID, attendedPatientID, professionalID, assistantID, statusAttendedValue, nil)
 
 	// Same slot, already CANCELLED -> untouched, and not double-counted.
-	alreadyCancelledID := uuid.Must(uuid.NewV7())
+	alreadyCancelledID := uuid.NewV7()
 	insertAppointment(ctx, t, pool, alreadyCancelledID, targetSlotID, cancelledPatientID, professionalID, assistantID, statusCancelledValue, nil)
 
 	// A different slot, CONFIRMED -> untouched.
-	otherSlotID := uuid.Must(uuid.NewV7())
+	otherSlotID := uuid.NewV7()
 	insertSlot(ctx, t, pool, otherSlotID, professionalID, cancelOtherSlotDate, "09:00:00+00", "09:30:00+00", 10, false)
-	otherSlotApptID := uuid.Must(uuid.NewV7())
+	otherSlotApptID := uuid.NewV7()
 	insertAppointment(ctx, t, pool, otherSlotApptID, otherSlotID, otherSlotPatientID, professionalID, assistantID, statusConfirmedValue, nil)
 
 	repo, err := appointment.NewPostgresRepository(pool)
@@ -117,10 +117,10 @@ func TestCancelBySlotReturnsZeroWithoutError(t *testing.T) {
 
 	pool := newIntegrationPool(ctx, t)
 
-	professionalID := uuid.Must(uuid.NewV7())
+	professionalID := uuid.NewV7()
 	insertProfessional(ctx, t, pool, professionalID)
 
-	emptySlotID := uuid.Must(uuid.NewV7())
+	emptySlotID := uuid.NewV7()
 	insertSlot(ctx, t, pool, emptySlotID, professionalID, cancelTargetSlotDate, "11:00:00+00", "11:30:00+00", 5, false)
 
 	repo, err := appointment.NewPostgresRepository(pool)
@@ -130,7 +130,7 @@ func TestCancelBySlotReturnsZeroWithoutError(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, int64(0), emptyCount)
 
-	unknownCount, err := repo.CancelBySlot(ctx, uuid.Must(uuid.NewV7()))
+	unknownCount, err := repo.CancelBySlot(ctx, uuid.NewV7())
 	require.NoError(t, err)
 	assert.Equal(t, int64(0), unknownCount)
 }
@@ -143,32 +143,32 @@ func TestCancelOnBlockedSlotsReconcilesConfirmedAppointments(t *testing.T) {
 
 	pool := newIntegrationPool(ctx, t)
 
-	professionalID := uuid.Must(uuid.NewV7())
-	assistantID := uuid.Must(uuid.NewV7())
+	professionalID := uuid.NewV7()
+	assistantID := uuid.NewV7()
 	insertProfessional(ctx, t, pool, professionalID)
 	insertAssistant(ctx, t, pool, assistantID)
 
-	blockedPatientID := uuid.Must(uuid.NewV7())
-	blockedAttendedPatientID := uuid.Must(uuid.NewV7())
-	openPatientID := uuid.Must(uuid.NewV7())
+	blockedPatientID := uuid.NewV7()
+	blockedAttendedPatientID := uuid.NewV7()
+	openPatientID := uuid.NewV7()
 	for _, patientID := range []uuid.UUID{blockedPatientID, blockedAttendedPatientID, openPatientID} {
 		insertPatient(ctx, t, pool, patientID)
 	}
 
 	// Blocked slot: the CONFIRMED booking is swept, the ATTENDED one is not.
-	blockedSlotID := uuid.Must(uuid.NewV7())
+	blockedSlotID := uuid.NewV7()
 	insertSlot(ctx, t, pool, blockedSlotID, professionalID, cancelTargetSlotDate, "14:00:00+00", "14:30:00+00", 10, true)
 
-	strandedID := uuid.Must(uuid.NewV7())
+	strandedID := uuid.NewV7()
 	insertAppointment(ctx, t, pool, strandedID, blockedSlotID, blockedPatientID, professionalID, assistantID, statusConfirmedValue, nil)
 
-	blockedAttendedID := uuid.Must(uuid.NewV7())
+	blockedAttendedID := uuid.NewV7()
 	insertAppointment(ctx, t, pool, blockedAttendedID, blockedSlotID, blockedAttendedPatientID, professionalID, assistantID, statusAttendedValue, nil)
 
 	// Open slot: untouched, the sweep only targets blocked slots.
-	openSlotID := uuid.Must(uuid.NewV7())
+	openSlotID := uuid.NewV7()
 	insertSlot(ctx, t, pool, openSlotID, professionalID, cancelOtherSlotDate, "14:00:00+00", "14:30:00+00", 10, false)
-	openApptID := uuid.Must(uuid.NewV7())
+	openApptID := uuid.NewV7()
 	insertAppointment(ctx, t, pool, openApptID, openSlotID, openPatientID, professionalID, assistantID, statusConfirmedValue, nil)
 
 	repo, err := appointment.NewPostgresRepository(pool)
