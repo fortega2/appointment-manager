@@ -17,7 +17,7 @@ A production-grade medical appointment scheduling system built entirely in Go. D
 
 | Layer | Technology |
 |---|---|
-| Language | Go 1.26 |
+| Language | Go 1.27 |
 | HTTP | `net/http`, `http.ServeMux` — no router frameworks |
 | Database | PostgreSQL 18 + `pgx` driver |
 | Migrations | `golang-migrate` with embedded SQL |
