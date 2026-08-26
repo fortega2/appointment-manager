@@ -33,6 +33,7 @@ func newProfessionalIntegrationPool(ctx context.Context, t *testing.T) *pgxpool.
 		postgres.WithDatabase(professionalIntegrationDBName),
 		postgres.WithUsername(professionalIntegrationDBUser),
 		postgres.WithPassword(professionalIntegrationDBPass),
+		testcontainers.WithEnv(map[string]string{"PGDATA": "/var/lib/postgresql/data"}),
 		postgres.BasicWaitStrategies(),
 	)
 	require.NoError(t, err)

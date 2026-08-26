@@ -46,6 +46,7 @@ func newSlotIntegrationPool(ctx context.Context, t *testing.T) *pgxpool.Pool {
 		postgres.WithDatabase(integrationDBName),
 		postgres.WithUsername(integrationDBUser),
 		postgres.WithPassword(integrationDBPass),
+		testcontainers.WithEnv(map[string]string{"PGDATA": "/var/lib/postgresql/data"}),
 		postgres.BasicWaitStrategies(),
 	)
 	require.NoError(t, err)

@@ -42,6 +42,7 @@ func newAuthIntegrationPool(ctx context.Context, t *testing.T) *pgxpool.Pool {
 		postgres.WithDatabase(authIntegrationDBName),
 		postgres.WithUsername(authIntegrationDBUser),
 		postgres.WithPassword(authIntegrationDBPass),
+		testcontainers.WithEnv(map[string]string{"PGDATA": "/var/lib/postgresql/data"}),
 		postgres.BasicWaitStrategies(),
 	)
 	require.NoError(t, err)

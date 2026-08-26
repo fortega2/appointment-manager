@@ -39,6 +39,7 @@ func newSessionIntegrationPool(ctx context.Context, t *testing.T) *pgxpool.Pool 
 		postgres.WithDatabase(sessionIntegrationDBName),
 		postgres.WithUsername(sessionIntegrationDBUser),
 		postgres.WithPassword(sessionIntegrationDBPass),
+		testcontainers.WithEnv(map[string]string{"PGDATA": "/var/lib/postgresql/data"}),
 		postgres.BasicWaitStrategies(),
 	)
 	require.NoError(t, err)

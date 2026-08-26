@@ -50,6 +50,7 @@ func startPostgresContainer(ctx context.Context, t *testing.T) string {
 		postgres.WithDatabase(dbIntegrationName),
 		postgres.WithUsername(dbIntegrationUser),
 		postgres.WithPassword(dbIntegrationPassword),
+		testcontainers.WithEnv(map[string]string{"PGDATA": "/var/lib/postgresql/data"}),
 		postgres.BasicWaitStrategies(),
 	)
 	require.NoError(t, err)

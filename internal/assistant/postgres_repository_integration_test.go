@@ -205,6 +205,7 @@ func startAssistantPostgresContainer(ctx context.Context, t *testing.T) string {
 		postgres.WithDatabase(repoIntegrationName),
 		postgres.WithUsername(repoIntegrationUser),
 		postgres.WithPassword(repoIntegrationPassword),
+		testcontainers.WithEnv(map[string]string{"PGDATA": "/var/lib/postgresql/data"}),
 		postgres.BasicWaitStrategies(),
 	)
 	require.NoError(t, err)

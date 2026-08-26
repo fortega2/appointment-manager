@@ -30,6 +30,7 @@ func newHealthInsuranceIntegrationPool(ctx context.Context, t *testing.T) *pgxpo
 		postgres.WithDatabase(healthInsuranceIntegrationDBName),
 		postgres.WithUsername(healthInsuranceIntegrationDBUser),
 		postgres.WithPassword(healthInsuranceIntegrationDBPass),
+		testcontainers.WithEnv(map[string]string{"PGDATA": "/var/lib/postgresql/data"}),
 		postgres.BasicWaitStrategies(),
 	)
 	require.NoError(t, err)

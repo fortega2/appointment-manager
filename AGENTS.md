@@ -164,6 +164,13 @@ both where dockerd listens and where the ports of testcontainers' containers are
 `DOCKER_HOST` and `TESTCONTAINERS_HOST_OVERRIDE` both point at the gateway, and the CI image needs
 `iproute2` for `ip route`.
 
+Every `postgres.Run` call sets `PGDATA=/var/lib/postgresql/data`. Postgres 18 moved the default to
+`/var/lib/postgresql/$PG_MAJOR/docker`, and its entrypoint creates that path as root, chowns only
+the leaf, then re-execs under `gosu postgres` and re-runs the same setup — which dies with
+`mkdir: can't create directory ... Permission denied` on the arm64 image inside dind. The classic
+path hangs directly off the volume, which the image already owns as `postgres`, so the second pass
+is a no-op. Keep the override: dropping it silently breaks CI only, never local amd64 runs.
+
 **Only `./internal/db` runs for now, with `-p 1`.** dind is capped at 1.5 CPU / 2.5 GB and every
 container shares that budget with the job itself. `internal/appointment` alone takes ~89s on a
 multicore x86 dev box, so the remaining twelve packages are only worth switching on once the

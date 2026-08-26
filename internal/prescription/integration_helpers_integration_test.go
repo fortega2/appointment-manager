@@ -39,6 +39,7 @@ func newPrescriptionIntegrationPool(ctx context.Context, t *testing.T) *pgxpool.
 		postgres.WithDatabase(prescriptionIntegrationDBName),
 		postgres.WithUsername(prescriptionIntegrationDBUser),
 		postgres.WithPassword(prescriptionIntegrationDBPass),
+		testcontainers.WithEnv(map[string]string{"PGDATA": "/var/lib/postgresql/data"}),
 		postgres.BasicWaitStrategies(),
 	)
 	require.NoError(t, err)
