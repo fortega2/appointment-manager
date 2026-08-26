@@ -10,12 +10,13 @@ import (
 )
 
 type Config struct {
-	ReadHeaderTimeout time.Duration
-	ReadTimeout       time.Duration
-	WriteTimeout      time.Duration
-	IdleTimeout       time.Duration
-	ShutdownTimeout   time.Duration
-	MaxHeaderBytes    int
+	ReadHeaderTimeout   time.Duration
+	ReadTimeout         time.Duration
+	WriteTimeout        time.Duration
+	IdleTimeout         time.Duration
+	ShutdownTimeout     time.Duration
+	MaxHeaderBytes      int
+	MaxHeaderValueCount int
 }
 
 func (c Config) validate() error {
@@ -36,6 +37,9 @@ func (c Config) validate() error {
 	}
 	if c.MaxHeaderBytes <= 0 {
 		return fmt.Errorf("invalid max header bytes: %w", ErrInvalidConfig)
+	}
+	if c.MaxHeaderValueCount <= 0 {
+		return fmt.Errorf("invalid max header value count: %w", ErrInvalidConfig)
 	}
 	return nil
 }
@@ -58,13 +62,14 @@ func Start(ctx context.Context, logger *slog.Logger, handler http.Handler, addr 
 	}
 
 	srv := &http.Server{
-		Addr:              addr,
-		Handler:           handler,
-		ReadHeaderTimeout: cfg.ReadHeaderTimeout,
-		ReadTimeout:       cfg.ReadTimeout,
-		WriteTimeout:      cfg.WriteTimeout,
-		IdleTimeout:       cfg.IdleTimeout,
-		MaxHeaderBytes:    cfg.MaxHeaderBytes,
+		Addr:                addr,
+		Handler:             handler,
+		ReadHeaderTimeout:   cfg.ReadHeaderTimeout,
+		ReadTimeout:         cfg.ReadTimeout,
+		WriteTimeout:        cfg.WriteTimeout,
+		IdleTimeout:         cfg.IdleTimeout,
+		MaxHeaderBytes:      cfg.MaxHeaderBytes,
+		MaxHeaderValueCount: cfg.MaxHeaderValueCount,
 	}
 
 	errCh := make(chan error, 1)

@@ -27,6 +27,12 @@ const (
 	serverMaxHeaderBytes    = 1 << 20
 	serverShutdownTimeout   = 3 * time.Second
 
+	// Complements serverMaxHeaderBytes: that one caps total header size, this one
+	// caps how many values are parsed, so many tiny headers cannot slip through.
+	// A browser plus htmx plus Caddy's X-Forwarded-* sends well under 40; 100 is
+	// generous headroom and still 5x tighter than http.DefaultMaxHeaderValueCount.
+	serverMaxHeaderValueCount = 100
+
 	// Clears auth.dispatchTimeout so an in-flight mail finishes, and stays under
 	// the stop_grace_period in docker/docker-compose.yml so SIGKILL never wins.
 	resetDrainTimeout = 50 * time.Second
@@ -175,12 +181,13 @@ func run() error {
 	defer stopWorkers()
 
 	if err := server.Start(ctx, logger, handler, serverAddr, server.Config{
-		ReadHeaderTimeout: serverReadHeaderTimeout,
-		ReadTimeout:       serverReadTimeout,
-		WriteTimeout:      serverWriteTimeout,
-		IdleTimeout:       serverIdleTimeout,
-		MaxHeaderBytes:    serverMaxHeaderBytes,
-		ShutdownTimeout:   serverShutdownTimeout,
+		ReadHeaderTimeout:   serverReadHeaderTimeout,
+		ReadTimeout:         serverReadTimeout,
+		WriteTimeout:        serverWriteTimeout,
+		IdleTimeout:         serverIdleTimeout,
+		MaxHeaderBytes:      serverMaxHeaderBytes,
+		MaxHeaderValueCount: serverMaxHeaderValueCount,
+		ShutdownTimeout:     serverShutdownTimeout,
 	}); err != nil {
 		logger.ErrorContext(ctx, "server error", slog.Any("error", err))
 		return err
