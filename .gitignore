@@ -46,3 +46,6 @@ Dockerfile.*
 
 # Downloaded Tailwind CLI binary (see Makefile `css` target) — output is committed, binary is not
 /bin/
+
+# Written by the Integration tests step in .forgejo/workflows/config.yml
+integration.log

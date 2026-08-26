@@ -145,6 +145,31 @@ Notes:
 - Disable test cache while debugging:
   - `go test ./internal/assistant -count=1 -run '^TestGetEndpoint$' -v`
 
+### Integration tests in CI (staged rollout, Aug 2026)
+
+Every integration test opens with `testcontainers.SkipIfProviderIsNotHealthy(t)`, which turns an
+unreachable Docker daemon into a **skip** — and `go test` reports a package whose tests all skipped
+as `ok`. The `linter-tests` job had no `DOCKER_HOST`, so all 133 integration tests skipped silently
+and CI was green on coverage it never ran. Two guards now prevent a repeat, both in
+`.forgejo/workflows/config.yml`:
+
+- The step greps its own `-v` output for `--- SKIP` and fails the job. Match the *indented* form
+  too: when a subtest skips, the parent still prints `--- PASS`, so an anchored `^--- SKIP` misses it.
+  The project has no other `t.Skip`, so any skip means the daemon is gone.
+- `set -euo pipefail` with `shell: bash`. Without `pipefail`, `go test | tee` returns tee's status
+  and a **failing** suite exits 0 — the same class of silent-green bug.
+
+Job containers run *inside* `forgejo-dind`, so the default gateway is dind's own interface: that is
+both where dockerd listens and where the ports of testcontainers' containers are published. Hence
+`DOCKER_HOST` and `TESTCONTAINERS_HOST_OVERRIDE` both point at the gateway, and the CI image needs
+`iproute2` for `ip route`.
+
+**Only `./internal/db` runs for now, with `-p 1`.** dind is capped at 1.5 CPU / 2.5 GB and every
+container shares that budget with the job itself. `internal/appointment` alone takes ~89s on a
+multicore x86 dev box, so the remaining twelve packages are only worth switching on once the
+measured cost of the first one says they fit. If they don't, the options are running integration
+on `main` pushes only, or sharing one Postgres across packages.
+
 ### Coverage (team convention)
 
 - For the coverage command and the full pre-finish verification sequence, use the `pre-pr-check` skill.

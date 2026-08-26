@@ -52,10 +52,31 @@ jobs:
       - name: Unit tests
         run: go test ./... -race
 
+      # Explicit because of `set -o pipefail` below: it is a bash builtin, and the
+      # step fails with an obscure error if the runner ever defaults to dash/sh.
       - name: Integration tests
+        shell: bash
         run: |
-          pkgs=$(grep -rl '^//go:build integration$' --include='*_test.go' . | xargs -n1 dirname | sort -u)
-          go test -tags=integration -race $pkgs
+          set -euo pipefail
+
+          DOCKER_GW=$(ip route | awk '/^default/{print $3}')
+          export DOCKER_HOST="tcp://${DOCKER_GW}:2375"
+          export TESTCONTAINERS_HOST_OVERRIDE="${DOCKER_GW}"
+          export TESTCONTAINERS_RYUK_CONTAINER_PRIVILEGED=true
+
+          echo "docker daemon: ${DOCKER_HOST}"
+
+          go test -tags=integration -race -p 1 -v ./internal/db 2>&1 | tee integration.log
+
+          # Every integration test opens with testcontainers.SkipIfProviderIsNotHealthy,
+          # which turns an unreachable daemon into a SKIP -- and `go test` reports a
+          # skipped package as `ok`. That is how these tests silently stopped running.
+          # The project has no other t.Skip, so any skip at all means the daemon is gone.
+          if grep -qE '^[[:space:]]*--- SKIP' integration.log; then
+            echo "::error::Integration tests were skipped: the runner cannot reach the Docker daemon"
+            grep -E '^[[:space:]]*--- SKIP' integration.log | head -20
+            exit 1
+          fi
 
   docker:
     runs-on: docker
