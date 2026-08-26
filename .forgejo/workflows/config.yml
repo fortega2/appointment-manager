@@ -66,7 +66,11 @@ jobs:
 
           echo "docker daemon: ${DOCKER_HOST}"
 
-          go test -tags=integration -race -p 1 -v ./internal/db 2>&1 | tee integration.log
+          pkgs=$(grep -rl '^//go:build integration$' --include='*_test.go' . | xargs -n1 dirname | sort -u)
+
+          # -p 1 serialises packages: each one starts its own Postgres, and dind is
+          # capped at 1.5 CPU / 2.5 GB shared with this job.
+          go test -tags=integration -race -p 1 -v $pkgs 2>&1 | tee integration.log
 
           # Every integration test opens with testcontainers.SkipIfProviderIsNotHealthy,
           # which turns an unreachable daemon into a SKIP -- and `go test` reports a

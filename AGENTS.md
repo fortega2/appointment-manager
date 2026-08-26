@@ -171,11 +171,13 @@ the leaf, then re-execs under `gosu postgres` and re-runs the same setup — whi
 path hangs directly off the volume, which the image already owns as `postgres`, so the second pass
 is a no-op. Keep the override: dropping it silently breaks CI only, never local amd64 runs.
 
-**Only `./internal/db` runs for now, with `-p 1`.** dind is capped at 1.5 CPU / 2.5 GB and every
-container shares that budget with the job itself. `internal/appointment` alone takes ~89s on a
-multicore x86 dev box, so the remaining twelve packages are only worth switching on once the
-measured cost of the first one says they fit. If they don't, the options are running integration
-on `main` pushes only, or sharing one Postgres across packages.
+**All 13 integration packages run, with `-p 1`.** dind is capped at 1.5 CPU / 2.5 GB and every
+container shares that budget with the job itself, so packages are serialised rather than run in
+parallel -- each one starts its own Postgres. Measured 2026-08-26: the full suite is 248s locally
+(`-p 1`, x86), and `internal/db` ran 2.47x slower on the arm64 runner, which projects to roughly
+10 minutes of CI. `internal/appointment` alone is 89s of that 248s. If the job gets too slow, the
+first lever is running integration only on `main` pushes, the second is sharing one Postgres across
+packages.
 
 ### Coverage (team convention)
 
