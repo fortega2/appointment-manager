@@ -43,6 +43,12 @@ const (
 	// under the server's WriteTimeout (cmd/server/main.go), or a queued login
 	// would still be waiting once its response can no longer be written.
 	maxQueueWait = 3 * time.Second
+
+	// The cost WithTestCost applies. Chosen so a hash stays in the tens of
+	// milliseconds even on the CI runner, leaving maxQueueWait roughly an order
+	// of magnitude of headroom, while still exercising real Argon2 work.
+	testCostMemoryKiB  = 4 * 1024
+	testCostIterations = 1
 )
 
 type Argon2 struct {
@@ -55,14 +61,26 @@ type Argon2 struct {
 	metrics     Metrics
 }
 
+// Option customises a hasher before it starts serving callers.
+type Option func(*Argon2)
+
+// WithTestCost lowers the Argon2 cost far below the production defaults, and is
+// for tests only -- it weakens every hash the returned hasher writes.
+func WithTestCost() Option {
+	return func(a *Argon2) {
+		a.memory = testCostMemoryKiB
+		a.iterations = testCostIterations
+	}
+}
+
 // NewArgon2 builds a hasher whose concurrency budget is shared by every caller
 // in the process. A nil hashMetrics disables instrumentation.
-func NewArgon2(hashMetrics Metrics) *Argon2 {
+func NewArgon2(hashMetrics Metrics, opts ...Option) *Argon2 {
 	if hashMetrics == nil {
 		hashMetrics = noopMetrics{}
 	}
 
-	return &Argon2{
+	hasher := &Argon2{
 		memory:      defaultMemoryKiB,
 		iterations:  defaultIterations,
 		parallelism: defaultParallelism,
@@ -71,6 +89,12 @@ func NewArgon2(hashMetrics Metrics) *Argon2 {
 		sem:         make(chan struct{}, maxConcurrentHashes),
 		metrics:     hashMetrics,
 	}
+
+	for _, opt := range opts {
+		opt(hasher)
+	}
+
+	return hasher
 }
 
 func (a *Argon2) Hash(ctx context.Context, password string) (string, error) {

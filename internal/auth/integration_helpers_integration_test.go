@@ -196,7 +196,7 @@ func newAuthIntegrationMux(
 
 	limiter := newAuthIntegrationLimiter(t, cfg)
 
-	h, err := auth.NewHandler(slog.New(slog.DiscardHandler), store, repo, password.NewArgon2(nil), limiter, isDev)
+	h, err := auth.NewHandler(slog.New(slog.DiscardHandler), store, repo, password.NewArgon2(nil, password.WithTestCost()), limiter, isDev)
 	require.NoError(t, err)
 
 	mux := http.NewServeMux()

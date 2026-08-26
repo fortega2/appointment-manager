@@ -305,7 +305,7 @@ func seedAssistantForAuth(
 ) uuid.UUID {
 	t.Helper()
 
-	hasher := password.NewArgon2(nil)
+	hasher := password.NewArgon2(nil, password.WithTestCost())
 	hashedPassword, err := hasher.Hash(ctx, plainPassword)
 	require.NoError(t, err)
 

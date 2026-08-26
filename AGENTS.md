@@ -171,6 +171,14 @@ the leaf, then re-execs under `gosu postgres` and re-runs the same setup — whi
 path hangs directly off the volume, which the image already owns as `postgres`, so the second pass
 is a no-op. Keep the override: dropping it silently breaks CI only, never local amd64 runs.
 
+`internal/auth`'s integration fixtures build their hasher with `password.WithTestCost()`. At the
+production cost a single Argon2 hash outlasts `maxQueueWait` (3s) on the CI runner, so
+`TestLoginQueuesConcurrentPasswordChecks` — 10 concurrent logins against 2 hashing slots — was
+answered with 503 there while passing locally, where the same hash costs ~60ms. The catch when
+applying it: **`Compare` re-derives with the parameters stored in the encoded hash, not with the
+hasher's**, so the login path only gets cheap if `seedAssistantForAuth` also hashes through a
+`WithTestCost` hasher. Setting it on the handler alone changes nothing.
+
 **All 13 integration packages run, with `-p 1`.** dind is capped at 1.5 CPU / 2.5 GB and every
 container shares that budget with the job itself, so packages are serialised rather than run in
 parallel -- each one starts its own Postgres. Measured 2026-08-26: the full suite is 248s locally
