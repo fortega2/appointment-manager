@@ -134,7 +134,7 @@ func (s *Service) NotifySlotCancelled(ctx context.Context, slotID uuid.UUID) {
 // final pass so notifications raised just before shutdown are not lost. It
 // blocks, so callers run it in a goroutine and stop it by cancelling ctx.
 //
-// Unlike worker.Worker this does not drain once before the first tick: the
+// Unlike worker.Group this does not drain once before the first tick: the
 // queue is necessarily empty at start-up, so that pass would always be a no-op.
 func (s *Service) Run(ctx context.Context) {
 	ticker := time.NewTicker(s.tickerInterval)
