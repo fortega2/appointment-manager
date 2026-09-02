@@ -9,6 +9,9 @@ import (
 	"time"
 	"uuid"
 
+	"appointment-manager/internal/outbox"
+	"appointment-manager/internal/slot"
+
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -253,7 +256,8 @@ const (
 			slot_id = $2
 			AND status = 1
 		RETURNING
-			prescription_id
+			prescription_id,
+			slot_id
 	`
 	cancelAppointmentsOnBlockedSlotsQuery = `
 		UPDATE
@@ -268,7 +272,8 @@ const (
 			AND a.status = 1
 			AND s.blocked = TRUE
 		RETURNING
-			a.prescription_id
+			a.prescription_id,
+			a.slot_id
 	`
 )
 
@@ -493,12 +498,16 @@ func (r *PostgresRepository) cancelAndReopen(ctx context.Context, operation, que
 		_ = tx.Rollback(ctx)
 	}()
 
-	prescriptionIDs, cancelledCount, err := collectCancelledPrescriptions(ctx, tx, query, args...)
+	cancelled, err := collectCancelledAppointments(ctx, tx, query, args...)
 	if err != nil {
 		return 0, fmt.Errorf("%s: %w", operation, err)
 	}
 
-	if err := reopenFreedPrescriptions(ctx, tx, prescriptionIDs); err != nil {
+	if err := reopenFreedPrescriptions(ctx, tx, cancelled.prescriptionIDs); err != nil {
+		return 0, fmt.Errorf("%s: %w", operation, err)
+	}
+
+	if err := emitSlotCancelledEvents(ctx, tx, cancelled.slotIDs); err != nil {
 		return 0, fmt.Errorf("%s: %w", operation, err)
 	}
 
@@ -506,35 +515,61 @@ func (r *PostgresRepository) cancelAndReopen(ctx context.Context, operation, que
 		return 0, fmt.Errorf("commit %s transaction: %w", operation, err)
 	}
 
-	return cancelledCount, nil
+	return cancelled.count, nil
 }
 
-// collectCancelledPrescriptions drains the cancellation's RETURNING rows before
+// cancelledAppointments is what one cancellation touched. Both slices are raw
+// RETURNING output, so they may repeat.
+type cancelledAppointments struct {
+	prescriptionIDs []uuid.UUID
+	slotIDs         []uuid.UUID
+	count           int64
+}
+
+// collectCancelledAppointments drains the cancellation's RETURNING rows before
 // returning: a connection with an open result set rejects further statements on
 // the same transaction as busy, and the caller runs the reopen right after this.
-func collectCancelledPrescriptions(ctx context.Context, tx pgx.Tx, query string, args ...any) ([]uuid.UUID, int64, error) {
+func collectCancelledAppointments(ctx context.Context, tx pgx.Tx, query string, args ...any) (cancelledAppointments, error) {
 	rows, err := tx.Query(ctx, query, args...)
 	if err != nil {
-		return nil, 0, err
+		return cancelledAppointments{}, err
 	}
 	defer rows.Close()
 
-	var prescriptionIDs []uuid.UUID
-	var cancelledCount int64
+	var cancelled cancelledAppointments
 	for rows.Next() {
-		var prescriptionID uuid.UUID
-		if err := rows.Scan(&prescriptionID); err != nil {
-			return nil, 0, err
+		var prescriptionID, slotID uuid.UUID
+		if err := rows.Scan(&prescriptionID, &slotID); err != nil {
+			return cancelledAppointments{}, err
 		}
 
-		prescriptionIDs = append(prescriptionIDs, prescriptionID)
-		cancelledCount++
+		cancelled.prescriptionIDs = append(cancelled.prescriptionIDs, prescriptionID)
+		cancelled.slotIDs = append(cancelled.slotIDs, slotID)
+		cancelled.count++
 	}
 	if err := rows.Err(); err != nil {
-		return nil, 0, err
+		return cancelledAppointments{}, err
 	}
 
-	return prescriptionIDs, cancelledCount, nil
+	return cancelled, nil
+}
+
+// emitSlotCancelledEvents records one event per cancelled slot. The sweep can
+// converge several slots at once, and both callers repeat a slot per booking.
+func emitSlotCancelledEvents(ctx context.Context, tx pgx.Tx, slotIDs []uuid.UUID) error {
+	for _, slotID := range sortedUniqueIDs(slotIDs) {
+		event := outbox.Event{
+			AggregateType: slot.OutboxAggregate,
+			EventType:     slot.EventCancelled,
+			AggregateID:   slotID,
+		}
+
+		if err := outbox.Insert(ctx, tx, event); err != nil {
+			return fmt.Errorf("emit slot cancelled event: %w", err)
+		}
+	}
+
+	return nil
 }
 
 func readStatus(ctx context.Context, tx pgx.Tx, appointmentID uuid.UUID) (Status, error) {

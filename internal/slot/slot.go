@@ -6,6 +6,14 @@ import (
 	"uuid"
 
 	"appointment-manager/internal/domain"
+	"appointment-manager/internal/outbox"
+)
+
+// Outbox vocabulary for events about a slot. Declared here because this package
+// owns the aggregate, even though appointment is what writes them.
+const (
+	OutboxAggregate outbox.AggregateType = "slot"
+	EventCancelled  outbox.EventType     = "slot.cancelled"
 )
 
 type Slot struct {
