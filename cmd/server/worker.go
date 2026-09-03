@@ -1,6 +1,7 @@
 package main
 
 import (
+	"appointment-manager/internal/outbox"
 	"appointment-manager/internal/passwordreset"
 	"appointment-manager/internal/ratelimit"
 	"appointment-manager/internal/session"
@@ -19,6 +20,7 @@ const (
 	expireResetTokensJobName = "expire-password-reset-tokens"
 	sweepLoginLimiterJobName = "sweep-login-rate-limiter"
 	sweepResetLimiterJobName = "sweep-password-reset-rate-limiter"
+	drainOutboxJobName       = "drain-outbox"
 	workerJobTimeout         = 5 * time.Second
 )
 
@@ -30,18 +32,19 @@ type workerDeps struct {
 	resetTokenStore *passwordreset.Store
 	loginLimiter    *ratelimit.Limiter
 	resetLimiter    *ratelimit.Limiter
+	outboxRelay     *outbox.Relay
 }
 
-// startBackgroundWorkers runs the periodic sweeps in the background until the
-// returned stop func is called. stop cancels every worker and blocks until
-// their goroutines have exited, so callers can defer it to keep shutdown
-// ordered ahead of the pool being closed.
-//
-// Every job is a method on the thing it sweeps: the work carries rules and
-// metrics that belong to its own package rather than being assembled here, and
-// the worker group owns nothing but when it runs.
+// startBackgroundWorkers runs periodic sweeps until stop is called, then waits
+// for all workers to exit before shutdown continues. Jobs own their rules and
+// metrics; this group only schedules them.
 func startBackgroundWorkers(ctx context.Context, logger *slog.Logger, w workerDeps) (func(), error) {
 	workerInterval, err := parseWorkerInterval(os.Getenv(workerIntervalEnv))
+	if err != nil {
+		return nil, err
+	}
+
+	outboxDrainInterval, err := parseOutboxDrainInterval(os.Getenv(outboxDrainIntervalEnv))
 	if err != nil {
 		return nil, err
 	}
@@ -70,6 +73,11 @@ func startBackgroundWorkers(ctx context.Context, logger *slog.Logger, w workerDe
 		if err := group.Add(job.name, job.run); err != nil {
 			return nil, fmt.Errorf("failed to register %s worker: %w", job.name, err)
 		}
+	}
+
+	// Poll more frequently so outbox retries respect their backoff schedule.
+	if err := group.Add(drainOutboxJobName, w.outboxRelay.Drain, worker.WithInterval(outboxDrainInterval)); err != nil {
+		return nil, fmt.Errorf("failed to register %s worker: %w", drainOutboxJobName, err)
 	}
 
 	group.Start(ctx)

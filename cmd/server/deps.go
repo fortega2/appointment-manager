@@ -9,6 +9,7 @@ import (
 	"appointment-manager/internal/mailer"
 	"appointment-manager/internal/metrics"
 	"appointment-manager/internal/notification"
+	"appointment-manager/internal/outbox"
 	"appointment-manager/internal/password"
 	"appointment-manager/internal/passwordreset"
 	"appointment-manager/internal/patient"
@@ -149,6 +150,7 @@ func newDependencies(pool *pgxpool.Pool, appMetrics *metrics.Metrics) (*dependen
 type appComponents struct {
 	deps                *dependencies
 	notificationService *notification.Service
+	outboxRelay         *outbox.Relay
 	sessionStore        *session.Store
 	resetTokenStore     *passwordreset.Store
 	loginLimiter        *ratelimit.Limiter
@@ -175,6 +177,11 @@ func initializeAppComponents(
 	notificationService, err := initializeNotificationService(logger, deps, appMetrics)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize notification service: %w", err)
+	}
+
+	outboxRelay, err := initializeOutboxRelay(logger, pool)
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize outbox relay: %w", err)
 	}
 
 	locale, err := parseDefaultLocale(os.Getenv(defaultLocaleEnv))
@@ -258,6 +265,7 @@ func initializeAppComponents(
 	return &appComponents{
 		deps:                deps,
 		notificationService: notificationService,
+		outboxRelay:         outboxRelay,
 		sessionStore:        sessionStore,
 		resetTokenStore:     resetTokenStore,
 		loginLimiter:        loginLimiter,

@@ -36,13 +36,15 @@ const (
 	defaultServiceVersion   = "dev"
 	defaultTraceSampleRatio = 1.0
 
+	outboxDrainIntervalEnv = "OUTBOX_DRAIN_INTERVAL"
+	outboxBatchSizeEnv     = "OUTBOX_BATCH_SIZE"
+	// Keeps retries below the 5-minute backoff ceiling. See ADR 0003.
+	defaultOutboxDrainInterval = 15 * time.Second
+	defaultOutboxBatchSize     = 20
+
 	notificationTickerIntervalEnv = "NOTIFICATION_TICKER_INTERVAL"
 	notificationBufferSizeEnv     = "NOTIFICATION_BUFFER_SIZE"
-	// Notifications are drained far more often than the appointment sweeps: a
-	// patient learning their appointment is off is time-sensitive, and the queue
-	// is in-memory, so a short interval also shrinks the window in which a crash
-	// loses events. An empty drain costs one channel poll, so ticking often is
-	// close to free.
+	// Frequent draining limits notification delay and crash-related event loss.
 	defaultNotificationTickerInterval = time.Minute
 	defaultNotificationBufferSize     = 100
 
@@ -52,18 +54,13 @@ const (
 	loginRateLimitIPBurstEnv       = "LOGIN_RATE_LIMIT_IP_BURST"
 	loginRateLimitIPRefillEnv      = "LOGIN_RATE_LIMIT_IP_REFILL"
 	loginRateLimitMaxEntriesEnv    = "LOGIN_RATE_LIMIT_MAX_ENTRIES"
-	// Five quick attempts absorb a mistyped password; after that the account
-	// earns one every few minutes, which is unremarkable for a person and
-	// useless for a guesser. The address allowance is looser because one
-	// household or clinic can share an address, and refilling to full on a
-	// successful login is what keeps the tighter account limit from stranding
-	// anyone -- and the password reset of ADR 0010 is the way out if it does.
+	// Allows brief mistakes while slowing guesses; IP limits are looser for
+	// shared addresses. Successful logins refill the account limit.
 	defaultLoginRateLimitAccountBurst  = 5
 	defaultLoginRateLimitAccountRefill = 3 * time.Minute
 	defaultLoginRateLimitIPBurst       = 20
 	defaultLoginRateLimitIPRefill      = 30 * time.Second
-	// At roughly 150 bytes per tracked key this caps the limiter near 1.5 MB per
-	// map, which is what bounds its memory against keys an attacker invents.
+	// Bounds limiter memory against attacker-generated keys.
 	defaultLoginRateLimitMaxEntries = 10_000
 
 	appBaseURLEnv = "APP_BASE_URL"
@@ -132,14 +129,20 @@ func parseWorkerInterval(raw string) (time.Duration, error) {
 	return parsePositiveDuration(raw, workerIntervalEnv, defaultWorkerTickerInterval)
 }
 
-// parseLoginRateLimit reads the LOGIN_RATE_LIMIT_* variables. Each is optional
-// and falls back to its default; a value that is set but malformed or
-// non-positive is rejected so misconfiguration fails fast.
-//
-// These are environment variables rather than constants because they are a
-// product judgement about how much retrying is normal, expected to be retuned
-// as real usage shows up -- unlike password.maxQueueWait, which is derived from
-// a machine constraint and has no business changing per deployment.
+// parseOutboxDrainInterval reads OUTBOX_DRAIN_INTERVAL, overriding the group's
+// default interval for the outbox drain job specifically.
+func parseOutboxDrainInterval(raw string) (time.Duration, error) {
+	return parsePositiveDuration(raw, outboxDrainIntervalEnv, defaultOutboxDrainInterval)
+}
+
+// parseOutboxBatchSize reads OUTBOX_BATCH_SIZE, the number of events the drain
+// claims per run.
+func parseOutboxBatchSize(raw string) (int, error) {
+	return parsePositiveInt(raw, outboxBatchSizeEnv, defaultOutboxBatchSize)
+}
+
+// parseLoginRateLimit reads LOGIN_RATE_LIMIT_* variables, using defaults for
+// unset values and rejecting malformed or non-positive values.
 func parseLoginRateLimit(getenv func(string) string) (ratelimit.Config, error) {
 	// An unset variable must never read as "off": the only way to disable the
 	// limiter is to say so.
@@ -354,15 +357,8 @@ type poolConfig struct {
 	HealthCheckPeriod     string
 }
 
-// parsePoolConfig turns the DB_POOL_* environment into pgx pool options. Every
-// one of them is optional and independent: an unset (or blank) value yields no
-// option at all, which leaves pgx's own default in place rather than a default
-// of ours. That is why nothing warns here, unlike parseNotificationConfig -- the
-// fallback is not a number this project picked, and the values that actually
-// took effect are logged once the pool is up.
-//
-// A value that is present but malformed or out of range is rejected instead of
-// defaulted: that is a misconfiguration, not an omission, and must fail fast.
+// parsePoolConfig converts optional DB_POOL_* values into pgx options, preserving
+// pgx defaults for omitted values and rejecting malformed or out-of-range ones.
 func parsePoolConfig(raw poolConfig) ([]db.Option, error) {
 	specs := []struct {
 		env   string

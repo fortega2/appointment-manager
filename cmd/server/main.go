@@ -173,6 +173,7 @@ func run() error {
 		resetTokenStore: components.resetTokenStore,
 		loginLimiter:    components.loginLimiter,
 		resetLimiter:    components.resetLimiter,
+		outboxRelay:     components.outboxRelay,
 	})
 	if err != nil {
 		logger.ErrorContext(ctx, "failed to start background workers", slog.Any("error", err))
