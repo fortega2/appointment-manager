@@ -39,12 +39,9 @@ const (
 	outcomeFailed            = "failed"
 )
 
-// Why a notification was thrown away. queue_full is the ordinary saturation
-// drop; unknown_kind is a programming error and should stay flat at zero.
-const (
-	dropReasonQueueFull   = "queue_full"
-	dropReasonUnknownKind = "unknown_kind"
-)
+// dropReasonUnknownKind marks a notification kind the send switch does not
+// know. It is a programming error and should stay flat at zero.
+const dropReasonUnknownKind = "unknown_kind"
 
 // Why a caller stopped waiting for a hashing slot. Only timeout means
 // saturation; client_cancelled is the caller's own context ending first.
@@ -218,7 +215,7 @@ func New() *Metrics {
 	)
 
 	// Dashboard: sum by (reason) (rate(appt_notifications_dropped_total[5m]))
-	// Alert:     increase(appt_notifications_dropped_total{reason="queue_full"}[5m]) > 0
+	// Alert:     increase(appt_notifications_dropped_total{reason="unknown_kind"}[5m]) > 0
 	notificationsDropped := factory.NewCounterVec(
 		prometheus.CounterOpts{
 			Namespace: namespace,
@@ -338,7 +335,6 @@ func New() *Metrics {
 	// known reason here is what makes the first occurrence visible.
 	passwordQueueTimeouts.WithLabelValues(queueWaitFailureTimeout)
 	passwordQueueTimeouts.WithLabelValues(queueWaitFailureClientCancelled)
-	notificationsDropped.WithLabelValues(dropReasonQueueFull)
 	notificationsDropped.WithLabelValues(dropReasonUnknownKind)
 	loginRateLimitedAccount := loginRateLimited.WithLabelValues(rateLimitScopeAccount)
 	loginRateLimitedIP := loginRateLimited.WithLabelValues(rateLimitScopeIP)
@@ -431,16 +427,9 @@ func (m *Metrics) RecordAppointmentsExpired(n int64) {
 	m.apptFinalized.WithLabelValues(outcomeExpired).Add(float64(n))
 }
 
-// RecordNotificationDroppedQueueFull counts one notification discarded because
-// the queue was saturated when its producer tried to enqueue it. This is the
-// series that answers whether the configured buffer size is large enough.
-func (m *Metrics) RecordNotificationDroppedQueueFull() {
-	m.notificationsDropped.WithLabelValues(dropReasonQueueFull).Inc()
-}
-
-// RecordNotificationDroppedUnknownKind counts one queued notification the drain
-// had no handler for. Unlike a queue-full drop this is never an ordinary
-// outcome: it means a kind was queued that the send switch does not know.
+// RecordNotificationDroppedUnknownKind counts one notification the send switch
+// had no case for. This is never an ordinary outcome: it means a kind reached
+// dispatch that Service.dispatch does not know.
 func (m *Metrics) RecordNotificationDroppedUnknownKind() {
 	m.notificationsDropped.WithLabelValues(dropReasonUnknownKind).Inc()
 }
@@ -458,9 +447,8 @@ func (m *Metrics) RecordNotificationNoRecipients(kind string) {
 	m.notificationsProcessed.WithLabelValues(kind, notificationOutcomeNoRecipients).Inc()
 }
 
-// RecordNotificationLookupFailed counts one notification lost because its
-// recipients could not be resolved. The queue is in memory and the event is
-// already consumed, so this notification is not retried and never arrives.
+// RecordNotificationLookupFailed counts one notification whose recipients
+// could not be resolved.
 func (m *Metrics) RecordNotificationLookupFailed(kind string) {
 	m.notificationsProcessed.WithLabelValues(kind, notificationOutcomeLookupFailed).Inc()
 }
@@ -471,39 +459,6 @@ func (m *Metrics) RecordNotificationLookupFailed(kind string) {
 // when ctx holds a sampled span.
 func (m *Metrics) ObserveNotificationSend(ctx context.Context, kind string, duration time.Duration) {
 	observeWithExemplar(ctx, m.notificationSendDuration.WithLabelValues(kind), duration.Seconds())
-}
-
-// RegisterNotificationQueue registers gauges reporting the notification queue's
-// live depth and its configured capacity. Both are read on scrape rather than
-// written on enqueue, so an idle queue costs nothing and the depth can never
-// drift from the channel it describes.
-//
-// Capacity is exported alongside depth so a dashboard can plot saturation as a
-// ratio, rather than hard-coding the buffer size per environment.
-func (m *Metrics) RegisterNotificationQueue(depth, capacity func() float64) {
-	factory := promauto.With(m.reg)
-
-	// Dashboard: appt_notifications_queue_depth / appt_notifications_queue_capacity
-	// Alert:     appt_notifications_queue_depth / appt_notifications_queue_capacity > 0.8
-	factory.NewGaugeFunc(
-		prometheus.GaugeOpts{
-			Namespace: namespace,
-			Subsystem: subsystemNotifications,
-			Name:      "queue_depth",
-			Help:      "Number of notifications currently waiting in the queue.",
-		},
-		depth,
-	)
-
-	factory.NewGaugeFunc(
-		prometheus.GaugeOpts{
-			Namespace: namespace,
-			Subsystem: subsystemNotifications,
-			Name:      "queue_capacity",
-			Help:      "Configured maximum number of notifications the queue can hold.",
-		},
-		capacity,
-	)
 }
 
 // RecordLoginRateLimitedByAccount counts one login attempt refused because the

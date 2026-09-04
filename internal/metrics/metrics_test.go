@@ -62,7 +62,6 @@ func TestNewInitialisesFailureReasonsAtZero(t *testing.T) {
 	body := rec.Body.String()
 	assert.Contains(t, body, `appt_password_queue_timeouts_total{reason="timeout"} 0`)
 	assert.Contains(t, body, `appt_password_queue_timeouts_total{reason="client_cancelled"} 0`)
-	assert.Contains(t, body, `appt_notifications_dropped_total{reason="queue_full"} 0`)
 	assert.Contains(t, body, `appt_notifications_dropped_total{reason="unknown_kind"} 0`)
 	assert.Contains(t, body, `appt_login_rate_limited_total{scope="account"} 0`)
 	assert.Contains(t, body, `appt_login_rate_limited_total{scope="ip"} 0`)
@@ -133,17 +132,12 @@ func TestNotificationRecorders(t *testing.T) {
 
 	m := New()
 
-	m.RecordNotificationDroppedQueueFull()
-	m.RecordNotificationDroppedQueueFull()
 	m.RecordNotificationDroppedUnknownKind()
 	m.RecordNotificationSent(kindSlotCancelled)
 	m.RecordNotificationNoRecipients(kindSlotCancelled)
 	m.RecordNotificationLookupFailed(kindSlotCancelled)
 	m.ObserveNotificationSend(context.Background(), kindSlotCancelled, 250*time.Millisecond)
 
-	// The two drop reasons must stay separable: a queue-full drop is a sizing
-	// signal, an unknown kind is a bug, and they call for opposite responses.
-	assert.InDelta(t, 2, testutil.ToFloat64(m.notificationsDropped.WithLabelValues(dropReasonQueueFull)), 0)
 	assert.InDelta(t, 1, testutil.ToFloat64(m.notificationsDropped.WithLabelValues(dropReasonUnknownKind)), 0)
 
 	assert.InDelta(t, 1, testutil.ToFloat64(m.notificationsProcessed.WithLabelValues(kindSlotCancelled, notificationOutcomeSent)), 0)
@@ -171,39 +165,6 @@ func TestObserveNotificationSendAttachesTraceExemplar(t *testing.T) {
 
 	require.Equal(t, http.StatusOK, rec.Code)
 	assert.Contains(t, rec.Body.String(), `trace_id="`+span.SpanContext().TraceID().String()+`"`)
-}
-
-func TestRegisterNotificationQueueExposesLiveGauges(t *testing.T) {
-	t.Parallel()
-
-	m := New()
-
-	// A real queue stands in for the channel: the point of a GaugeFunc is that
-	// the value is read on collection, so a gauge written once at registration
-	// would pass a single scrape and then drift.
-	queue := make(chan struct{}, 4)
-	m.RegisterNotificationQueue(
-		func() float64 { return float64(len(queue)) },
-		func() float64 { return float64(cap(queue)) },
-	)
-
-	scrape := func() string {
-		req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, metricsEndpoint, nil)
-		rec := httptest.NewRecorder()
-		m.Handler().ServeHTTP(rec, req)
-		require.Equal(t, http.StatusOK, rec.Code)
-
-		return rec.Body.String()
-	}
-
-	body := scrape()
-	assert.Contains(t, body, "appt_notifications_queue_depth 0")
-	assert.Contains(t, body, "appt_notifications_queue_capacity 4")
-
-	queue <- struct{}{}
-	queue <- struct{}{}
-
-	assert.Contains(t, scrape(), "appt_notifications_queue_depth 2", "depth must be read at scrape time, not at registration")
 }
 
 func TestObserveRequestAndInFlight(t *testing.T) {

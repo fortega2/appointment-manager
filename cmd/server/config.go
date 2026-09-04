@@ -42,12 +42,6 @@ const (
 	defaultOutboxDrainInterval = 15 * time.Second
 	defaultOutboxBatchSize     = 20
 
-	notificationTickerIntervalEnv = "NOTIFICATION_TICKER_INTERVAL"
-	notificationBufferSizeEnv     = "NOTIFICATION_BUFFER_SIZE"
-	// Frequent draining limits notification delay and crash-related event loss.
-	defaultNotificationTickerInterval = time.Minute
-	defaultNotificationBufferSize     = 100
-
 	loginRateLimitEnabledEnv       = "LOGIN_RATE_LIMIT_ENABLED"
 	loginRateLimitAccountBurstEnv  = "LOGIN_RATE_LIMIT_ACCOUNT_BURST"
 	loginRateLimitAccountRefillEnv = "LOGIN_RATE_LIMIT_ACCOUNT_REFILL"
@@ -297,52 +291,6 @@ func parseDefaultLocale(raw string) (i18n.Locale, error) {
 // attached to spans. When unset it falls back to defaultServiceVersion.
 func parseServiceVersion(raw string) string {
 	return stringOrDefault(raw, defaultServiceVersion)
-}
-
-// parseNotificationConfig reads NOTIFICATION_TICKER_INTERVAL (a Go duration
-// string, e.g. "1m") and NOTIFICATION_BUFFER_SIZE (how many notifications may
-// wait at once before new ones are dropped). Each falls back to its default
-// when unset, warning as it does so: a queue draining or dropping on a value
-// nobody chose should be visible in the logs rather than a silent surprise.
-//
-// A value that is present but malformed or non-positive is rejected instead of
-// defaulted -- that is a misconfiguration, not an omission, and must fail fast.
-func parseNotificationConfig(logger *slog.Logger, rawTickerInterval, rawBufferSize string) (time.Duration, int, error) {
-	tickerInterval := defaultNotificationTickerInterval
-	if raw := strings.TrimSpace(rawTickerInterval); raw != "" {
-		parsed, err := time.ParseDuration(raw)
-		if err != nil {
-			return 0, 0, fmt.Errorf("invalid %s: %w", notificationTickerIntervalEnv, err)
-		}
-		if parsed <= 0 {
-			return 0, 0, fmt.Errorf("invalid %s: must be greater than zero", notificationTickerIntervalEnv)
-		}
-		tickerInterval = parsed
-	} else {
-		logger.Warn("notification ticker interval is not set, falling back to the default",
-			slog.String("env", notificationTickerIntervalEnv),
-			slog.Duration("default", defaultNotificationTickerInterval),
-		)
-	}
-
-	bufferSize := defaultNotificationBufferSize
-	if raw := strings.TrimSpace(rawBufferSize); raw != "" {
-		parsed, err := strconv.Atoi(raw)
-		if err != nil {
-			return 0, 0, fmt.Errorf("invalid %s: %w", notificationBufferSizeEnv, err)
-		}
-		if parsed <= 0 {
-			return 0, 0, fmt.Errorf("invalid %s: must be greater than zero", notificationBufferSizeEnv)
-		}
-		bufferSize = parsed
-	} else {
-		logger.Warn("notification buffer size is not set, falling back to the default",
-			slog.String("env", notificationBufferSizeEnv),
-			slog.Int("default", defaultNotificationBufferSize),
-		)
-	}
-
-	return tickerInterval, bufferSize, nil
 }
 
 // poolConfig carries the raw DB_POOL_* values straight from the environment, so

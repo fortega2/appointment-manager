@@ -140,14 +140,6 @@ func run() error {
 	stopMetricsServer := startMetricsServer(ctx, logger, appMetrics, parseMetricsAddr(os.Getenv(metricsAddrEnv)))
 	defer stopMetricsServer()
 
-	// Detached from ctx on purpose: sharing it would end the drain the moment
-	// SIGTERM arrives, while the server is still finishing in-flight requests, so
-	// a slot cancelled in those last seconds would be lost silently. Deferred
-	// here so it stops after the sweeps but before the pool closes -- the final
-	// flush still queries for recipients.
-	stopNotificationWorker := startNotificationWorker(context.WithoutCancel(ctx), components.notificationService)
-	defer stopNotificationWorker()
-
 	// Deferred before the workers so it runs after them and before the pool
 	// closes: a reset mail still in flight queries for the account it is for.
 	defer func() {
