@@ -11,11 +11,9 @@ import (
 	"appointment-manager/internal/ratelimit"
 	"appointment-manager/internal/session"
 	"appointment-manager/internal/slot"
-	"context"
 	"fmt"
 	"log/slog"
 	"time"
-	"uuid"
 )
 
 const readinessTimeout = 300 * time.Millisecond
@@ -92,14 +90,9 @@ func initializePatientHandler(logger *slog.Logger, deps *dependencies) (*patient
 	return patientHandler, nil
 }
 
-// initializeSlotHandler takes sendNotification as a plain func rather than the
-// notification service itself: the handler declares the shape it needs and this
-// package binds a method value to it, so nothing on the routing path has to know
-// which transport announces a cancellation.
 func initializeSlotHandler(
 	logger *slog.Logger,
 	deps *dependencies,
-	sendNotification func(context.Context, uuid.UUID),
 ) (*slot.Handler, error) {
 	slotHandler, err := slot.NewHandler(
 		logger,
@@ -107,7 +100,6 @@ func initializeSlotHandler(
 		deps.slotQuery,
 		deps.professionalRepo,
 		deps.appointmentService.CancelBySlot,
-		sendNotification,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create slot handler: %w", err)

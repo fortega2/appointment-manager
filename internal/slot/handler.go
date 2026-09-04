@@ -20,20 +20,12 @@ import (
 // implementation is bound in cmd/server.
 type cancelAppointmentsFunc func(ctx context.Context, slotID uuid.UUID) error
 
-// sendNotificationFunc announces that a slot was cancelled. It is declared here,
-// in the consumer, so the notification transport (email, SMS, push) can change
-// without this package knowing. It is called on the request goroutine, so
-// implementations must not block: they are expected to hand the work off and
-// return, keeping delivery and its lifetime entirely on their own side.
-type sendNotificationFunc func(ctx context.Context, slotID uuid.UUID)
-
 type Handler struct {
 	logger             *slog.Logger
 	repo               *Repository
 	query              *Query
 	pRepo              *professional.Repository
 	cancelAppointments cancelAppointmentsFunc
-	sendNotification   sendNotificationFunc
 }
 
 func NewHandler(
@@ -42,7 +34,6 @@ func NewHandler(
 	query *Query,
 	pRepo *professional.Repository,
 	cancelAppointments cancelAppointmentsFunc,
-	sendNotification sendNotificationFunc,
 ) (*Handler, error) {
 	if logger == nil {
 		return nil, ErrNilLogger
@@ -64,17 +55,12 @@ func NewHandler(
 		return nil, ErrNilCancelAppointments
 	}
 
-	if sendNotification == nil {
-		return nil, ErrNilSendNotification
-	}
-
 	return &Handler{
 		logger:             logger,
 		repo:               repo,
 		query:              query,
 		pRepo:              pRepo,
 		cancelAppointments: cancelAppointments,
-		sendNotification:   sendNotification,
 	}, nil
 }
 
@@ -281,7 +267,6 @@ func (h *Handler) cancelUIHandler() http.HandlerFunc {
 			return
 		}
 
-		h.sendNotification(ctx, id)
 		h.renderUpdatedSlotsTable(ctx, w, msgKeyCancelled)
 	}
 }

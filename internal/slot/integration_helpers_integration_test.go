@@ -91,7 +91,6 @@ func newSlotIntegrationMux(t *testing.T, pool *pgxpool.Pool, calls *recordedCall
 		query,
 		pRepo,
 		calls.cancelAppointments,
-		calls.sendNotification,
 	)
 	require.NoError(t, err)
 

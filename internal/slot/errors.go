@@ -20,5 +20,4 @@ var (
 	ErrNilQuery              = errors.New("query cannot be nil")
 	ErrNilProfessionalRepo   = errors.New("professional repository cannot be nil")
 	ErrNilCancelAppointments = errors.New("cancel appointments function cannot be nil")
-	ErrNilSendNotification   = errors.New("send notification function cannot be nil")
 )

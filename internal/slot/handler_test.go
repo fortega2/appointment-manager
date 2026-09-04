@@ -27,15 +27,12 @@ func newHandlerLogger() *slog.Logger {
 
 func noopCancelAppointments(_ context.Context, _ uuid.UUID) error { return nil }
 
-func noopSendNotification(_ context.Context, _ uuid.UUID) {}
-
-// recordedCalls captures what the two injected collaborators were asked to do,
-// so tests can assert the handler's orchestration rather than reaching into the
-// appointment or notification packages. Shared with the integration tests.
+// recordedCalls captures what the injected collaborator was asked to do, so
+// tests can assert the handler's orchestration rather than reaching into the
+// appointment package. Shared with the integration tests.
 type recordedCalls struct {
 	cancelErr        error
 	cancelledSlotIDs []uuid.UUID
-	notifiedSlotIDs  []uuid.UUID
 }
 
 func (c *recordedCalls) cancelAppointments(_ context.Context, slotID uuid.UUID) error {
@@ -44,17 +41,12 @@ func (c *recordedCalls) cancelAppointments(_ context.Context, slotID uuid.UUID) 
 	return c.cancelErr
 }
 
-func (c *recordedCalls) sendNotification(_ context.Context, slotID uuid.UUID) {
-	c.notifiedSlotIDs = append(c.notifiedSlotIDs, slotID)
-}
-
 type newHandlerArgs struct {
 	logger             *slog.Logger
 	repo               *slot.Repository
 	query              *slot.Query
 	pRepo              *professional.Repository
 	cancelAppointments func(context.Context, uuid.UUID) error
-	sendNotification   func(context.Context, uuid.UUID)
 }
 
 func validHandlerArgs() newHandlerArgs {
@@ -64,13 +56,12 @@ func validHandlerArgs() newHandlerArgs {
 		query:              &slot.Query{},
 		pRepo:              &professional.Repository{},
 		cancelAppointments: noopCancelAppointments,
-		sendNotification:   noopSendNotification,
 	}
 }
 
-// The handler refuses to start unless every collaborator is supplied. Both
-// cancelAppointments and sendNotification are invoked unconditionally on the
-// cancel path, so a nil one would panic at request time rather than at boot.
+// The handler refuses to start unless every collaborator is supplied.
+// cancelAppointments is invoked unconditionally on the cancel path, so a nil
+// one would panic at request time rather than at boot.
 func TestNewHandlerValidatesDependencies(t *testing.T) {
 	t.Parallel()
 
@@ -84,7 +75,6 @@ func TestNewHandlerValidatesDependencies(t *testing.T) {
 		{name: "nil query", mutate: func(a *newHandlerArgs) { a.query = nil }, expected: slot.ErrNilQuery},
 		{name: "nil professional repository", mutate: func(a *newHandlerArgs) { a.pRepo = nil }, expected: slot.ErrNilProfessionalRepo},
 		{name: "nil cancel appointments", mutate: func(a *newHandlerArgs) { a.cancelAppointments = nil }, expected: slot.ErrNilCancelAppointments},
-		{name: "nil send notification", mutate: func(a *newHandlerArgs) { a.sendNotification = nil }, expected: slot.ErrNilSendNotification},
 	}
 
 	for _, tt := range tests {
@@ -94,7 +84,7 @@ func TestNewHandlerValidatesDependencies(t *testing.T) {
 			args := validHandlerArgs()
 			tt.mutate(&args)
 
-			h, err := slot.NewHandler(args.logger, args.repo, args.query, args.pRepo, args.cancelAppointments, args.sendNotification)
+			h, err := slot.NewHandler(args.logger, args.repo, args.query, args.pRepo, args.cancelAppointments)
 
 			require.Error(t, err)
 			assert.Nil(t, h)
@@ -108,7 +98,7 @@ func TestNewHandlerSucceedsWithEveryDependency(t *testing.T) {
 
 	args := validHandlerArgs()
 
-	h, err := slot.NewHandler(args.logger, args.repo, args.query, args.pRepo, args.cancelAppointments, args.sendNotification)
+	h, err := slot.NewHandler(args.logger, args.repo, args.query, args.pRepo, args.cancelAppointments)
 
 	require.NoError(t, err)
 	require.NotNil(t, h)
@@ -141,7 +131,7 @@ func TestCancelUIHandlerRejectsInvalidSlotID(t *testing.T) {
 			calls := &recordedCalls{}
 
 			args := validHandlerArgs()
-			h, err := slot.NewHandler(args.logger, args.repo, args.query, args.pRepo, calls.cancelAppointments, calls.sendNotification)
+			h, err := slot.NewHandler(args.logger, args.repo, args.query, args.pRepo, calls.cancelAppointments)
 			require.NoError(t, err)
 
 			mux := http.NewServeMux()
@@ -155,7 +145,6 @@ func TestCancelUIHandlerRejectsInvalidSlotID(t *testing.T) {
 			assert.Equal(t, http.StatusBadRequest, rec.Code)
 			assert.Contains(t, rec.Body.String(), tt.want)
 			assert.Empty(t, calls.cancelledSlotIDs, "appointments must not be cancelled for an unparseable slot id")
-			assert.Empty(t, calls.notifiedSlotIDs, "no notification must be sent for an unparseable slot id")
 		})
 	}
 }

@@ -8,17 +8,15 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
-	"uuid"
 
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
 
 type handlerConfig struct {
-	logger           *slog.Logger
-	components       *appComponents
-	storageClient    *storage.Client
-	metrics          *metrics.Metrics
-	sendNotification func(context.Context, uuid.UUID)
+	logger        *slog.Logger
+	components    *appComponents
+	storageClient *storage.Client
+	metrics       *metrics.Metrics
 }
 
 type resetShutdownFunc func(context.Context) error
@@ -47,7 +45,7 @@ func initializeServerHandlers(cfg handlerConfig) (http.Handler, resetShutdownFun
 	if err != nil {
 		return nil, nil, err
 	}
-	slotHandler, err := initializeSlotHandler(cfg.logger, cfg.components.deps, cfg.sendNotification)
+	slotHandler, err := initializeSlotHandler(cfg.logger, cfg.components.deps)
 	if err != nil {
 		return nil, nil, err
 	}

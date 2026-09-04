@@ -124,11 +124,10 @@ func run() error {
 	}
 
 	handler, shutdownFunc, err := initializeServerHandlers(handlerConfig{
-		logger:           logger,
-		components:       components,
-		storageClient:    storageClient,
-		metrics:          appMetrics,
-		sendNotification: components.notificationService.NotifySlotCancelled,
+		logger:        logger,
+		components:    components,
+		storageClient: storageClient,
+		metrics:       appMetrics,
 	})
 	if err != nil {
 		logger.Error("failed to initialize server handlers", slog.Any("error", err))
