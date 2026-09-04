@@ -49,13 +49,10 @@ const (
 	backoffRate = 2
 )
 
-// Handler delivers one event. aggregateID and payload are the outbox row's own
-// columns, so a handler never needs to re-decode more than its own event type.
+// Handler delivers one outbox event.
 type Handler func(ctx context.Context, aggregateID uuid.UUID, payload json.RawMessage) error
 
-// Relay drains public.outbox and dispatches each row to the Handler registered
-// for its EventType. An event type with no handler is treated as a failure and
-// retried like any other, rather than dropped silently.
+// Relay drains public.outbox and dispatches rows to registered handlers.
 type Relay struct {
 	logger    *slog.Logger
 	pool      *pgxpool.Pool
@@ -83,8 +80,7 @@ func NewRelay(logger *slog.Logger, pool *pgxpool.Pool, batchSize int) (*Relay, e
 	}, nil
 }
 
-// Register binds a Handler to an EventType. Registering the same type twice, or
-// a nil handler, is a startup error rather than a silent overwrite.
+// Register binds a Handler to an EventType.
 func (r *Relay) Register(eventType EventType, handler Handler) error {
 	if eventType == "" {
 		return ErrEmptyEventType
@@ -101,14 +97,9 @@ func (r *Relay) Register(eventType EventType, handler Handler) error {
 	return nil
 }
 
-// Drain claims one batch of due events with SKIP LOCKED, so several instances
-// of this process can run the same job without claiming the same row, and
-// dispatches each to its handler. It matches worker.JobFunc, returning the
-// count of rows it delivered.
-//
-// One event failing does not roll back another: each row is handled inside its
-// own savepoint, so a bad row is backed off in place instead of poisoning the
-// batch.
+// Drain claims and dispatches one batch of due events, returning the delivered count.
+// SKIP LOCKED allows multiple relay instances to process different rows. Each row
+// uses a savepoint so one failed delivery does not roll back the rest of the batch.
 func (r *Relay) Drain(ctx context.Context) (int64, error) {
 	tx, err := r.pool.BeginTx(ctx, pgx.TxOptions{})
 	if err != nil {
@@ -177,9 +168,7 @@ func (r *Relay) claimPending(ctx context.Context, tx pgx.Tx) ([]pendingRow, erro
 	return pending, nil
 }
 
-// handleRow dispatches one row inside a savepoint, so a delivery failure or a
-// missing handler rolls back only this row's own state and leaves the rest of
-// the batch, and the outer transaction, unaffected.
+// handleRow dispatches one row inside a savepoint.
 func (r *Relay) handleRow(ctx context.Context, tx pgx.Tx, row pendingRow) error {
 	savepoint, err := tx.Begin(ctx)
 	if err != nil {
@@ -214,9 +203,7 @@ func (r *Relay) markFailed(ctx context.Context, tx pgx.Tx, row pendingRow, cause
 	return cause
 }
 
-// backoff grows exponentially with the attempts already made, capped so a
-// permanently failing event is retried at most every backoffCap rather than
-// drifting arbitrarily far into the future.
+// backoff grows exponentially with the attempts already made and is capped.
 func backoff(attempts int16) time.Duration {
 	delay := backoffBase * time.Duration(math.Pow(backoffRate, float64(attempts)))
 	if delay > backoffCap {

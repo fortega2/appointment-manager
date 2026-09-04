@@ -179,7 +179,7 @@ func initializeAppComponents(
 		return nil, fmt.Errorf("failed to initialize notification service: %w", err)
 	}
 
-	outboxRelay, err := initializeOutboxRelay(logger, pool)
+	outboxRelay, err := initializeOutboxRelay(logger, pool, notificationService)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize outbox relay: %w", err)
 	}

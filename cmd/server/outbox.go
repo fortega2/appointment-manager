@@ -1,7 +1,9 @@
 package main
 
 import (
+	"appointment-manager/internal/notification"
 	"appointment-manager/internal/outbox"
+	"appointment-manager/internal/slot"
 	"fmt"
 	"log/slog"
 	"os"
@@ -9,9 +11,11 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// initializeOutboxRelay builds the relay that drains public.outbox. Handlers
-// will be registered when internal/notification migrates off in-request sends.
-func initializeOutboxRelay(logger *slog.Logger, pool *pgxpool.Pool) (*outbox.Relay, error) {
+func initializeOutboxRelay(
+	logger *slog.Logger,
+	pool *pgxpool.Pool,
+	notificationService *notification.Service,
+) (*outbox.Relay, error) {
 	batchSize, err := parseOutboxBatchSize(os.Getenv(outboxBatchSizeEnv))
 	if err != nil {
 		return nil, err
@@ -20,6 +24,10 @@ func initializeOutboxRelay(logger *slog.Logger, pool *pgxpool.Pool) (*outbox.Rel
 	relay, err := outbox.NewRelay(logger, pool, batchSize)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create outbox relay: %w", err)
+	}
+
+	if err := relay.Register(slot.EventCancelled, notificationService.SendSlotCancelled); err != nil {
+		return nil, fmt.Errorf("failed to register %s handler: %w", slot.EventCancelled, err)
 	}
 
 	return relay, nil
