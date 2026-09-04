@@ -1,26 +1,51 @@
 # ADR 0003 — Notification durability: outbox first, broker only on a trigger
 
 - **Date:** 2026-08-04
-- **Status:** **Proposed** — nothing here is built, and nothing in the tree depends on it. See
-  *Status note* below before treating any of it as settled.
-- **Scope:** `internal/notification`, `internal/slot` (the cancel path), `internal/worker`,
-  and any future queue/transport package
+- **Status:** **Accepted** — stage 1 is built. See *Status note* below for exactly what shipped
+  and where it diverges from the original text.
+- **Scope:** `internal/outbox`, `internal/notification`, `internal/slot` (the cancel path),
+  `internal/appointment` (the transaction that writes the event), `internal/worker`, and
+  `cmd/server` (wiring)
 - **Extends:** ADR 0002, specifically its *Future: when delivery becomes real* section, which
-  named the outbox as the honest fix but did not work out what that implies
+  named the outbox as the honest fix but did not work out what that implies. ADR 0002 is now
+  **superseded** by the in-process delivery half of this document — see its own Status line.
 
 ## Status note
 
-`Proposed` means: the reasoning is recorded so it does not have to be re-derived, but the
-decision is **not** made and no code should be written against it yet.
+Stage 1 shipped without waiting on the *Prerequisite* section below: the drop counter and
+queue-depth gauge were never observed in production before this was built. That measurement step
+was explicitly skipped by product decision, not by an accident — worth knowing if you come back
+looking for the data that was supposed to justify this.
+
+What is built differs from the text in three ways that matter if you are reading this to
+understand the running system rather than the history:
+
+- **The table is `public.outbox`, not `notification_outbox`**, and it is deliberately generic —
+  `aggregate_type` / `aggregate_id` / `event_type` / `payload`, not `kind` / `slot_id`. The
+  decision was to let any future producer share one table rather than one outbox per domain.
+  Columns also differ in name (`available_at` instead of `next_attempt_at`, `processed_at`
+  instead of `sent_at`, `status` replaced by `processed_at IS NULL`), but the semantics Decision
+  3 describes are unchanged.
+- **The drain is its own package, `internal/outbox`**, not `internal/worker` polling directly.
+  `outbox.Relay.Drain` matches `worker.JobFunc` and is registered into the existing
+  `worker.Group` with a shorter interval than the other sweeps — the backoff schedule tops out
+  at 5 minutes, so a 30-minute tick would defeat it.
+- **Decision 6 (idempotency per recipient) is still open.** Delivery is still the ADR 0002
+  placeholder — a log line per recipient — so an at-least-once retry produces a harmless
+  duplicate log line, not a duplicate email. The dedup key described in Decision 6 has to exist
+  before delivery becomes real, not before this ADR is accepted.
+
+Decision 4 (out-of-process sender) and Decision 5 (no multi-broker abstraction) were not
+exercised: the sender registered on the relay runs in-process
+(`notification.Service.SendSlotCancelled`), so ADR 0002 Decision 1 stays intact for free, the way
+Decision 3's "why stage 1 is likely terminal" argued it would. Stage 2 remains exactly as
+speculative as it was when this was written.
 
 This ADR exists because the question "how do we move notifications to a real queue?" was asked
 and answered informally. The answer contains at least two conclusions that are not obvious and
 would very likely be got wrong on a second pass — Decision 2 (outbox and broker are not
 alternatives) and Decision 4 (an out-of-process sender breaks ADR 0002's Decision 1). Losing
 those to a chat log is the failure this file prevents.
-
-What promotes it to `Accepted` is listed under *Revisit when*. Until one of those fires, the
-in-memory design in ADR 0002 stands unchanged and is the correct design for the current load.
 
 ## Context
 
@@ -176,20 +201,17 @@ measurement is how a project ends up with a broker it does not need.
 
 ## Revisit when
 
-Any of these promotes this ADR from `Proposed` toward `Accepted` — and each points at a different
-stage, so note which:
+Stage 1 is done. Any of these is the trigger for stage 2, or for closing Decision 6:
 
-- **`appt_notifications_dropped_total` is non-zero in production** → measure first; per ADR 0002
-  Decision 4 the first response is a shorter interval, not this ADR.
-- **Delivery stops being a log line** → stage 1. Durability, retries and Decision 6 all become
-  real at once; the in-memory queue is the limiting factor from that moment.
-- **A provider outage outlasts `flushTimeout`** → stage 1, urgently. This is the concrete failure
-  the outbox exists to prevent.
-- **Notifications become something the clinic must prove it sent**, rather than a courtesy →
-  stage 1 is mandatory, not optional. Best-effort on an in-memory queue is not defensible.
+- **Delivery stops being a log line** → Decision 6 (per-recipient idempotency) must land in the
+  same change. Retries are already real; a duplicate email is the new risk a duplicate log line
+  never was.
+- **A provider outage outlasts the drain's retry budget** → already handled by the backoff
+  schedule (caps at 5 minutes, retried forever); revisit only if the cap itself proves too slow
+  or too fast once delivery is real.
 - **A second consumer or genuine fan-out appears** (email *and* SMS delivered independently, or
   another service needing the same events) → the first real argument for stage 2, and the point
   at which Decision 4 must be settled before any code is written.
 - **Slot cancellation stops being one-at-a-time** — a bulk endpoint, or a professional's whole
-  week cancelled in one action → breaks the "one event per human click" premise that Decision 3
-  rests on here and that Decisions 3 and 5 rest on in ADR 0002. Same trigger as ADR 0001.
+  week cancelled in one action → breaks the "one event per human click" premise Decision 3
+  rests on. Same trigger as ADR 0001.

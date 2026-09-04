@@ -1,7 +1,11 @@
 # ADR 0004 — Notification observability: what is measured, and what is deliberately not
 
 - **Date:** 2026-08-04
-- **Status:** Accepted
+- **Status:** Accepted, **partially superseded by ADR 0003**. `appt_notifications_queue_depth`,
+  `appt_notifications_queue_capacity`, `RegisterNotificationQueue`, and the
+  `reason="queue_full"` series described below no longer exist — the channel they measured is
+  gone. `RecordNotificationSent`/`NoRecipients`/`LookupFailed`, `ObserveNotificationSend`,
+  `reason="unknown_kind"`, and the trace-exemplar wiring are all still accurate as written.
 - **Scope:** `internal/metrics` (the `appt_notifications_*` collectors and their recorder
   methods), `internal/notification` (`Metrics`, `noopMetrics`, `EventKind.String`, the span in
   `Service.send`), and the wiring in `cmd/server/notification.go`

@@ -1,9 +1,18 @@
 # ADR 0002 — Notification queue: in-memory channel, drop-on-full, resolve-per-event
 
 - **Date:** 2026-08-04
-- **Status:** Accepted
+- **Status:** **Superseded by ADR 0003.** `internal/notification` no longer owns a queue: the
+  buffered channel, `Run`/`drain`/`flush`, `NotifySlotCancelled`, and the `NOTIFICATION_*`
+  variables described below are gone from the code. `Service.SendSlotCancelled` now delivers
+  synchronously, called by `outbox.Relay` — durability moved to `public.outbox`.
 - **Scope:** `internal/notification`, plus the `NOTIFICATION_*` variables wired in
   `cmd/server/notification.go`
+
+This document is kept for the reasoning it still explains correctly: Decision 1 (identifiers,
+not rendered content, resolved at send time) is unchanged and is now enforced one level up, by
+the outbox's own payload rule. Decision 5 (one query per event, not a batched `IN`) is also
+unchanged — the relay still calls the sender once per row. Decisions 2, 3 and 4 describe the
+channel itself and no longer apply to anything in the tree; read ADR 0003 for what replaced them.
 
 ## Context
 
