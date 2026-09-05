@@ -145,8 +145,8 @@ over the `.env` file.
 | `STORAGE_REGION` | no | Optional region for the object store. |
 | `STORAGE_USE_SSL` | no | `true` (default) uses HTTPS; set `false` for a plain-HTTP store. |
 | `WORKER_TICKER_INTERVAL` | no | How often the background sweeps run — expiring overdue appointments to absent, and cancelling appointments stranded on an already-blocked slot (default `30m`). |
-| `NOTIFICATION_TICKER_INTERVAL` | no | How often queued notifications are drained and delivered (default `1m`). This is also the window a crash can lose, since the queue is in memory. |
-| `NOTIFICATION_BUFFER_SIZE` | no | How many notifications may wait at once (default `100`). Beyond that, new ones are dropped with a warning rather than blocking the request that raised them. |
+| `OUTBOX_DRAIN_INTERVAL` | no | How often the transactional outbox is drained and its events delivered (default `15s`). Keep it below the 5-minute retry backoff ceiling, or the backoff schedule stops being what paces retries. |
+| `OUTBOX_BATCH_SIZE` | no | How many due events one drain claims per run (default `20`). The whole batch shares one transaction and one job timeout. |
 | `METRICS_ADDR` | no | Listen address for the Prometheus metrics server (default `:9090`). Served on a separate listener from the app. |
 | `LOGIN_RATE_LIMIT_ENABLED` | no | Whether login attempts are rate limited (default `true`). Unset means enabled — a missing variable must never silently drop the protection. |
 | `LOGIN_RATE_LIMIT_ACCOUNT_BURST` | no | Attempts a single account may make back to back before it is throttled (default `5`). |
