@@ -31,8 +31,7 @@ const (
 	outcomeLookupFailed = "lookup_failed"
 )
 
-// Contact details that must never reach the log backend, so the assertions can
-// prove they did not.
+// Contact details that must never reach the log backend.
 const (
 	recipientName  = "Bruno Ferreyra"
 	recipientEmail = "bruno.ferreyra@example.com"
@@ -52,8 +51,7 @@ func oneRecipient(id string) notification.SlotCancellation {
 	}
 }
 
-// noRecipients is the lookup used by tests that do not care who was affected:
-// an empty result is a valid outcome, so it stands in as the quiet default.
+// noRecipients is the quiet default for tests that do not care who was affected.
 func noRecipients(_ context.Context, _ uuid.UUID) (notification.SlotCancellation, error) {
 	return notification.SlotCancellation{}, nil
 }
@@ -68,33 +66,23 @@ func failingLookup(_ context.Context, _ uuid.UUID) (notification.SlotCancellatio
 	return notification.SlotCancellation{}, errors.New(lookupBoomError)
 }
 
-func countMessages(logs, msg string) int {
-	return strings.Count(logs, `"msg":"`+msg+`"`)
-}
-
 func hasMessage(logs, msg string) bool {
-	return countMessages(logs, msg) > 0
+	return strings.Contains(logs, `"msg":"`+msg+`"`)
 }
 
-// processedKey mirrors the label pair on appt_notifications_processed_total, so
-// the spy records the same (kind, outcome) breakdown Prometheus would.
+// processedKey mirrors the label pair on appt_notifications_processed_total.
 type processedKey struct {
 	kind    string
 	outcome string
 }
 
 type metricsSpy struct {
-	processed      map[processedKey]int
-	observed       []string
-	droppedUnknown int
+	processed map[processedKey]int
+	observed  []string
 }
 
 func newMetricsSpy() *metricsSpy {
 	return &metricsSpy{processed: make(map[processedKey]int)}
-}
-
-func (m *metricsSpy) RecordNotificationDroppedUnknownKind() {
-	m.droppedUnknown++
 }
 
 func (m *metricsSpy) RecordNotificationSent(kind string) {
@@ -113,8 +101,8 @@ func (m *metricsSpy) ObserveNotificationSend(_ context.Context, kind string, _ t
 	m.observed = append(m.observed, kind)
 }
 
-// totalProcessed sums every outcome, so a test can assert that one call
-// produced exactly one outcome rather than naming each one.
+// totalProcessed sums every outcome, so a test can assert one call produced
+// exactly one.
 func (m *metricsSpy) totalProcessed() int {
 	total := 0
 	for _, count := range m.processed {
@@ -194,9 +182,8 @@ func TestNewServiceValidation(t *testing.T) {
 	}
 }
 
-// Contact details are needed to deliver a notification but must never be
-// written to the log backend, which has a different audience and retention from
-// the database. Recipients are identified by opaque id only.
+// The log backend has a different audience and retention from the database, so
+// recipients are logged by opaque id only.
 func TestSendSlotCancelledKeepsContactDetailsOutOfLogs(t *testing.T) {
 	t.Parallel()
 
@@ -221,8 +208,7 @@ func TestSendSlotCancelledKeepsContactDetailsOutOfLogs(t *testing.T) {
 	assert.NotContains(t, logs, recipientPhone)
 }
 
-// A slot nobody booked is an ordinary outcome, not a failure: it is recorded
-// and nothing is delivered.
+// A slot nobody booked is an ordinary outcome, not a failure.
 func TestSendSlotCancelledWithoutRecipientsIsNotAnError(t *testing.T) {
 	t.Parallel()
 
@@ -253,19 +239,6 @@ func TestSendSlotCancelledStopsWhenLookupFails(t *testing.T) {
 	assert.Contains(t, logs, lookupBoomError)
 	assert.False(t, hasMessage(logs, sentMessage), "a failed lookup must not report a delivery")
 	assert.False(t, hasMessage(logs, recipientDebugMessage))
-}
-
-// The kind reaches Prometheus as a label value, so an unrecognised kind must
-// collapse onto one series instead of opening a new one per bad value.
-func TestEventKindStringIsBoundedForUnknownKinds(t *testing.T) {
-	t.Parallel()
-
-	assert.Equal(t, kindSlotCancelled, notification.EventSlotCancelled.String())
-
-	const kindUnknown = "unknown"
-	for _, kind := range []notification.EventKind{0, -1, 99, 32767} {
-		assert.Equal(t, kindUnknown, kind.String(), "kind %d must not become its own label value", kind)
-	}
 }
 
 func TestServiceRecordsSendOutcomes(t *testing.T) {

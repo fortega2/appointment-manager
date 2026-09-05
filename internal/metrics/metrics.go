@@ -39,10 +39,6 @@ const (
 	outcomeFailed            = "failed"
 )
 
-// dropReasonUnknownKind marks a notification kind the send switch does not
-// know. It is a programming error and should stay flat at zero.
-const dropReasonUnknownKind = "unknown_kind"
-
 // Why a caller stopped waiting for a hashing slot. Only timeout means
 // saturation; client_cancelled is the caller's own context ending first.
 const (
@@ -100,7 +96,6 @@ type Metrics struct {
 	apptCreated   prometheus.Counter
 	apptFinalized *prometheus.CounterVec
 
-	notificationsDropped     *prometheus.CounterVec
 	notificationsProcessed   *prometheus.CounterVec
 	notificationSendDuration *prometheus.HistogramVec
 
@@ -214,18 +209,6 @@ func New() *Metrics {
 		[]string{"outcome"},
 	)
 
-	// Dashboard: sum by (reason) (rate(appt_notifications_dropped_total[5m]))
-	// Alert:     increase(appt_notifications_dropped_total{reason="unknown_kind"}[5m]) > 0
-	notificationsDropped := factory.NewCounterVec(
-		prometheus.CounterOpts{
-			Namespace: namespace,
-			Subsystem: subsystemNotifications,
-			Name:      "dropped_total",
-			Help:      "Total number of notifications discarded without being delivered, by reason.",
-		},
-		[]string{"reason"},
-	)
-
 	// Dashboard: sum by (outcome) (rate(appt_notifications_processed_total[5m]))
 	// Alert:     rate(appt_notifications_processed_total{outcome="lookup_failed"}[5m]) > 0
 	notificationsProcessed := factory.NewCounterVec(
@@ -335,7 +318,6 @@ func New() *Metrics {
 	// known reason here is what makes the first occurrence visible.
 	passwordQueueTimeouts.WithLabelValues(queueWaitFailureTimeout)
 	passwordQueueTimeouts.WithLabelValues(queueWaitFailureClientCancelled)
-	notificationsDropped.WithLabelValues(dropReasonUnknownKind)
 	loginRateLimitedAccount := loginRateLimited.WithLabelValues(rateLimitScopeAccount)
 	loginRateLimitedIP := loginRateLimited.WithLabelValues(rateLimitScopeIP)
 
@@ -351,7 +333,6 @@ func New() *Metrics {
 		dbErrors:                 dbErrors,
 		apptCreated:              apptCreated,
 		apptFinalized:            apptFinalized,
-		notificationsDropped:     notificationsDropped,
 		notificationsProcessed:   notificationsProcessed,
 		notificationSendDuration: notificationSendDuration,
 		passwordQueueWait:        passwordQueueWait,
@@ -425,13 +406,6 @@ func (m *Metrics) RecordAppointmentAbsent() { m.apptFinalized.WithLabelValues(ou
 // RecordAppointmentsExpired counts n appointments swept to absent by the overdue worker.
 func (m *Metrics) RecordAppointmentsExpired(n int64) {
 	m.apptFinalized.WithLabelValues(outcomeExpired).Add(float64(n))
-}
-
-// RecordNotificationDroppedUnknownKind counts one notification the send switch
-// had no case for. This is never an ordinary outcome: it means a kind reached
-// dispatch that Service.dispatch does not know.
-func (m *Metrics) RecordNotificationDroppedUnknownKind() {
-	m.notificationsDropped.WithLabelValues(dropReasonUnknownKind).Inc()
 }
 
 // RecordNotificationSent counts one notification delivered to at least one

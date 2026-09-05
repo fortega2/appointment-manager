@@ -1,14 +1,17 @@
 # ADR 0004 — Notification observability: what is measured, and what is deliberately not
 
 - **Date:** 2026-08-04
-- **Status:** Accepted, **partially superseded by ADR 0003**. `appt_notifications_queue_depth`,
-  `appt_notifications_queue_capacity`, `RegisterNotificationQueue`, and the
-  `reason="queue_full"` series described below no longer exist — the channel they measured is
-  gone. `RecordNotificationSent`/`NoRecipients`/`LookupFailed`, `ObserveNotificationSend`,
-  `reason="unknown_kind"`, and the trace-exemplar wiring are all still accurate as written.
+- **Status:** Accepted, **partially superseded by ADR 0003**. The whole of
+  `appt_notifications_dropped_total` is gone: `queue_depth`, `queue_capacity`,
+  `RegisterNotificationQueue` and `reason="queue_full"` went with the channel they measured, and
+  `reason="unknown_kind"` went with the `EventKind` switch — the relay's handler registry routes
+  by event type now, so Decision 3's cardinality guard has no switch left to bound. Decision 1's
+  first three rows and Decision 3 below are therefore historical.
+  `RecordNotificationSent`/`NoRecipients`/`LookupFailed`, `ObserveNotificationSend`, the `kind`
+  label (now the `kindSlotCancelled` constant) and the trace-exemplar wiring are still accurate.
 - **Scope:** `internal/metrics` (the `appt_notifications_*` collectors and their recorder
-  methods), `internal/notification` (`Metrics`, `noopMetrics`, `EventKind.String`, the span in
-  `Service.send`), and the wiring in `cmd/server/notification.go`
+  methods), `internal/notification` (`Metrics`, `noopMetrics`, the span in `Service.send`), and
+  the wiring in `cmd/server/notification.go`
 - **Implements:** ADR 0002's *Future* section, which named `appt_notifications_dropped_total` and a
   queue-depth gauge as prerequisites to tuning the queue empirically
 

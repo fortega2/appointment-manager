@@ -62,7 +62,6 @@ func TestNewInitialisesFailureReasonsAtZero(t *testing.T) {
 	body := rec.Body.String()
 	assert.Contains(t, body, `appt_password_queue_timeouts_total{reason="timeout"} 0`)
 	assert.Contains(t, body, `appt_password_queue_timeouts_total{reason="client_cancelled"} 0`)
-	assert.Contains(t, body, `appt_notifications_dropped_total{reason="unknown_kind"} 0`)
 	assert.Contains(t, body, `appt_login_rate_limited_total{scope="account"} 0`)
 	assert.Contains(t, body, `appt_login_rate_limited_total{scope="ip"} 0`)
 }
@@ -132,13 +131,10 @@ func TestNotificationRecorders(t *testing.T) {
 
 	m := New()
 
-	m.RecordNotificationDroppedUnknownKind()
 	m.RecordNotificationSent(kindSlotCancelled)
 	m.RecordNotificationNoRecipients(kindSlotCancelled)
 	m.RecordNotificationLookupFailed(kindSlotCancelled)
 	m.ObserveNotificationSend(context.Background(), kindSlotCancelled, 250*time.Millisecond)
-
-	assert.InDelta(t, 1, testutil.ToFloat64(m.notificationsDropped.WithLabelValues(dropReasonUnknownKind)), 0)
 
 	assert.InDelta(t, 1, testutil.ToFloat64(m.notificationsProcessed.WithLabelValues(kindSlotCancelled, notificationOutcomeSent)), 0)
 	assert.InDelta(t, 1, testutil.ToFloat64(m.notificationsProcessed.WithLabelValues(kindSlotCancelled, notificationOutcomeNoRecipients)), 0)

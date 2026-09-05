@@ -23,11 +23,9 @@ func initializeNotificationService(
 	return service, nil
 }
 
-// resolveSlotCancellation adapts the appointment read model to the notification
-// package's own view of a cancellation. The translation lives here, in the only
-// place that knows about both packages: notification never imports appointment,
-// so its recipients stay whatever a notification needs rather than whatever the
-// appointment schema happens to hold.
+// resolveSlotCancellation adapts the appointment read model to notification's
+// own view of a cancellation. It lives here because notification never imports
+// appointment, so its recipients stay independent of that schema.
 func resolveSlotCancellation(query *appointment.Query) func(context.Context, uuid.UUID) (notification.SlotCancellation, error) {
 	return func(ctx context.Context, slotID uuid.UUID) (notification.SlotCancellation, error) {
 		cancellation, err := query.SlotCancellationRecipients(ctx, slotID)

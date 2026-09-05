@@ -1,6 +1,5 @@
 // Package notification resolves who to tell about a domain event and delivers
-// it. It exports a concrete *Service and no interface: consumers declare the
-// function type they need and bind a method value to it.
+// it. It exports a concrete *Service and no interface.
 package notification
 
 import (
@@ -20,6 +19,8 @@ const (
 	sendTimeout = 5 * time.Second
 
 	tracerName = "appointment-manager/internal/notification"
+
+	kindSlotCancelled = "slot_cancelled"
 )
 
 var tracer = otel.Tracer(tracerName)
@@ -43,10 +44,9 @@ type SlotCancellation struct {
 // recipients is an ordinary result, not an error.
 type slotCancellationFunc func(ctx context.Context, slotID uuid.UUID) (SlotCancellation, error)
 
-// Metrics records what becomes of each notification. A nil value passed to the
-// constructor is replaced by a no-op implementation.
+// Metrics records what becomes of each notification. A nil value is replaced
+// by a no-op implementation.
 type Metrics interface {
-	RecordNotificationDroppedUnknownKind()
 	RecordNotificationSent(kind string)
 	RecordNotificationNoRecipients(kind string)
 	RecordNotificationLookupFailed(kind string)
@@ -82,20 +82,16 @@ func NewService(
 	}, nil
 }
 
-// SendSlotCancelled delivers a slot cancellation synchronously, so the caller
-// learns whether it succeeded. It matches outbox.Handler.
+// SendSlotCancelled delivers a slot cancellation. It matches outbox.Handler.
 func (s *Service) SendSlotCancelled(ctx context.Context, slotID uuid.UUID, _ json.RawMessage) error {
-	return s.send(ctx, Event{Kind: EventSlotCancelled, SlotID: slotID})
+	return s.send(ctx, kindSlotCancelled, slotID)
 }
 
 // send delivers one event under its own timeout, span and duration observation.
-// The span is a root: Event stays pointer-free, so it carries no trace context
-// (ADR 0002).
-func (s *Service) send(ctx context.Context, event Event) error {
+// The span is a root: the producer passes no trace context (ADR 0002).
+func (s *Service) send(ctx context.Context, kind string, slotID uuid.UUID) error {
 	ctx, cancel := context.WithTimeout(ctx, sendTimeout)
 	defer cancel()
-
-	kind := event.Kind.String()
 
 	ctx, span := tracer.Start(ctx, "notification.Service.send")
 
@@ -104,40 +100,23 @@ func (s *Service) send(ctx context.Context, event Event) error {
 
 	span.SetAttributes(
 		attribute.String("notification.kind", kind),
-		attribute.String("slot_id", event.SlotID.String()),
+		attribute.String("slot_id", slotID.String()),
 	)
 
-	// Timed inside the span so the observation picks up its trace_id as an exemplar.
+	// Timed inside the span so the observation gets its trace_id as an exemplar.
 	start := time.Now()
-	err = s.dispatch(ctx, event)
+	err = s.sendSlotCancelled(ctx, slotID)
 	s.metrics.ObserveNotificationSend(ctx, kind, time.Since(start))
 
 	return err
 }
 
-func (s *Service) dispatch(ctx context.Context, event Event) error {
-	switch event.Kind {
-	case EventSlotCancelled:
-		return s.sendSlotCancelled(ctx, event.SlotID)
-	default:
-		s.metrics.RecordNotificationDroppedUnknownKind()
-		s.logger.ErrorContext(ctx, "unknown notification kind, dropping notification",
-			slog.Int("kind", int(event.Kind)),
-		)
-
-		return ErrUnknownEventKind
-	}
-}
-
-// sendSlotCancelled resolves who was affected by a cancelled slot and delivers
-// to each of them. Delivery is still a placeholder: a log line per recipient.
-// Recipients are identified by opaque id only, never by name or contact detail.
+// sendSlotCancelled delivers to everyone affected by a cancelled slot. Delivery
+// is still a placeholder, and recipients are logged by opaque id only.
 func (s *Service) sendSlotCancelled(ctx context.Context, slotID uuid.UUID) error {
-	kind := EventSlotCancelled.String()
-
 	cancellation, err := s.resolveSlotCancellation(ctx, slotID)
 	if err != nil {
-		s.metrics.RecordNotificationLookupFailed(kind)
+		s.metrics.RecordNotificationLookupFailed(kindSlotCancelled)
 		s.logger.ErrorContext(ctx, "failed to resolve slot cancellation recipients",
 			slog.String("slot_id", slotID.String()),
 			slog.Any("error", err),
@@ -147,7 +126,7 @@ func (s *Service) sendSlotCancelled(ctx context.Context, slotID uuid.UUID) error
 	}
 
 	if len(cancellation.Recipients) == 0 {
-		s.metrics.RecordNotificationNoRecipients(kind)
+		s.metrics.RecordNotificationNoRecipients(kindSlotCancelled)
 		s.logger.InfoContext(ctx, "cancelled slot had no recipients to notify",
 			slog.String("slot_id", slotID.String()),
 		)
@@ -163,7 +142,7 @@ func (s *Service) sendSlotCancelled(ctx context.Context, slotID uuid.UUID) error
 		)
 	}
 
-	s.metrics.RecordNotificationSent(kind)
+	s.metrics.RecordNotificationSent(kindSlotCancelled)
 	s.logger.InfoContext(ctx, "slot cancellation notification sent",
 		slog.String("slot_id", slotID.String()),
 		slog.String("professional", cancellation.ProfessionalFullName),
@@ -190,13 +169,8 @@ func validate(logger *slog.Logger, resolveSlotCancellation slotCancellationFunc)
 	return errs
 }
 
-// noopMetrics is the default Metrics used when the service is built without a
-// recorder.
+// noopMetrics is used when the service is built without a recorder.
 type noopMetrics struct{}
-
-func (noopMetrics) RecordNotificationDroppedUnknownKind() {
-	// RecordNotificationDroppedUnknownKind is intentionally empty: no metrics recorder was configured.
-}
 
 func (noopMetrics) RecordNotificationSent(string) {
 	// RecordNotificationSent is intentionally empty: no metrics recorder was configured.
