@@ -1,6 +1,5 @@
 // Package outbox records events in the same transaction as the domain change
-// that produced them. It only writes; draining public.outbox belongs to the
-// consumer.
+// that produced them: Insert writes, Relay drains and dispatches to handlers.
 package outbox
 
 import (
@@ -23,14 +22,14 @@ const insertEventQuery = `
 
 var emptyPayload = []byte(`{}`)
 
-// AggregateType names the kind of entity an event is about. Producers declare their own values.
+// AggregateType names the kind of entity an event is about.
 type AggregateType string
 
 // EventType names what happened. Consumers dispatch on it.
 type EventType string
 
 // Event is one row of the outbox. Payload carries identifiers, never resolved
-// personal data, and nil stores an empty object.
+// personal data.
 type Event struct {
 	Payload       any
 	AggregateType AggregateType
@@ -38,8 +37,7 @@ type Event struct {
 	AggregateID   uuid.UUID
 }
 
-// Insert writes event through tx, so it commits with the change that caused it
-// or not at all.
+// Insert writes event through tx, so it commits with its cause or not at all.
 func Insert(ctx context.Context, tx pgx.Tx, event Event) error {
 	if tx == nil {
 		return ErrNilTx
@@ -76,9 +74,8 @@ func Insert(ctx context.Context, tx pgx.Tx, event Event) error {
 	return nil
 }
 
-// encodePayload marshals payload and rejects anything that is not a JSON object
-// here, because chk_outbox_payload_object would abort the caller's whole
-// transaction instead.
+// encodePayload rejects a non-object here, because chk_outbox_payload_object
+// would abort the caller's whole transaction instead.
 func encodePayload(payload any) ([]byte, error) {
 	if payload == nil {
 		return emptyPayload, nil

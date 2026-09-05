@@ -38,9 +38,13 @@ const (
 		WHERE id = $1
 	`
 
+	// available_at uses CURRENT_TIMESTAMP to stay comparable with the bound
+	// above; the ceiling stops a never-succeeding row overflowing the SMALLINT.
 	markFailedQuery = `
 		UPDATE public.outbox
-		SET attempts = attempts + 1, available_at = $2, last_error = $3
+		SET attempts = LEAST(attempts + 1, 32767),
+		    available_at = CURRENT_TIMESTAMP + make_interval(secs => $2),
+		    last_error = $3
 		WHERE id = $1
 	`
 
@@ -97,9 +101,8 @@ func (r *Relay) Register(eventType EventType, handler Handler) error {
 	return nil
 }
 
-// Drain claims and dispatches one batch of due events, returning the delivered count.
-// SKIP LOCKED allows multiple relay instances to process different rows. Each row
-// uses a savepoint so one failed delivery does not roll back the rest of the batch.
+// Drain claims and dispatches one batch of due events, returning the delivered
+// count. The batch shares one transaction, so delivery is at-least-once.
 func (r *Relay) Drain(ctx context.Context) (int64, error) {
 	tx, err := r.pool.BeginTx(ctx, pgx.TxOptions{})
 	if err != nil {
@@ -151,7 +154,7 @@ func (r *Relay) claimPending(ctx context.Context, tx pgx.Tx) ([]pendingRow, erro
 	}
 	defer rows.Close()
 
-	var pending []pendingRow
+	pending := make([]pendingRow, 0, r.batchSize)
 	for rows.Next() {
 		var row pendingRow
 		if err := rows.Scan(&row.id, &row.aggregateID, &row.eventType, &row.payload, &row.attempts); err != nil {
@@ -168,22 +171,21 @@ func (r *Relay) claimPending(ctx context.Context, tx pgx.Tx) ([]pendingRow, erro
 	return pending, nil
 }
 
-// handleRow dispatches one row inside a savepoint.
+// handleRow delivers one row and records the outcome. The savepoint covers only
+// the mark-processed statement; the handler touches no transaction of ours.
 func (r *Relay) handleRow(ctx context.Context, tx pgx.Tx, row pendingRow) error {
-	savepoint, err := tx.Begin(ctx)
-	if err != nil {
-		return fmt.Errorf("begin outbox row savepoint: %w", err)
-	}
-
 	handler, ok := r.handlers[row.eventType]
 	if !ok {
-		_ = savepoint.Rollback(ctx)
 		return r.markFailed(ctx, tx, row, ErrNoHandlerRegistered)
 	}
 
 	if err := handler(ctx, row.aggregateID, row.payload); err != nil {
-		_ = savepoint.Rollback(ctx)
 		return r.markFailed(ctx, tx, row, err)
+	}
+
+	savepoint, err := tx.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("begin outbox row savepoint: %w", err)
 	}
 
 	if _, err := savepoint.Exec(ctx, markProcessedQuery, row.id); err != nil {
@@ -191,12 +193,17 @@ func (r *Relay) handleRow(ctx context.Context, tx pgx.Tx, row pendingRow) error 
 		return r.markFailed(ctx, tx, row, err)
 	}
 
-	return savepoint.Commit(ctx)
+	// A failed release leaves the row pending, so back it off like any failure.
+	if err := savepoint.Commit(ctx); err != nil {
+		_ = savepoint.Rollback(ctx)
+		return r.markFailed(ctx, tx, row, err)
+	}
+
+	return nil
 }
 
 func (r *Relay) markFailed(ctx context.Context, tx pgx.Tx, row pendingRow, cause error) error {
-	availableAt := time.Now().Add(backoff(row.attempts))
-	if _, err := tx.Exec(ctx, markFailedQuery, row.id, availableAt, cause.Error()); err != nil {
+	if _, err := tx.Exec(ctx, markFailedQuery, row.id, backoff(row.attempts).Seconds(), cause.Error()); err != nil {
 		return fmt.Errorf("mark outbox event failed: %w", err)
 	}
 
@@ -205,10 +212,15 @@ func (r *Relay) markFailed(ctx context.Context, tx pgx.Tx, row pendingRow, cause
 
 // backoff grows exponentially with the attempts already made and is capped.
 func backoff(attempts int16) time.Duration {
-	delay := backoffBase * time.Duration(math.Pow(backoffRate, float64(attempts)))
-	if delay > backoffCap {
+	if attempts <= 0 {
+		return backoffBase
+	}
+
+	// Compared before the conversion: the int64 product overflows from 34 on.
+	delay := float64(backoffBase) * math.Pow(backoffRate, float64(attempts))
+	if delay >= float64(backoffCap) {
 		return backoffCap
 	}
 
-	return delay
+	return time.Duration(delay)
 }
