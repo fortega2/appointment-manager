@@ -24,8 +24,8 @@ const (
 	workerJobTimeout         = 5 * time.Second
 )
 
-// workerDeps groups what the sweeps run against, so adding one does not grow
-// startBackgroundWorkers another positional parameter.
+// workerDeps groups what the sweeps run against, so adding one costs no
+// parameter on startBackgroundWorkers.
 type workerDeps struct {
 	deps            *dependencies
 	sessionStore    *session.Store
@@ -36,8 +36,7 @@ type workerDeps struct {
 }
 
 // startBackgroundWorkers runs periodic sweeps until stop is called, then waits
-// for all workers to exit before shutdown continues. Jobs own their rules and
-// metrics; this group only schedules them.
+// for all workers to exit. Jobs own their rules; this only schedules them.
 func startBackgroundWorkers(ctx context.Context, logger *slog.Logger, w workerDeps) (func(), error) {
 	workerInterval, err := parseWorkerInterval(os.Getenv(workerIntervalEnv))
 	if err != nil {
@@ -60,6 +59,7 @@ func startBackgroundWorkers(ctx context.Context, logger *slog.Logger, w workerDe
 	jobs := []struct {
 		name string
 		run  worker.JobFunc
+		opts []worker.JobOption
 	}{
 		{name: expireOverdueJobName, run: w.deps.appointmentService.ExpireOverdue},
 		{name: reconcileCancelsJobName, run: w.deps.appointmentService.CancelOnBlockedSlots},
@@ -67,17 +67,14 @@ func startBackgroundWorkers(ctx context.Context, logger *slog.Logger, w workerDe
 		{name: expireResetTokensJobName, run: w.resetTokenStore.DeleteExpired},
 		{name: sweepLoginLimiterJobName, run: w.loginLimiter.DeleteExpired},
 		{name: sweepResetLimiterJobName, run: w.resetLimiter.DeleteExpired},
+		// Polls faster so outbox retries respect their backoff schedule.
+		{name: drainOutboxJobName, run: w.outboxRelay.Drain, opts: []worker.JobOption{worker.WithInterval(outboxDrainInterval)}},
 	}
 
 	for _, job := range jobs {
-		if err := group.Add(job.name, job.run); err != nil {
+		if err := group.Add(job.name, job.run, job.opts...); err != nil {
 			return nil, fmt.Errorf("failed to register %s worker: %w", job.name, err)
 		}
-	}
-
-	// Poll more frequently so outbox retries respect their backoff schedule.
-	if err := group.Add(drainOutboxJobName, w.outboxRelay.Drain, worker.WithInterval(outboxDrainInterval)); err != nil {
-		return nil, fmt.Errorf("failed to register %s worker: %w", drainOutboxJobName, err)
 	}
 
 	group.Start(ctx)

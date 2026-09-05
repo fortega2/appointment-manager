@@ -123,8 +123,8 @@ func parseWorkerInterval(raw string) (time.Duration, error) {
 	return parsePositiveDuration(raw, workerIntervalEnv, defaultWorkerTickerInterval)
 }
 
-// parseOutboxDrainInterval reads OUTBOX_DRAIN_INTERVAL, overriding the group's
-// default interval for the outbox drain job specifically.
+// parseOutboxDrainInterval reads OUTBOX_DRAIN_INTERVAL, how often the drain job
+// polls. When unset it falls back to defaultOutboxDrainInterval.
 func parseOutboxDrainInterval(raw string) (time.Duration, error) {
 	return parsePositiveDuration(raw, outboxDrainIntervalEnv, defaultOutboxDrainInterval)
 }
