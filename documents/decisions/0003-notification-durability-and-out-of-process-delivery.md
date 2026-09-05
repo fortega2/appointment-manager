@@ -17,7 +17,7 @@ queue-depth gauge were never observed in production before this was built. That 
 was explicitly skipped by product decision, not by an accident — worth knowing if you come back
 looking for the data that was supposed to justify this.
 
-What is built differs from the text in three ways that matter if you are reading this to
+What is built differs from the text in five ways that matter if you are reading this to
 understand the running system rather than the history:
 
 - **The table is `public.outbox`, not `notification_outbox`**, and it is deliberately generic —
@@ -30,6 +30,15 @@ understand the running system rather than the history:
   `outbox.Relay.Drain` matches `worker.JobFunc` and is registered into the existing
   `worker.Group` with a shorter interval than the other sweeps — the backoff schedule tops out
   at 5 minutes, so a 30-minute tick would defeat it.
+- **Decision 1's seam was removed outright, not preserved.** `slot`'s `sendNotificationFunc` and
+  `Service.NotifySlotCancelled` are gone: the slot handler no longer sends anything, and the
+  binding it describes now happens at `relay.Register(slot.EventAppointmentsCancelled, ...)` in
+  `cmd/server/outbox.go`. The conclusion holds — no `Notifier` interface was needed — but the
+  symbols Decision 1 names no longer exist.
+- **The outbox is uninstrumented.** The queue gauges and `dropped_total` that ADR 0004 built are
+  gone with the channel, and nothing replaced them: a backlog accumulating in `public.outbox`,
+  or a row retrying to the 5-minute cap, is visible only as an `ERROR` line from `Relay.Drain`.
+  Deferred deliberately, and it is the first thing to add when delivery stops being a log line.
 - **Decision 6 (idempotency per recipient) is still open.** Delivery is still the ADR 0002
   placeholder — a log line per recipient — so an at-least-once retry produces a harmless
   duplicate log line, not a duplicate email. The dedup key described in Decision 6 has to exist

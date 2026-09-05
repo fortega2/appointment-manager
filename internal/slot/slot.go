@@ -9,11 +9,11 @@ import (
 	"appointment-manager/internal/outbox"
 )
 
-// Outbox vocabulary for events about a slot. Declared here because this package
-// owns the aggregate, even though appointment is what writes them.
+// Outbox vocabulary for slot events. Declared here because this package owns
+// the aggregate, even though appointment is what writes them.
 const (
-	OutboxAggregate outbox.AggregateType = "slot"
-	EventCancelled  outbox.EventType     = "slot.cancelled"
+	OutboxAggregate            outbox.AggregateType = "slot"
+	EventAppointmentsCancelled outbox.EventType     = "slot.appointments_cancelled"
 )
 
 type Slot struct {

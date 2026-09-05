@@ -507,7 +507,7 @@ func (r *PostgresRepository) cancelAndReopen(ctx context.Context, operation, que
 		return 0, fmt.Errorf("%s: %w", operation, err)
 	}
 
-	if err := emitSlotCancelledEvents(ctx, tx, cancelled.slotIDs); err != nil {
+	if err := emitAppointmentsCancelledEvents(ctx, tx, cancelled.slotIDs); err != nil {
 		return 0, fmt.Errorf("%s: %w", operation, err)
 	}
 
@@ -515,7 +515,7 @@ func (r *PostgresRepository) cancelAndReopen(ctx context.Context, operation, que
 		return 0, fmt.Errorf("commit %s transaction: %w", operation, err)
 	}
 
-	return cancelled.count, nil
+	return int64(len(cancelled.prescriptionIDs)), nil
 }
 
 // cancelledAppointments is what one cancellation touched. Both slices are raw
@@ -523,12 +523,10 @@ func (r *PostgresRepository) cancelAndReopen(ctx context.Context, operation, que
 type cancelledAppointments struct {
 	prescriptionIDs []uuid.UUID
 	slotIDs         []uuid.UUID
-	count           int64
 }
 
-// collectCancelledAppointments drains the cancellation's RETURNING rows before
-// returning: a connection with an open result set rejects further statements on
-// the same transaction as busy, and the caller runs the reopen right after this.
+// collectCancelledAppointments drains the RETURNING rows before returning: an
+// open result set makes the transaction reject the reopen that follows as busy.
 func collectCancelledAppointments(ctx context.Context, tx pgx.Tx, query string, args ...any) (cancelledAppointments, error) {
 	rows, err := tx.Query(ctx, query, args...)
 	if err != nil {
@@ -545,7 +543,6 @@ func collectCancelledAppointments(ctx context.Context, tx pgx.Tx, query string, 
 
 		cancelled.prescriptionIDs = append(cancelled.prescriptionIDs, prescriptionID)
 		cancelled.slotIDs = append(cancelled.slotIDs, slotID)
-		cancelled.count++
 	}
 	if err := rows.Err(); err != nil {
 		return cancelledAppointments{}, err
@@ -554,13 +551,13 @@ func collectCancelledAppointments(ctx context.Context, tx pgx.Tx, query string, 
 	return cancelled, nil
 }
 
-// emitSlotCancelledEvents records one event per cancelled slot. The sweep can
-// converge several slots at once, and both callers repeat a slot per booking.
-func emitSlotCancelledEvents(ctx context.Context, tx pgx.Tx, slotIDs []uuid.UUID) error {
+// emitAppointmentsCancelledEvents records one event per affected slot; both
+// callers repeat a slot per booking, and the sweep converges several at once.
+func emitAppointmentsCancelledEvents(ctx context.Context, tx pgx.Tx, slotIDs []uuid.UUID) error {
 	for _, slotID := range sortedUniqueIDs(slotIDs) {
 		event := outbox.Event{
 			AggregateType: slot.OutboxAggregate,
-			EventType:     slot.EventCancelled,
+			EventType:     slot.EventAppointmentsCancelled,
 			AggregateID:   slotID,
 		}
 

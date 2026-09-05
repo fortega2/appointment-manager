@@ -28,7 +28,7 @@ func fetchOutboxAggregateIDs(ctx context.Context, t *testing.T, pool *pgxpool.Po
 		FROM public.outbox
 		WHERE aggregate_type = $1 AND event_type = $2
 		ORDER BY id
-	`, string(slot.OutboxAggregate), string(slot.EventCancelled))
+	`, string(slot.OutboxAggregate), string(slot.EventAppointmentsCancelled))
 	require.NoError(t, err)
 	defer rows.Close()
 

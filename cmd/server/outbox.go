@@ -26,8 +26,8 @@ func initializeOutboxRelay(
 		return nil, fmt.Errorf("failed to create outbox relay: %w", err)
 	}
 
-	if err := relay.Register(slot.EventCancelled, notificationService.SendSlotCancelled); err != nil {
-		return nil, fmt.Errorf("failed to register %s handler: %w", slot.EventCancelled, err)
+	if err := relay.Register(slot.EventAppointmentsCancelled, notificationService.SendSlotCancelled); err != nil {
+		return nil, fmt.Errorf("failed to register %s handler: %w", slot.EventAppointmentsCancelled, err)
 	}
 
 	return relay, nil
